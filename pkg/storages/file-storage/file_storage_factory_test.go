@@ -25,9 +25,7 @@ func TestNewStorage_S3(t *testing.T) {
 		},
 	}
 	logger, _ := commons.NewApplicationLogger()
-
 	storage := NewStorage(cfg, logger)
-
 	assert.NotNil(t, storage)
 	assert.Equal(t, "aws", storage.Name())
 }
@@ -38,9 +36,7 @@ func TestNewStorage_Local(t *testing.T) {
 		StoragePathPrefix: "/tmp/test",
 	}
 	logger, _ := commons.NewApplicationLogger()
-
 	storage := NewStorage(cfg, logger)
-
 	assert.NotNil(t, storage)
 	assert.Equal(t, "local", storage.Name())
 }
@@ -56,11 +52,40 @@ func TestNewStorage_CDN(t *testing.T) {
 		},
 	}
 	logger, _ := commons.NewApplicationLogger()
-
 	storage := NewStorage(cfg, logger)
-
 	assert.NotNil(t, storage)
 	assert.Equal(t, "cdn", storage.Name())
+}
+
+func TestNewStorage_Azure(t *testing.T) {
+	cfg := configs.AssetStoreConfig{
+		StorageType:       "azure",
+		StoragePathPrefix: "my-container",
+		AzureAuth: &configs.AzureConfig{
+			AccountName: "testaccount",
+			AccountKey:  "dGVzdGtleQ==", // base64 placeholder
+		},
+	}
+	logger, _ := commons.NewApplicationLogger()
+	storage := NewStorage(cfg, logger)
+	assert.NotNil(t, storage)
+	assert.Equal(t, "azure", storage.Name())
+}
+
+func TestNewStorage_GCS(t *testing.T) {
+	cfg := configs.AssetStoreConfig{
+		StorageType:       "gcs",
+		StoragePathPrefix: "my-bucket",
+		GCSAuth: &configs.GCSConfig{
+			ProjectID: "test-project",
+		},
+	}
+	logger, _ := commons.NewApplicationLogger()
+	// GCS client creation with no credentials will use ADC;
+	// in CI without ADC it may fail — only assert the Name() if client was created.
+	storage := NewStorage(cfg, logger)
+	assert.NotNil(t, storage)
+	assert.Equal(t, "gcs", storage.Name())
 }
 
 func TestNewStorage_UnsupportedType(t *testing.T) {
@@ -69,10 +94,7 @@ func TestNewStorage_UnsupportedType(t *testing.T) {
 		StoragePathPrefix: "/tmp/test",
 	}
 	logger, _ := commons.NewApplicationLogger()
-
 	storage := NewStorage(cfg, logger)
-
 	assert.NotNil(t, storage)
-	// Should default to local storage for unsupported types
 	assert.Equal(t, "local", storage.Name())
 }

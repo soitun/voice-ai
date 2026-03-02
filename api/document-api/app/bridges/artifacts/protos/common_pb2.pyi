@@ -250,31 +250,6 @@ class FunctionCall(_message.Message):
     arguments: str
     def __init__(self, name: _Optional[str] = ..., arguments: _Optional[str] = ...) -> None: ...
 
-class Telemetry(_message.Message):
-    __slots__ = ("stageName", "startTime", "endTime", "duration", "attributes", "spanID", "parentID")
-    class AttributesEntry(_message.Message):
-        __slots__ = ("key", "value")
-        KEY_FIELD_NUMBER: _ClassVar[int]
-        VALUE_FIELD_NUMBER: _ClassVar[int]
-        key: str
-        value: str
-        def __init__(self, key: _Optional[str] = ..., value: _Optional[str] = ...) -> None: ...
-    STAGENAME_FIELD_NUMBER: _ClassVar[int]
-    STARTTIME_FIELD_NUMBER: _ClassVar[int]
-    ENDTIME_FIELD_NUMBER: _ClassVar[int]
-    DURATION_FIELD_NUMBER: _ClassVar[int]
-    ATTRIBUTES_FIELD_NUMBER: _ClassVar[int]
-    SPANID_FIELD_NUMBER: _ClassVar[int]
-    PARENTID_FIELD_NUMBER: _ClassVar[int]
-    stageName: str
-    startTime: _timestamp_pb2.Timestamp
-    endTime: _timestamp_pb2.Timestamp
-    duration: int
-    attributes: _containers.ScalarMap[str, str]
-    spanID: str
-    parentID: str
-    def __init__(self, stageName: _Optional[str] = ..., startTime: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ..., endTime: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ..., duration: _Optional[int] = ..., attributes: _Optional[_Mapping[str, str]] = ..., spanID: _Optional[str] = ..., parentID: _Optional[str] = ...) -> None: ...
-
 class Knowledge(_message.Message):
     __slots__ = ("id", "name", "description", "visibility", "language", "embeddingModelProviderId", "embeddingModelProviderName", "knowledgeEmbeddingModelOptions", "status", "createdBy", "createdUser", "updatedBy", "updatedUser", "createdDate", "updatedDate", "organizationId", "projectId", "organization", "knowledgeTag", "documentCount", "tokenCount", "wordCount")
     ID_FIELD_NUMBER: _ClassVar[int]

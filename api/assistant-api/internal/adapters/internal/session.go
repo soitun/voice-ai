@@ -19,7 +19,7 @@ import (
 	internal_audio_recorder "github.com/rapidaai/api/assistant-api/internal/audio/recorder"
 	internal_assistant_entity "github.com/rapidaai/api/assistant-api/internal/entity/assistants"
 	internal_conversation_entity "github.com/rapidaai/api/assistant-api/internal/entity/conversations"
-	internal_telemetry "github.com/rapidaai/api/assistant-api/internal/telemetry"
+	observe "github.com/rapidaai/api/assistant-api/internal/observe"
 	internal_type "github.com/rapidaai/api/assistant-api/internal/type"
 	"github.com/rapidaai/pkg/types"
 	type_enums "github.com/rapidaai/pkg/types/enums"
@@ -64,7 +64,6 @@ const (
 // Thread Safety: This method is safe to call from any goroutine, but should
 // only be called once per session to avoid duplicate cleanup operations.
 func (r *genericRequestor) Disconnect(ctx context.Context) {
-	ctx, span, _ := r.Tracer().StartSpan(ctx, utils.AssistantDisconnectStage)
 	startTime := time.Now()
 
 	// Phase 1: Close all session resources concurrently
@@ -97,26 +96,26 @@ func (r *genericRequestor) Disconnect(ctx context.Context) {
 	})
 	waitGroup.Wait()
 
-	// Emit disconnected event before closing resources
-	r.OnPacket(ctx, internal_type.ConversationEventPacket{
-		Name: "session",
-		Data: map[string]string{"type": "disconnected", "total_messages": fmt.Sprintf("%d", len(r.GetHistories()))},
-		Time: time.Now(),
-	})
-
 	// Phase 2: Trigger end-of-conversation hooks
 	r.OnEndConversation(ctx)
 
 	// Phase 3: Persist audio recording asynchronously
 	r.persistRecording(ctx)
 
-	// Phase 4: Complete the tracing span
-	span.EndSpan(ctx, utils.AssistantDisconnectStage)
+	// Phase 4: Flush and shut down observe collectors.
+	// Collect the "disconnected" event directly rather than via OnPacket/lowCh
+	// because the dispatcher goroutine runs on the streamer context, which is
+	// already cancelled by the time Disconnect() is called. drainChannels() will
+	// have already returned, so any packet enqueued here would be silently lost.
+	r.events.Collect(context.Background(), observe.EventRecord{
+		MessageID: r.GetID(),
+		Name:      "session",
+		Data:      map[string]string{"type": "disconnected", "total_messages": fmt.Sprintf("%d", len(r.GetHistories()))},
+		Time:      time.Now(),
+	})
+	r.shutdownCollectors(ctx)
 
-	// Phase 5: Export telemetry and cleanup
-	r.exportTelemetry(ctx)
-
-	// Phase 6: Close assistant executor and stop timers
+	// Phase 5: Close assistant executor and stop timers
 	r.closeExecutor(ctx)
 	r.stopTimers()
 	r.logger.Benchmark("session.Disconnect", time.Since(startTime))
@@ -133,9 +132,6 @@ func (r *genericRequestor) Connect(
 	// session ends (streamer context cancelled).
 	go r.runDispatcher(ctx)
 
-	ctx, span, _ := r.Tracer().StartSpan(ctx, utils.AssistantConnectStage)
-	defer span.EndSpan(ctx, utils.AssistantConnectStage)
-
 	r.SetAuth(auth)
 
 	assistant, err := r.GetAssistant(ctx, auth, config.Assistant.AssistantId, config.Assistant.Version)
@@ -145,12 +141,15 @@ func (r *genericRequestor) Connect(
 	}
 
 	if conversationID := config.GetAssistantConversationId(); conversationID > 0 {
-		span.AddAttributes(ctx, internal_telemetry.KV{K: "conversation_initiation", V: internal_telemetry.StringValue("resume")}, internal_telemetry.KV{K: "conversation_id", V: internal_telemetry.IntValue(conversationID)})
-		return r.resumeSession(ctx, config, assistant)
+		if err := r.resumeSession(ctx, config, assistant); err != nil {
+			return err
+		}
+	} else {
+		if err := r.createSession(ctx, config, assistant); err != nil {
+			return err
+		}
 	}
-
-	span.AddAttributes(ctx, internal_telemetry.KV{K: "conversation_initiation", V: internal_telemetry.StringValue("new")})
-	return r.createSession(ctx, config, assistant)
+	return nil
 }
 
 // persistRecording saves the audio recording asynchronously.
@@ -166,19 +165,6 @@ func (r *genericRequestor) persistRecording(ctx context.Context) {
 				r.logger.Tracef(ctx, "failed to create conversation recording record: %+v", err)
 			}
 		})
-	}
-}
-
-// exportTelemetry exports conversation telemetry data for analytics and monitoring.
-func (r *genericRequestor) exportTelemetry(ctx context.Context) {
-	exportOptions := &internal_telemetry.VoiceAgentExportOption{
-		AssistantId:              r.assistant.Id,
-		AssistantProviderModelId: r.assistant.AssistantProviderId,
-		AssistantConversationId:  r.assistantConversation.Id,
-	}
-
-	if err := r.tracer.Export(ctx, r.auth, exportOptions); err != nil {
-		r.logger.Errorf("failed to export telemetry data: %v", err)
 	}
 }
 
@@ -209,14 +195,13 @@ func (r *genericRequestor) resumeSession(
 	config *protos.ConversationInitialization,
 	assistant *internal_assistant_entity.Assistant,
 ) error {
-	ctx, span, _ := r.Tracer().StartSpan(ctx, utils.AssistantResumeConverstaionStage)
-	defer span.EndSpan(ctx, utils.AssistantResumeConverstaionStage)
-
 	conversation, err := r.ResumeConversation(ctx, assistant, config)
 	if err != nil {
 		r.logger.Errorf("failed to resume conversation: %+v", err)
 		return err
 	}
+
+	r.initializeCollectors(ctx)
 
 	r.OnPacket(ctx, internal_type.ConversationEventPacket{
 		Name: "session",
@@ -285,9 +270,6 @@ func (r *genericRequestor) createSession(
 	config *protos.ConversationInitialization,
 	assistant *internal_assistant_entity.Assistant,
 ) error {
-	ctx, span, _ := r.Tracer().StartSpan(ctx, utils.AssistantCreateConversationStage)
-	defer span.EndSpan(ctx, utils.AssistantCreateConversationStage)
-
 	conversation, err := r.BeginConversation(
 		ctx,
 		assistant,
@@ -298,6 +280,8 @@ func (r *genericRequestor) createSession(
 		r.logger.Errorf("failed to begin conversation: %+v", err)
 		return err
 	}
+
+	r.initializeCollectors(ctx)
 
 	r.OnPacket(ctx, internal_type.ConversationEventPacket{
 		Name: "session",

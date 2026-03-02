@@ -34,25 +34,28 @@ func (t *genericRequestor) Talk(_ context.Context, auth types.SimplePrinciple) e
 		req, err := t.streamer.Recv()
 		if err != nil {
 			if initialized {
-				t.OnPacket(
-					context.Background(),
-					internal_type.ConversationMetricPacket{
-						ContextID: t.Conversation().Id,
-						Metrics: []*protos.Metric{{
-							Name:        type_enums.STATUS.String(),
-							Value:       "completed",
-							Description: "Status of current conversation",
-						}},
+				// Persist completion metrics directly — the dispatcher goroutine
+				// uses the streamer context, which is already cancelled when
+				// Recv() returns an error. Routing through OnPacket/lowCh risks
+				// the dispatcher exiting via ctx.Done() before it processes these
+				// packets, leaving STATUS stuck at IN_PROGRESS and TIME_TAKEN
+				// empty. Writing directly with a background context guarantees
+				// the final state is persisted.
+				completionMetrics := []*protos.Metric{
+					{
+						Name:        type_enums.STATUS.String(),
+						Value:       "completed",
+						Description: "Status of current conversation",
 					},
-					internal_type.ConversationMetricPacket{
-						ContextID: t.Conversation().Id,
-						Metrics: []*protos.Metric{{
-							Name:        type_enums.TIME_TAKEN.String(),
-							Value:       fmt.Sprintf("%d", time.Since(totalTime)),
-							Description: "Time taken to complete the conversation from the first message received to the end of the conversation.",
-						}},
+					{
+						Name:        type_enums.TIME_TAKEN.String(),
+						Value:       fmt.Sprintf("%d", time.Since(totalTime)),
+						Description: "Time taken to complete the conversation from the first message received to the end of the conversation.",
 					},
-				)
+				}
+				if err := t.onAddMetrics(context.Background(), completionMetrics...); err != nil {
+					t.logger.Errorf("talk: failed to persist completion metrics: %v", err)
+				}
 				t.Disconnect(context.Background())
 			}
 			return nil
@@ -66,6 +69,10 @@ func (t *genericRequestor) Talk(_ context.Context, auth types.SimplePrinciple) e
 				return fmt.Errorf("talking.Connect error: %w", err)
 			}
 			initialized = true
+			// Now that Connect() has finished (STT/TTS ready), trigger transport
+			// setup for the requested mode. For AUDIO this starts the WebRTC
+			// handshake; for TEXT or non-WebRTC streamers this is a no-op.
+			t.streamer.NotifyMode(payload.GetStreamMode())
 
 		case *protos.ConversationConfiguration:
 			if initialized {
@@ -155,8 +162,6 @@ func (t *genericRequestor) Talk(_ context.Context, auth types.SimplePrinciple) e
 
 // Notify sends notifications to websocket for various events.
 func (t *genericRequestor) Notify(ctx context.Context, actionDatas ...internal_type.Stream) error {
-	ctx, span, _ := t.Tracer().StartSpan(ctx, utils.AssistantNotifyStage)
-	defer span.EndSpan(ctx, utils.AssistantNotifyStage)
 	for _, actionData := range actionDatas {
 		t.streamer.Send(actionData)
 	}

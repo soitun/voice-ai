@@ -9,11 +9,11 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"time"
 
 	internal_audio "github.com/rapidaai/api/assistant-api/internal/audio"
-	internal_adapter_telemetry "github.com/rapidaai/api/assistant-api/internal/telemetry"
-	internal_telemetry "github.com/rapidaai/api/assistant-api/internal/telemetry"
+	observe "github.com/rapidaai/api/assistant-api/internal/observe"
 	internal_type "github.com/rapidaai/api/assistant-api/internal/type"
 	type_enums "github.com/rapidaai/pkg/types/enums"
 	"github.com/rapidaai/pkg/utils"
@@ -133,6 +133,9 @@ func (r *genericRequestor) runDispatcher(ctx context.Context) {
 		// Stage 2 — wait for any packet; critical still wins if it arrives
 		select {
 		case <-ctx.Done():
+			// Drain remaining packets so completion metrics (STATUS, TIME_TAKEN)
+			// that were enqueued just before Disconnect() are not lost.
+			r.drainChannels()
 			return
 		case e := <-r.criticalCh:
 			r.dispatch(e.ctx, e.pkt)
@@ -140,6 +143,24 @@ func (r *genericRequestor) runDispatcher(ctx context.Context) {
 			r.dispatch(e.ctx, e.pkt)
 		case e := <-r.lowCh:
 			r.dispatch(e.ctx, e.pkt)
+		}
+	}
+}
+
+// drainChannels processes all packets remaining in the priority channels.
+// Called when the session context is cancelled to ensure final metrics
+// (conversation status, duration) are persisted before the dispatcher exits.
+func (r *genericRequestor) drainChannels() {
+	for {
+		select {
+		case e := <-r.criticalCh:
+			r.dispatch(e.ctx, e.pkt)
+		case e := <-r.normalCh:
+			r.dispatch(e.ctx, e.pkt)
+		case e := <-r.lowCh:
+			r.dispatch(e.ctx, e.pkt)
+		default:
+			return
 		}
 	}
 }
@@ -307,12 +328,6 @@ func (talking *genericRequestor) handleRecordAssistantAudio(ctx context.Context,
 // =============================================================================
 
 func (talking *genericRequestor) handleSpeechToText(ctx context.Context, vl internal_type.SpeechToTextPacket) {
-	ctx, span, _ := talking.Tracer().StartSpan(ctx, utils.AssistantListeningStage,
-		internal_telemetry.KV{K: "transcript", V: internal_telemetry.StringValue(vl.Script)},
-		internal_telemetry.KV{K: "confidence", V: internal_telemetry.FloatValue(vl.Confidence)},
-		internal_telemetry.KV{K: "isCompleted", V: internal_telemetry.BoolValue(!vl.Interim)},
-	)
-	defer span.EndSpan(ctx, utils.AssistantListeningStage)
 	vl.ContextID = talking.GetID()
 	if err := talking.callEndOfSpeech(ctx, vl); err != nil {
 		if !vl.Interim {
@@ -331,13 +346,6 @@ func (talking *genericRequestor) handleInterimEndOfSpeech(ctx context.Context, v
 }
 
 func (talking *genericRequestor) handleEndOfSpeech(ctx context.Context, vl internal_type.EndOfSpeechPacket) {
-	ctx, span, _ := talking.Tracer().StartSpan(ctx, utils.AssistantUtteranceStage)
-	span.EndSpan(ctx,
-		utils.AssistantUtteranceStage,
-		internal_telemetry.KV{K: "activity_type", V: internal_telemetry.StringValue("SpeechEndActivity")},
-		internal_telemetry.KV{K: "speech", V: internal_telemetry.StringValue(vl.Speech)},
-	)
-
 	talking.stopIdleTimeoutTimer()
 
 	if err := talking.Transition(LLMGenerating); err != nil {
@@ -364,12 +372,8 @@ func (talking *genericRequestor) handleEndOfSpeech(ctx context.Context, vl inter
 // =============================================================================
 
 func (talking *genericRequestor) handleInterruption(ctx context.Context, vl internal_type.InterruptionPacket) {
-	ctx, span, _ := talking.Tracer().StartSpan(ctx, utils.AssistantUtteranceStage)
-	defer span.EndSpan(ctx, utils.AssistantUtteranceStage)
-
 	switch vl.Source {
 	case internal_type.InterruptionSourceWord:
-		span.AddAttributes(ctx, internal_telemetry.KV{K: "activity_type", V: internal_telemetry.StringValue("word_interrupt")})
 		talking.resetIdleTimeoutTimer(ctx)
 
 		if err := talking.callEndOfSpeech(ctx, vl); err != nil {
@@ -402,7 +406,6 @@ func (talking *genericRequestor) handleInterruption(ctx context.Context, vl inte
 			talking.logger.Errorf("end of speech error: %v", err)
 		}
 
-		span.AddAttributes(ctx, internal_telemetry.KV{K: "activity_type", V: internal_telemetry.StringValue("vad_interrupt")})
 		if err := talking.Transition(Interrupt); err != nil {
 			return
 		}
@@ -527,18 +530,6 @@ func (talking *genericRequestor) handleSpeakText(ctx context.Context, vl interna
 	}
 
 	if talking.textToSpeechTransformer != nil && talking.GetMode().Audio() {
-		activity := "speak"
-		if vl.IsFinal {
-			activity = "finish_speaking"
-		}
-		ctx, span, _ := talking.Tracer().StartSpan(ctx, utils.AssistantSpeakingStage)
-		defer span.EndSpan(ctx, utils.AssistantSpeakingStage)
-		span.AddAttributes(ctx,
-			internal_adapter_telemetry.MessageKV(vl.ContextID),
-			internal_adapter_telemetry.KV{K: "activity", V: internal_adapter_telemetry.StringValue(activity)},
-			internal_adapter_telemetry.KV{K: "script", V: internal_adapter_telemetry.StringValue(vl.Text)},
-		)
-
 		var pkt internal_type.Packet
 		if vl.IsFinal {
 			pkt = internal_type.LLMResponseDonePacket{ContextID: vl.ContextID, Text: vl.Text}
@@ -629,6 +620,13 @@ func (talking *genericRequestor) handleConversationMetric(ctx context.Context, v
 				talking.logger.Errorf("Error in onAddMetrics: %v", err)
 			}
 		})
+		utils.Go(ctx, func() {
+			talking.metrics.Collect(ctx, observe.ConversationMetricRecord{
+				ConversationID: vl.ContextId(),
+				Metrics:        vl.Metrics,
+				Time:           time.Now(),
+			})
+		})
 	}
 }
 
@@ -655,6 +653,14 @@ func (talking *genericRequestor) handleMessageMetric(ctx context.Context, vl int
 			if err := talking.onMessageMetric(ctx, vl.ContextID, vl.Metrics); err != nil {
 				talking.logger.Errorf("Error in onMessageMetric: %v", err)
 			}
+		})
+		utils.Go(ctx, func() {
+			talking.metrics.Collect(ctx, observe.MessageMetricRecord{
+				MessageID:      vl.ContextID,
+				ConversationID: fmt.Sprintf("%d", talking.Conversation().Id),
+				Metrics:        vl.Metrics,
+				Time:           time.Now(),
+			})
 		})
 	}
 }
@@ -734,5 +740,11 @@ func (talking *genericRequestor) handleConversationEvent(ctx context.Context, vl
 		Name: vl.Name,
 		Data: vl.Data,
 		Time: timestamppb.New(vl.Time),
+	})
+	talking.events.Collect(ctx, observe.EventRecord{
+		MessageID: contextID,
+		Name:      vl.Name,
+		Data:      vl.Data,
+		Time:      vl.Time,
 	})
 }

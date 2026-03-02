@@ -238,9 +238,11 @@ func (s *webrtcStreamer) setupPeerEventHandlers() {
 			s.sendReady()
 
 		case pionwebrtc.PeerConnectionStateFailed:
-			// Connection failed irrecoverably — tear down and notify downstream.
-			s.Logger.Errorw("WebRTC connection failed, closing session", "session", s.sessionID)
-			s.PushDisconnection(protos.ConversationDisconnection_DISCONNECTION_TYPE_USER)
+			// ICE failure — common on Safari (mDNS privacy candidates cannot be
+			// resolved on a cloud server). Do NOT close the gRPC session; fall
+			// back to text mode so the conversation stays alive.
+			s.Logger.Warnw("WebRTC ICE failed, falling back to text mode", "session", s.sessionID)
+			s.resetAudioSession()
 
 		case pionwebrtc.PeerConnectionStateDisconnected:
 			// Transient state — network hiccup, ICE may recover.
@@ -572,7 +574,8 @@ func (s *webrtcStreamer) runGrpcReader() {
 		switch msg.GetRequest().(type) {
 		case *protos.WebTalkRequest_Initialization:
 			s.PushInput(msg.GetInitialization())
-			s.handleConfigurationMessage(msg.GetInitialization().GetStreamMode())
+			// Don't call handleConfigurationMessage here — the Talk() loop will
+			// trigger transport setup after Connect() completes via NotifyMode().
 		case *protos.WebTalkRequest_Configuration:
 			s.PushInput(msg.GetConfiguration())
 			s.handleConfigurationMessage(msg.GetConfiguration().GetStreamMode())
@@ -590,6 +593,13 @@ func (s *webrtcStreamer) runGrpcReader() {
 			s.Logger.Warnw("Unknown message type", "type", fmt.Sprintf("%T", msg.GetRequest()))
 		}
 	}
+}
+
+// NotifyMode is called by the Talk loop after Connect() completes.
+// For AUDIO mode it triggers the WebRTC handshake; for TEXT it is a no-op
+// (or tears down audio if switching back to text).
+func (s *webrtcStreamer) NotifyMode(mode protos.StreamMode) {
+	s.handleConfigurationMessage(mode)
 }
 
 // handleConfigurationMessage processes transport mode changes.

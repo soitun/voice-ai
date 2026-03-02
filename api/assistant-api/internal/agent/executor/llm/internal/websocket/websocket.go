@@ -18,7 +18,6 @@ import (
 
 	internal_agent_executor "github.com/rapidaai/api/assistant-api/internal/agent/executor"
 	internal_assistant_entity "github.com/rapidaai/api/assistant-api/internal/entity/assistants"
-	internal_adapter_telemetry "github.com/rapidaai/api/assistant-api/internal/telemetry"
 	internal_type "github.com/rapidaai/api/assistant-api/internal/type"
 	"github.com/rapidaai/pkg/commons"
 	"github.com/rapidaai/pkg/utils"
@@ -47,9 +46,6 @@ func (e *websocketExecutor) Name() string {
 
 // Initialize establishes the WebSocket connection and starts the listener.
 func (e *websocketExecutor) Initialize(ctx context.Context, comm internal_type.Communication, cfg *protos.ConversationInitialization) error {
-	_, span, _ := comm.Tracer().StartSpan(ctx, utils.AssistantAgentConnectStage, internal_adapter_telemetry.KV{K: "executor", V: internal_adapter_telemetry.StringValue(e.Name())})
-	defer span.EndSpan(ctx, utils.AssistantAgentConnectStage)
-
 	provider := comm.Assistant().AssistantProviderWebsocket
 	if provider == nil {
 		return fmt.Errorf("websocket provider is not enabled")
@@ -223,8 +219,6 @@ func (e *websocketExecutor) handleResponse(ctx context.Context, resp *Response, 
 
 // Execute sends a packet to the WebSocket server.
 func (e *websocketExecutor) Execute(ctx context.Context, comm internal_type.Communication, packet internal_type.Packet) error {
-	_, span, _ := comm.Tracer().StartSpan(ctx, utils.AssistantAgentTextGenerationStage, internal_adapter_telemetry.MessageKV(packet.ContextId()))
-	defer span.EndSpan(ctx, utils.AssistantAgentTextGenerationStage)
 	switch p := packet.(type) {
 	case internal_type.UserTextPacket:
 		return e.send(Request{

@@ -15,8 +15,6 @@ import (
 	"github.com/rapidaai/api/assistant-api/config"
 	"github.com/rapidaai/protos"
 
-	internal_assistant_telemetry "github.com/rapidaai/api/assistant-api/internal/telemetry/assistant"
-	internal_assistant_telemetry_exporters "github.com/rapidaai/api/assistant-api/internal/telemetry/assistant/exporters"
 	internal_type "github.com/rapidaai/api/assistant-api/internal/type"
 
 	internal_agent_embeddings "github.com/rapidaai/api/assistant-api/internal/agent/embedding"
@@ -26,10 +24,12 @@ import (
 	internal_assistant_entity "github.com/rapidaai/api/assistant-api/internal/entity/assistants"
 	internal_conversation_entity "github.com/rapidaai/api/assistant-api/internal/entity/conversations"
 	internal_knowledge_gorm "github.com/rapidaai/api/assistant-api/internal/entity/knowledges"
+	internal_telemetry_entity "github.com/rapidaai/api/assistant-api/internal/entity/telemetry"
+	observe "github.com/rapidaai/api/assistant-api/internal/observe"
+	observe_exporters "github.com/rapidaai/api/assistant-api/internal/observe/exporters"
 	internal_services "github.com/rapidaai/api/assistant-api/internal/services"
 	internal_assistant_service "github.com/rapidaai/api/assistant-api/internal/services/assistant"
 	internal_knowledge_service "github.com/rapidaai/api/assistant-api/internal/services/knowledge"
-	internal_telemetry "github.com/rapidaai/api/assistant-api/internal/telemetry"
 	endpoint_client "github.com/rapidaai/pkg/clients/endpoint"
 	integration_client "github.com/rapidaai/pkg/clients/integration"
 	web_client "github.com/rapidaai/pkg/clients/web"
@@ -91,13 +91,15 @@ type genericRequestor struct {
 	assistantToolService internal_services.AssistantToolService
 
 	//
+	postgres      connectors.PostgresConnector
 	opensearch    connectors.OpenSearchConnector
 	vectordb      connectors.VectorConnector
 	queryEmbedder internal_agent_embeddings.QueryEmbedding
 	textReranker  internal_agent_rerankers.TextReranking
 
-	// managing event
-	tracer internal_telemetry.VoiceAgentTracer
+	// observe collectors — fan out events and metrics to external APM backends
+	events  observe.EventCollector
+	metrics observe.MetricCollector
 
 	// integration client
 	integrationClient integration_client.IntegrationServiceClient
@@ -170,6 +172,7 @@ func NewGenericRequestor(
 		templateParser:       parsers.NewPongo2StringTemplateParser(logger),
 		//
 
+		postgres:      postgres,
 		opensearch:    opensearch,
 		vectordb:      opensearch,
 		queryEmbedder: internal_agent_embeddings.NewQueryEmbedding(logger, config, redis),
@@ -180,13 +183,8 @@ func NewGenericRequestor(
 		deploymentClient:  endpoint_client.NewDeploymentServiceClientGRPC(&config.AppConfig, logger, redis),
 		vaultClient:       web_client.NewVaultClientGRPC(&config.AppConfig, logger, redis),
 
-		//
-		tracer: func() internal_telemetry.VoiceAgentTracer {
-			if opensearch != nil {
-				return internal_assistant_telemetry.NewInMemoryTracer(logger, internal_assistant_telemetry_exporters.NewOpensearchAssistantTraceExporter(logger, &config.AppConfig, opensearch))
-			}
-			return internal_assistant_telemetry.NewInMemoryTracer(logger)
-		}(),
+		events:  observe.NewEventCollector(logger, observe.SessionMeta{}),
+		metrics: observe.NewMetricCollector(logger, observe.SessionMeta{}),
 		contextID:        uuid.NewString(),
 		interactionState: Unknown,
 		msgMode:          type_enums.TextMode,
@@ -220,10 +218,6 @@ func (deb *genericRequestor) onCreateMessage(ctx context.Context, msg internal_t
 		return err
 	}
 	return nil
-}
-
-func (dm *genericRequestor) Tracer() internal_telemetry.VoiceAgentTracer {
-	return dm.tracer
 }
 
 func (gr *genericRequestor) GetAssistantConversation(ctx context.Context, auth types.SimplePrinciple, assistantId uint64, assistantConversationId uint64) (*internal_conversation_entity.AssistantConversation, error) {
@@ -376,4 +370,124 @@ func (r *genericRequestor) Transition(newState InteractionState) error {
 	}
 	r.interactionState = newState
 	return nil
+}
+
+// loadTelemetryProviders fetches enabled telemetry provider configurations
+// (with their options) for the current assistant from the database.
+func (r *genericRequestor) loadTelemetryProviders(ctx context.Context) ([]*internal_telemetry_entity.AssistantTelemetryProvider, error) {
+	var providers []*internal_telemetry_entity.AssistantTelemetryProvider
+	err := r.postgres.DB(ctx).
+		Preload("Options").
+		Where("assistant_id = ? AND enabled = true", r.assistant.Id).
+		Find(&providers).Error
+	return providers, err
+}
+
+// initializeCollectors builds EventCollector and MetricCollector from the
+// assistant's telemetry provider configuration stored in the database.
+// Connection details come from the provider's Options key-value pairs.
+// Collectors default to no-op when no providers are configured.
+func (r *genericRequestor) initializeCollectors(ctx context.Context) {
+	providers, err := r.loadTelemetryProviders(ctx)
+	if err != nil {
+		r.logger.Errorf("observe: failed to load telemetry providers: %v", err)
+	}
+
+	var projectID, orgID uint64
+	if pid := r.auth.GetCurrentProjectId(); pid != nil {
+		projectID = *pid
+	}
+	if oid := r.auth.GetCurrentOrganizationId(); oid != nil {
+		orgID = *oid
+	}
+
+	meta := observe.SessionMeta{
+		AssistantID:             r.assistant.Id,
+		AssistantConversationID: r.assistantConversation.Id,
+		ProjectID:               projectID,
+		OrganizationID:          orgID,
+	}
+
+	var eventExporters []observe.EventExporter
+	var metricExporters []observe.MetricExporter
+
+	// OpenSearch is the platform's own telemetry store — register only when reachable.
+	if r.opensearch != nil && r.opensearch.IsConnected(ctx) {
+		exp := observe_exporters.NewOpenSearchExporter(r.logger, &r.config.AppConfig, r.opensearch)
+		eventExporters = append(eventExporters, exp)
+		metricExporters = append(metricExporters, exp)
+	}
+
+	for _, p := range providers {
+		opts := p.GetOptions()
+		switch p.ProviderType {
+		case "otlp_http", "otlp_grpc":
+			cfg := observe_exporters.OTLPConfigFromOptions(opts, p.ProviderType)
+			if cfg.Endpoint == "" {
+				r.logger.Errorf("observe: OTLP provider %d has no endpoint in options", p.Id)
+				continue
+			}
+			exp, err := observe_exporters.NewOTLPExporter(ctx, cfg)
+			if err != nil {
+				r.logger.Errorf("observe: OTLP exporter creation failed for provider %d: %v", p.Id, err)
+				continue
+			}
+			eventExporters = append(eventExporters, exp)
+			metricExporters = append(metricExporters, exp)
+
+		case "xray":
+			exp, err := observe_exporters.NewXRayExporter(ctx, opts)
+			if err != nil {
+				r.logger.Errorf("observe: X-Ray exporter creation failed for provider %d: %v", p.Id, err)
+				continue
+			}
+			eventExporters = append(eventExporters, exp)
+			metricExporters = append(metricExporters, exp)
+
+		case "google_trace":
+			exp, err := observe_exporters.NewGoogleTraceExporter(ctx, opts)
+			if err != nil {
+				r.logger.Errorf("observe: Google Cloud Trace exporter creation failed for provider %d: %v", p.Id, err)
+				continue
+			}
+			eventExporters = append(eventExporters, exp)
+			metricExporters = append(metricExporters, exp)
+
+		case "azure_monitor":
+			exp, err := observe_exporters.NewAzureMonitorExporter(ctx, opts)
+			if err != nil {
+				r.logger.Errorf("observe: Azure Monitor exporter creation failed for provider %d: %v", p.Id, err)
+				continue
+			}
+			eventExporters = append(eventExporters, exp)
+			metricExporters = append(metricExporters, exp)
+
+		case "datadog":
+			exp, err := observe_exporters.NewDatadogExporter(ctx, opts)
+			if err != nil {
+				r.logger.Errorf("observe: Datadog exporter creation failed for provider %d: %v", p.Id, err)
+				continue
+			}
+			eventExporters = append(eventExporters, exp)
+			metricExporters = append(metricExporters, exp)
+
+		case "logging":
+			exp := observe_exporters.NewLoggingExporter(r.logger)
+			eventExporters = append(eventExporters, exp)
+			metricExporters = append(metricExporters, exp)
+		}
+	}
+
+	r.events = observe.NewEventCollector(r.logger, meta, eventExporters...)
+	r.metrics = observe.NewMetricCollector(r.logger, meta, metricExporters...)
+}
+
+// shutdownCollectors waits for in-flight exports and shuts down all exporters.
+// Uses a background context so shutdown completes even if the session context
+// is already cancelled at disconnect time.
+func (r *genericRequestor) shutdownCollectors(_ context.Context) {
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	r.events.Shutdown(shutdownCtx)
+	r.metrics.Shutdown(shutdownCtx)
 }

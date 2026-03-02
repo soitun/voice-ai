@@ -13,7 +13,6 @@ import (
 	internal_audio "github.com/rapidaai/api/assistant-api/internal/audio"
 	internal_denoiser "github.com/rapidaai/api/assistant-api/internal/denoiser"
 	internal_end_of_speech "github.com/rapidaai/api/assistant-api/internal/end_of_speech"
-	internal_telemetry "github.com/rapidaai/api/assistant-api/internal/telemetry"
 	internal_transformer "github.com/rapidaai/api/assistant-api/internal/transformer"
 	internal_type "github.com/rapidaai/api/assistant-api/internal/type"
 	internal_vad "github.com/rapidaai/api/assistant-api/internal/vad"
@@ -32,20 +31,12 @@ func (listening *genericRequestor) initializeSpeechToText(ctx context.Context) e
 	if transformerConfig != nil {
 		options = utils.MergeMaps(options, transformerConfig.GetOptions())
 		eGroup.Go(func() error {
-			spanCtx, span, _ := listening.Tracer().StartSpan(ectx, utils.AssistantListenConnectStage)
-			defer span.EndSpan(spanCtx, utils.AssistantListenConnectStage)
-
-			span.AddAttributes(spanCtx,
-				internal_telemetry.KV{K: "options", V: internal_telemetry.JSONValue(options)},
-				internal_telemetry.KV{K: "provider", V: internal_telemetry.StringValue(transformerConfig.AudioProvider)},
-			)
-
 			credentialId, err := options.GetUint64("rapida.credential_id")
 			if err != nil {
 				listening.logger.Errorf("unable to find credential from options %+v", err)
 				return err
 			}
-			credential, err := listening.VaultCaller().GetCredential(spanCtx, listening.Auth(), credentialId)
+			credential, err := listening.VaultCaller().GetCredential(ectx, listening.Auth(), credentialId)
 			if err != nil {
 				listening.logger.Errorf("Api call to find credential failed %+v", err)
 				return err
@@ -180,19 +171,6 @@ func (spk *genericRequestor) initializeTextToSpeech(context context.Context) err
 	if outputTransformer != nil {
 		speakerOpts = utils.MergeMaps(outputTransformer.GetOptions())
 
-		// context with span
-		context, span, _ := spk.Tracer().StartSpan(context, utils.AssistantSpeakConnectStage)
-		defer span.EndSpan(context, utils.AssistantSpeakConnectStage)
-		span.AddAttributes(context,
-			internal_telemetry.KV{
-				K: "options", V: internal_telemetry.JSONValue(speakerOpts),
-			},
-			internal_telemetry.KV{
-				K: "provider", V: internal_telemetry.StringValue(outputTransformer.GetName()),
-			},
-		)
-
-		//
 		wg.Add(1)
 		utils.Go(context, func() {
 			defer wg.Done()

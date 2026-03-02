@@ -26,29 +26,33 @@ import (
 )
 
 type awsFileStorage struct {
-	config  configs.AssetStoreConfig
-	logger  commons.Logger
-	options aws_session.Options
+	config   configs.AssetStoreConfig
+	logger   commons.Logger
+	s3Client *s3.S3
 }
 
 func NewAwsFileStorage(cfg configs.AssetStoreConfig, logger commons.Logger) storages.Storage {
-	config := aws.Config{
+	awsConfig := aws.Config{
 		Region: aws.String(cfg.Auth.Region),
 	}
 	if cfg.Auth.AccessKeyId != "" && cfg.Auth.SecretKey != "" {
-		config.Credentials = credentials.NewStaticCredentials(
+		awsConfig.Credentials = credentials.NewStaticCredentials(
 			cfg.Auth.AccessKeyId,
 			cfg.Auth.SecretKey,
 			"",
 		)
 	}
+	sess, err := aws_session.NewSessionWithOptions(aws_session.Options{
+		Config:            awsConfig,
+		SharedConfigState: aws_session.SharedConfigEnable,
+	})
+	if err != nil {
+		logger.Errorf("unable to create aws s3 session: %v", err)
+	}
 	return &awsFileStorage{
-		config: cfg,
-		logger: logger,
-		options: aws_session.Options{
-			Config:            config,
-			SharedConfigState: aws_session.SharedConfigEnable,
-		},
+		config:   cfg,
+		logger:   logger,
+		s3Client: s3.New(sess),
 	}
 }
 
@@ -77,15 +81,9 @@ func (storage *awsFileStorage) contentType(filename string) string {
 // Store implements storages.Storage.
 func (storage *awsFileStorage) Store(ctx context.Context, key string, fileContent []byte) storages.StorageOutput {
 	storage.logger.Debugf("s3.store with file path name %s storage path prefix %s", key, storage.config.StoragePathPrefix)
-	aws_session, err := aws_session.NewSessionWithOptions(storage.options)
 	completePath := fmt.Sprintf("s3://%s/%s", storage.config.StoragePathPrefix, key)
-	if err != nil {
-		storage.logger.Errorf("unable to create aws s3 session to upload the document %v", err)
-		return storages.StorageOutput{Error: err, StorageType: configs.S3}
-	}
-	s3Client := s3.New(aws_session)
 	reader := bytes.NewReader(fileContent)
-	_, err = s3Client.PutObject(&s3.PutObjectInput{
+	_, err := storage.s3Client.PutObject(&s3.PutObjectInput{
 		Bucket:      aws.String(storage.config.StoragePathPrefix),
 		Key:         aws.String(key),
 		Body:        reader,
@@ -110,13 +108,7 @@ func (lfs *awsFileStorage) Name() string {
 }
 
 func (storage *awsFileStorage) Get(ctx context.Context, key string) storages.GetStorageOutput {
-	aws_session, err := aws_session.NewSessionWithOptions(storage.options)
-	if err != nil {
-		storage.logger.Errorf("unable to get aws s3 session to upload the document %v", err)
-		return storages.GetStorageOutput{Error: err}
-	}
-	s3Client := s3.New(aws_session)
-	resp, err := s3Client.GetObjectWithContext(ctx, &s3.GetObjectInput{
+	resp, err := storage.s3Client.GetObjectWithContext(ctx, &s3.GetObjectInput{
 		Bucket: aws.String(storage.config.StoragePathPrefix),
 		Key:    aws.String(key),
 	})
@@ -135,13 +127,7 @@ func (storage *awsFileStorage) Get(ctx context.Context, key string) storages.Get
 
 func (aws *awsFileStorage) GetUrl(ctx context.Context, key string) storages.StorageOutput {
 	aws.logger.Debugf("awsFileStorage.getUrl with file path name %s", key)
-	aws_session, err := aws_session.NewSessionWithOptions(aws.options)
-	if err != nil {
-		aws.logger.Errorf("unable to get aws s3 session to upload the document %v", err)
-		return storages.StorageOutput{Error: err}
-	}
-	s3Client := s3.New(aws_session)
-	req, _ := s3Client.GetObjectRequest(&s3.GetObjectInput{
+	req, _ := aws.s3Client.GetObjectRequest(&s3.GetObjectInput{
 		Bucket: utils.Ptr(aws.config.StoragePathPrefix),
 		Key:    utils.Ptr(key),
 	})

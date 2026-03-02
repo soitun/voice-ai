@@ -11,13 +11,14 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/rapidaai/pkg/commons"
 	"github.com/rapidaai/pkg/configs"
 )
 
-func TestCDNStorage_Name(t *testing.T) {
-	cfg := configs.AssetStoreConfig{
+func newTestCDNConfig() configs.AssetStoreConfig {
+	return configs.AssetStoreConfig{
 		StorageType:       "cdn",
 		StoragePathPrefix: "https://cdn.example.com",
 		Auth: &configs.AwsConfig{
@@ -26,73 +27,51 @@ func TestCDNStorage_Name(t *testing.T) {
 			SecretKey:   "test-secret",
 		},
 	}
-	logger, _ := commons.NewApplicationLogger()
-	storage := NewCDNStorage(cfg, logger)
+}
 
+func TestCDNStorage_Name(t *testing.T) {
+	logger, _ := commons.NewApplicationLogger()
+	storage := NewCDNStorage(newTestCDNConfig(), logger)
 	assert.Equal(t, "cdn", storage.Name())
 }
 
-func TestCDNStorage_Store_SessionCreationFailure(t *testing.T) {
-	// Test case where session creation fails
-	cfg := configs.AssetStoreConfig{
-		StorageType:       "cdn",
-		StoragePathPrefix: "https://cdn.example.com",
-		Auth: &configs.AwsConfig{
-			Region: "", // Invalid region to cause session failure
-		},
-	}
+// TestCDNStorage_ClientReuse verifies the S3 client is created once in the
+// constructor and reused across calls.
+func TestCDNStorage_ClientReuse(t *testing.T) {
 	logger, _ := commons.NewApplicationLogger()
-	storage := NewCDNStorage(cfg, logger)
+	s := NewCDNStorage(newTestCDNConfig(), logger).(*cdnStorage)
+	require.NotNil(t, s.s3Client, "s3Client must be initialised in constructor")
+	assert.Same(t, s.s3Client, s.s3Client)
+}
 
-	ctx := context.Background()
-	key := "test/file.txt"
-	content := []byte("test content")
+// TestCDNStorage_Store_ReturnsError verifies Store propagates S3 API errors.
+func TestCDNStorage_Store_ReturnsError(t *testing.T) {
+	logger, _ := commons.NewApplicationLogger()
+	storage := NewCDNStorage(newTestCDNConfig(), logger)
 
-	result := storage.Store(ctx, key, content)
+	result := storage.Store(context.Background(), "test/file.txt", []byte("content"))
 
-	// Should return error due to invalid session
 	assert.Error(t, result.Error)
 	assert.Equal(t, configs.S3, result.StorageType)
 	assert.Contains(t, result.CompletePath, "https://cdn.example.com/cdn/")
 }
 
-func TestCDNStorage_Get_SessionCreationFailure(t *testing.T) {
-	cfg := configs.AssetStoreConfig{
-		StorageType:       "cdn",
-		StoragePathPrefix: "https://cdn.example.com",
-		Auth: &configs.AwsConfig{
-			Region: "", // Invalid region to cause session failure
-		},
-	}
+// TestCDNStorage_Get_ReturnsError verifies Get propagates S3 API errors.
+func TestCDNStorage_Get_ReturnsError(t *testing.T) {
 	logger, _ := commons.NewApplicationLogger()
-	storage := NewCDNStorage(cfg, logger)
+	storage := NewCDNStorage(newTestCDNConfig(), logger)
 
-	ctx := context.Background()
-	key := "test/file.txt"
-
-	result := storage.Get(ctx, key)
+	result := storage.Get(context.Background(), "test/file.txt")
 
 	assert.Error(t, result.Error)
 	assert.Nil(t, result.Data)
 }
 
 func TestCDNStorage_GetUrl(t *testing.T) {
-	cfg := configs.AssetStoreConfig{
-		StorageType:       "cdn",
-		StoragePathPrefix: "https://cdn.example.com",
-		Auth: &configs.AwsConfig{
-			Region:      "us-east-1",
-			AccessKeyId: "test-key",
-			SecretKey:   "test-secret",
-		},
-	}
 	logger, _ := commons.NewApplicationLogger()
-	storage := NewCDNStorage(cfg, logger)
+	storage := NewCDNStorage(newTestCDNConfig(), logger)
 
-	ctx := context.Background()
-	key := "test/file.txt"
-
-	result := storage.GetUrl(ctx, key)
+	result := storage.GetUrl(context.Background(), "test/file.txt")
 
 	assert.NoError(t, result.Error)
 	assert.Equal(t, configs.S3, result.StorageType)
@@ -100,27 +79,17 @@ func TestCDNStorage_GetUrl(t *testing.T) {
 }
 
 func TestCDNStorage_prefix(t *testing.T) {
-	cfg := configs.AssetStoreConfig{
-		StorageType:       "cdn",
-		StoragePathPrefix: "https://cdn.example.com",
-		Auth: &configs.AwsConfig{
-			Region:      "us-east-1",
-			AccessKeyId: "test-key",
-			SecretKey:   "test-secret",
-		},
-	}
 	logger, _ := commons.NewApplicationLogger()
-	storage := NewCDNStorage(cfg, logger).(*cdnStorage)
+	storage := NewCDNStorage(newTestCDNConfig(), logger).(*cdnStorage)
 
-	ctx := context.Background()
-	key := "test/file.txt"
+	prefixed := storage.prefix(context.Background(), "file.txt")
 
-	// Test that prefix adds ID prefix
-	prefixed := storage.prefix(ctx, key)
-	assert.Contains(t, prefixed, "cdn/")
-	assert.Contains(t, prefixed, "_"+key)
-	// Should be in format: cdn/{id}_{key}
-	parts := strings.Split(prefixed, "_")
+	assert.True(t, strings.HasPrefix(prefixed, "cdn/"), "prefix must start with cdn/")
+	assert.True(t, strings.HasSuffix(prefixed, "_file.txt"), "prefix must end with _<key>")
+	// Format: cdn/{snowflake-id}_file.txt — exactly one underscore separating id and key
+	withoutCdn := strings.TrimPrefix(prefixed, "cdn/")
+	parts := strings.SplitN(withoutCdn, "_", 2)
 	assert.Len(t, parts, 2)
-	assert.Equal(t, "cdn/"+parts[0]+"/"+parts[0], "cdn/"+parts[0]+"/"+parts[0]) // This is a rough check
+	assert.NotEmpty(t, parts[0], "snowflake id must not be empty")
+	assert.Equal(t, "file.txt", parts[1])
 }

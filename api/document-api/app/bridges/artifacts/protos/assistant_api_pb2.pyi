@@ -152,6 +152,61 @@ class GetAllAssistantTelemetryRequest(_message.Message):
     assistant: _common_pb2.AssistantDefinition
     def __init__(self, paginate: _Optional[_Union[_common_pb2.Paginate, _Mapping]] = ..., criterias: _Optional[_Iterable[_Union[_common_pb2.Criteria, _Mapping]]] = ..., assistant: _Optional[_Union[_common_pb2.AssistantDefinition, _Mapping]] = ...) -> None: ...
 
+class TelemetryEvent(_message.Message):
+    __slots__ = ("messageId", "assistantId", "assistantConversationId", "projectId", "organizationId", "name", "data", "time")
+    class DataEntry(_message.Message):
+        __slots__ = ("key", "value")
+        KEY_FIELD_NUMBER: _ClassVar[int]
+        VALUE_FIELD_NUMBER: _ClassVar[int]
+        key: str
+        value: str
+        def __init__(self, key: _Optional[str] = ..., value: _Optional[str] = ...) -> None: ...
+    MESSAGEID_FIELD_NUMBER: _ClassVar[int]
+    ASSISTANTID_FIELD_NUMBER: _ClassVar[int]
+    ASSISTANTCONVERSATIONID_FIELD_NUMBER: _ClassVar[int]
+    PROJECTID_FIELD_NUMBER: _ClassVar[int]
+    ORGANIZATIONID_FIELD_NUMBER: _ClassVar[int]
+    NAME_FIELD_NUMBER: _ClassVar[int]
+    DATA_FIELD_NUMBER: _ClassVar[int]
+    TIME_FIELD_NUMBER: _ClassVar[int]
+    messageId: str
+    assistantId: int
+    assistantConversationId: int
+    projectId: int
+    organizationId: int
+    name: str
+    data: _containers.ScalarMap[str, str]
+    time: _timestamp_pb2.Timestamp
+    def __init__(self, messageId: _Optional[str] = ..., assistantId: _Optional[int] = ..., assistantConversationId: _Optional[int] = ..., projectId: _Optional[int] = ..., organizationId: _Optional[int] = ..., name: _Optional[str] = ..., data: _Optional[_Mapping[str, str]] = ..., time: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ...) -> None: ...
+
+class TelemetryMetric(_message.Message):
+    __slots__ = ("contextId", "assistantId", "assistantConversationId", "projectId", "organizationId", "scope", "metrics", "time")
+    CONTEXTID_FIELD_NUMBER: _ClassVar[int]
+    ASSISTANTID_FIELD_NUMBER: _ClassVar[int]
+    ASSISTANTCONVERSATIONID_FIELD_NUMBER: _ClassVar[int]
+    PROJECTID_FIELD_NUMBER: _ClassVar[int]
+    ORGANIZATIONID_FIELD_NUMBER: _ClassVar[int]
+    SCOPE_FIELD_NUMBER: _ClassVar[int]
+    METRICS_FIELD_NUMBER: _ClassVar[int]
+    TIME_FIELD_NUMBER: _ClassVar[int]
+    contextId: str
+    assistantId: int
+    assistantConversationId: int
+    projectId: int
+    organizationId: int
+    scope: str
+    metrics: _containers.RepeatedCompositeFieldContainer[_common_pb2.Metric]
+    time: _timestamp_pb2.Timestamp
+    def __init__(self, contextId: _Optional[str] = ..., assistantId: _Optional[int] = ..., assistantConversationId: _Optional[int] = ..., projectId: _Optional[int] = ..., organizationId: _Optional[int] = ..., scope: _Optional[str] = ..., metrics: _Optional[_Iterable[_Union[_common_pb2.Metric, _Mapping]]] = ..., time: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ...) -> None: ...
+
+class TelemetryRecord(_message.Message):
+    __slots__ = ("event", "metric")
+    EVENT_FIELD_NUMBER: _ClassVar[int]
+    METRIC_FIELD_NUMBER: _ClassVar[int]
+    event: TelemetryEvent
+    metric: TelemetryMetric
+    def __init__(self, event: _Optional[_Union[TelemetryEvent, _Mapping]] = ..., metric: _Optional[_Union[TelemetryMetric, _Mapping]] = ...) -> None: ...
+
 class GetAllAssistantTelemetryResponse(_message.Message):
     __slots__ = ("code", "success", "data", "error", "paginated")
     CODE_FIELD_NUMBER: _ClassVar[int]
@@ -161,10 +216,10 @@ class GetAllAssistantTelemetryResponse(_message.Message):
     PAGINATED_FIELD_NUMBER: _ClassVar[int]
     code: int
     success: bool
-    data: _containers.RepeatedCompositeFieldContainer[_common_pb2.Telemetry]
+    data: _containers.RepeatedCompositeFieldContainer[TelemetryRecord]
     error: _common_pb2.Error
     paginated: _common_pb2.Paginated
-    def __init__(self, code: _Optional[int] = ..., success: bool = ..., data: _Optional[_Iterable[_Union[_common_pb2.Telemetry, _Mapping]]] = ..., error: _Optional[_Union[_common_pb2.Error, _Mapping]] = ..., paginated: _Optional[_Union[_common_pb2.Paginated, _Mapping]] = ...) -> None: ...
+    def __init__(self, code: _Optional[int] = ..., success: bool = ..., data: _Optional[_Iterable[_Union[TelemetryRecord, _Mapping]]] = ..., error: _Optional[_Union[_common_pb2.Error, _Mapping]] = ..., paginated: _Optional[_Union[_common_pb2.Paginated, _Mapping]] = ...) -> None: ...
 
 class GetAllAssistantResponse(_message.Message):
     __slots__ = ("code", "success", "data", "error", "paginated")

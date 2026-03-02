@@ -19,6 +19,10 @@ func NewStorage(config configs.AssetStoreConfig, logger commons.Logger) storages
 		return NewLocalFileStorage(config, logger)
 	case configs.CDN:
 		return NewCDNStorage(config, logger)
+	case configs.AZURE:
+		return NewAzureBlobStorage(config, logger)
+	case configs.GCS:
+		return NewGCSStorage(config, logger)
 	default:
 		logger.Warnf("illegal/unsupported storage type, %s", config.StorageType)
 		return NewLocalFileStorage(config, logger)

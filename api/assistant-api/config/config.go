@@ -38,8 +38,8 @@ type AssistantConfig struct {
 	WeaviateConfig      configs.WeaviateConfig    `mapstructure:"weaviate"`
 	AssetStoreConfig    configs.AssetStoreConfig  `mapstructure:"asset_store" validate:"required"`
 	PublicAssistantHost string                    `mapstructure:"public_assistant_host" validate:"required"`
-	SIPConfig           *SIPConfig                `mapstructure:"sip"`
-	AudioSocketConfig   *AudioSocketConfig        `mapstructure:"audiosocket"`
+	SIPConfig         *SIPConfig         `mapstructure:"sip"`
+	AudioSocketConfig *AudioSocketConfig `mapstructure:"audiosocket"`
 }
 
 // reading config and intializing configs for application

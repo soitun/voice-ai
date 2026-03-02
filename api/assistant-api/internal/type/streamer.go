@@ -7,6 +7,8 @@ package internal_type
 
 import (
 	"context"
+
+	"github.com/rapidaai/protos"
 )
 
 // TalkInput defines the interface for incoming conversation messages from clients.
@@ -36,4 +38,12 @@ type Streamer interface {
 	// Send sends an input message to the stream.
 	// It returns an error if the send operation fails (e.g., stream closed, network error).
 	Send(Stream) error
+
+	// NotifyMode signals that the session is ready for the given stream mode.
+	// For AUDIO mode this triggers transport setup (e.g. WebRTC handshake).
+	// Called by the Talk loop after Connect() completes so that audio
+	// transport is only started once STT/TTS are initialized.
+	// Implementations that do not need mode-specific transport setup
+	// (e.g. telephony, plain gRPC) should no-op.
+	NotifyMode(mode protos.StreamMode)
 }

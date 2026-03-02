@@ -580,6 +580,10 @@ func (s *BaseStreamer) Context() context.Context {
 	return s.Ctx
 }
 
+// NotifyMode is a no-op for streamers that do not need mode-specific
+// transport setup. Concrete streamers (e.g. webrtcStreamer) override this.
+func (s *BaseStreamer) NotifyMode(_ protos.StreamMode) {}
+
 // Recv reads the next downstream-bound message from the unified input channel.
 // Both transport messages and decoded audio are fed into the same channel by
 // background goroutines. Shutdown is signalled by a ConversationDisconnection

@@ -17,7 +17,6 @@ import (
 	internal_tool_local "github.com/rapidaai/api/assistant-api/internal/agent/executor/tool/internal/local"
 	internal_tool_mcp "github.com/rapidaai/api/assistant-api/internal/agent/executor/tool/internal/mcp"
 	internal_assistant_entity "github.com/rapidaai/api/assistant-api/internal/entity/assistants"
-	internal_adapter_telemetry "github.com/rapidaai/api/assistant-api/internal/telemetry"
 	internal_type "github.com/rapidaai/api/assistant-api/internal/type"
 
 	"github.com/rapidaai/protos"
@@ -70,8 +69,8 @@ func (executor *toolExecutor) initializeLocalTool(ctx context.Context, logger co
 	}
 }
 
-// initializeLocalTools initializes all local tools synchronously
-func (executor *toolExecutor) initializeTools(ctx context.Context, tools []*internal_assistant_entity.AssistantTool, communication internal_type.Communication, tracer internal_adapter_telemetry.Tracer[utils.RapidaStage]) {
+// initializeTools initializes all tools (local + MCP) for the assistant
+func (executor *toolExecutor) initializeTools(ctx context.Context, tools []*internal_assistant_entity.AssistantTool, communication internal_type.Communication) {
 	for _, tool := range tools {
 		switch tool.ExecutionMethod {
 		case "mcp":
@@ -86,7 +85,6 @@ func (executor *toolExecutor) initializeTools(ctx context.Context, tools []*inte
 			}
 			for i, def := range definitions {
 				caller := internal_tool_mcp.NewMCPToolCaller(executor.logger, client, tool.Id+uint64(i), def.Name, def)
-				tracer.AddAttributes(ctx, internal_adapter_telemetry.KV{K: caller.Name(), V: internal_adapter_telemetry.StringValue(caller.ExecutionMethod())})
 				executor.registerTool(caller, def)
 			}
 		default:
@@ -102,7 +100,6 @@ func (executor *toolExecutor) initializeTools(ctx context.Context, tools []*inte
 				continue
 			}
 
-			tracer.AddAttributes(ctx, internal_adapter_telemetry.KV{K: caller.Name(), V: internal_adapter_telemetry.StringValue(caller.ExecutionMethod())})
 			executor.registerTool(caller, def)
 		}
 
@@ -111,9 +108,7 @@ func (executor *toolExecutor) initializeTools(ctx context.Context, tools []*inte
 
 // Initialize sets up all tools (local + MCP) for the assistant
 func (executor *toolExecutor) Initialize(ctx context.Context, communication internal_type.Communication) error {
-	ctx, span, _ := communication.Tracer().StartSpan(ctx, utils.AssistantToolConnectStage)
-	defer span.EndSpan(ctx, utils.AssistantToolConnectStage)
-	executor.initializeTools(ctx, communication.Assistant().AssistantTools, communication, span)
+	executor.initializeTools(ctx, communication.Assistant().AssistantTools, communication)
 	return nil
 }
 
@@ -122,19 +117,11 @@ func (executor *toolExecutor) GetFunctionDefinitions() []*protos.FunctionDefinit
 }
 
 func (executor *toolExecutor) execute(ctx context.Context, contextID string, call *protos.ToolCall, communication internal_type.Communication) *protos.ToolMessage_Tool {
-	ctx, span, _ := communication.Tracer().StartSpan(ctx, utils.AssistantToolExecuteStage, internal_adapter_telemetry.MessageKV(contextID))
-	defer span.EndSpan(ctx, utils.AssistantToolExecuteStage)
-
 	start := time.Now()
-	// metrics := make([]*types.Metric, 0)
 	funC, ok := executor.getTool(call.GetFunction().GetName())
 	if !ok {
 		return &protos.ToolMessage_Tool{Name: call.GetFunction().GetName(), Id: call.Id, Content: "unable to find tool: " + call.GetFunction().GetName()}
 	}
-	span.AddAttributes(ctx,
-		internal_adapter_telemetry.KV{K: "function", V: internal_adapter_telemetry.StringValue(call.GetFunction().GetName())},
-		internal_adapter_telemetry.KV{K: "argument", V: internal_adapter_telemetry.StringValue(call.GetFunction().GetArguments())})
-
 	arguments := executor.parseArgument(call.GetFunction().GetArguments())
 	communication.OnPacket(ctx, internal_type.LLMToolCallPacket{
 		ToolID:    call.GetId(),

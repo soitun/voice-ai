@@ -11,7 +11,6 @@ import (
 	internal_assistant_entity "github.com/rapidaai/api/assistant-api/internal/entity/assistants"
 	internal_conversation_entity "github.com/rapidaai/api/assistant-api/internal/entity/conversations"
 	internal_knowledge_gorm "github.com/rapidaai/api/assistant-api/internal/entity/knowledges"
-	internal_adapter_tracing "github.com/rapidaai/api/assistant-api/internal/telemetry"
 
 	endpoint_client "github.com/rapidaai/pkg/clients/endpoint"
 	integration_client "github.com/rapidaai/pkg/clients/integration"
@@ -53,9 +52,6 @@ type Communication interface {
 
 	// phone, debugger, sdk etc
 	Source() utils.RapidaSource
-
-	// for tracing
-	Tracer() internal_adapter_tracing.VoiceAgentTracer
 
 	// current assistant
 	Assistant() *internal_assistant_entity.Assistant

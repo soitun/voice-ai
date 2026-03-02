@@ -564,11 +564,13 @@ func (openSearch *openSearchConnector) search(ctx context.Context, index []strin
 	// only for benchmarking
 	start := time.Now()
 
+	ignoreUnavailable := true
 	openSearch.logger.Debugf("searching query started executing on index %s", index)
 	searchQuery := opensearchapi.SearchRequest{
 		Index:              index,
 		Body:               strings.NewReader(body),
 		RestTotalHitsAsInt: &totalHitsAsInt,
+		IgnoreUnavailable:  &ignoreUnavailable,
 	}
 	searchResponse, err := searchQuery.Do(ctx, openSearch.Connection)
 	if err != nil {

@@ -32,6 +32,9 @@ func (uds *unidirectionalStreamer) Context() context.Context {
 	return uds.server.Context()
 }
 
+// NotifyMode is a no-op for the plain gRPC streamer (audio transport is N/A).
+func (uds *unidirectionalStreamer) NotifyMode(_ protos.StreamMode) {}
+
 func (uds *unidirectionalStreamer) Recv() (internal_type.Stream, error) {
 	req, err := uds.server.Recv()
 	if err != nil {

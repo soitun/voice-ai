@@ -11,15 +11,19 @@ const (
 	S3    StorageType = "s3"
 	LOCAL StorageType = "local"
 	CDN   StorageType = "cdn"
+	AZURE StorageType = "azure"
+	GCS   StorageType = "gcs"
 )
 
 // asset_upload_bucket
 
 type AssetStoreConfig struct {
-	StorageType       string     `mapstructure:"storage_type" validate:"required"`
-	StoragePathPrefix string     `mapstructure:"storage_path_prefix"`
-	PublicUrlPrefix   *string    `mapstructure:"public_url_prefix"`
-	Auth              *AwsConfig `mapstructure:"auth"`
+	StorageType       string        `mapstructure:"storage_type" validate:"required"`
+	StoragePathPrefix string        `mapstructure:"storage_path_prefix"`
+	PublicUrlPrefix   *string       `mapstructure:"public_url_prefix"`
+	Auth              *AwsConfig    `mapstructure:"auth"`
+	AzureAuth         *AzureConfig  `mapstructure:"azure_auth"`
+	GCSAuth           *GCSConfig    `mapstructure:"gcs_auth"`
 }
 
 func (cfg *AssetStoreConfig) Type() StorageType {
@@ -28,6 +32,10 @@ func (cfg *AssetStoreConfig) Type() StorageType {
 		return S3
 	case string(CDN):
 		return CDN
+	case string(AZURE):
+		return AZURE
+	case string(GCS):
+		return GCS
 	default:
 		return LOCAL
 	}

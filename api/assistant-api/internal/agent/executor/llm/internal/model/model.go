@@ -16,7 +16,6 @@ import (
 
 	internal_agent_executor "github.com/rapidaai/api/assistant-api/internal/agent/executor"
 	internal_agent_tool "github.com/rapidaai/api/assistant-api/internal/agent/executor/tool"
-	internal_adapter_telemetry "github.com/rapidaai/api/assistant-api/internal/telemetry"
 	internal_type "github.com/rapidaai/api/assistant-api/internal/type"
 	integration_client_builders "github.com/rapidaai/pkg/clients/integration/builders"
 	"github.com/rapidaai/pkg/commons"
@@ -54,9 +53,6 @@ func (executor *modelAssistantExecutor) Name() string {
 
 func (executor *modelAssistantExecutor) Initialize(ctx context.Context, communication internal_type.Communication, cfg *protos.ConversationInitialization) error {
 	start := time.Now()
-	ctx, span, _ := communication.Tracer().StartSpan(ctx, utils.AssistantAgentConnectStage, internal_adapter_telemetry.KV{K: "executor", V: internal_adapter_telemetry.StringValue(executor.Name())})
-	defer span.EndSpan(ctx, utils.AssistantAgentConnectStage)
-
 	g, gCtx := errgroup.WithContext(ctx)
 	var providerCredential *protos.VaultCredential
 	var conversationLogs []*protos.Message
@@ -68,8 +64,6 @@ func (executor *modelAssistantExecutor) Initialize(ctx context.Context, communic
 			executor.logger.Errorf("Error while getting provider model credential ID: %v", err)
 			return fmt.Errorf("failed to get credential ID: %w", err)
 		}
-		span.AddAttributes(gCtx, internal_adapter_telemetry.KV{K: "vault_id", V: internal_adapter_telemetry.IntValue(credentialID)})
-
 		cred, err := communication.VaultCaller().GetCredential(gCtx, communication.Auth(), credentialID)
 		if err != nil {
 			executor.logger.Errorf("Error while getting provider model credentials: %v", err)
@@ -97,7 +91,6 @@ func (executor *modelAssistantExecutor) Initialize(ctx context.Context, communic
 	// Assign after goroutines complete to avoid race conditions
 	executor.providerCredential = providerCredential
 	executor.history = append(executor.history, conversationLogs...)
-	span.AddAttributes(ctx, internal_adapter_telemetry.KV{K: "history_length", V: internal_adapter_telemetry.IntValue(len(executor.history))})
 
 	// Open bidirectional stream for persistent connection
 	stream, err := communication.IntegrationCaller().StreamChat(
@@ -331,8 +324,6 @@ func (executor *modelAssistantExecutor) executeToolCalls(ctx context.Context, co
 
 // Execute processes incoming packets when user triggers a message
 func (executor *modelAssistantExecutor) Execute(ctx context.Context, communication internal_type.Communication, pctk internal_type.Packet) error {
-	ctx, span, _ := communication.Tracer().StartSpan(ctx, utils.AssistantAgentTextGenerationStage, internal_adapter_telemetry.MessageKV(pctk.ContextId()))
-	defer span.EndSpan(ctx, utils.AssistantAgentTextGenerationStage)
 	switch plt := pctk.(type) {
 	case internal_type.UserTextPacket:
 		return executor.handleUserTextPacket(ctx, communication, plt)
