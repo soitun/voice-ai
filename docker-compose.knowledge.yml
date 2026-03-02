@@ -9,7 +9,10 @@ services:
   # OpenSearch — required for knowledge base search
   opensearch:
     image: opensearchproject/opensearch:2.11.1
+    platform: linux/amd64
     container_name: opensearch
+    # ports:
+    #   - "9200:9200"
     environment:
       - cluster.name=opensearch-cluster
       - node.name=opensearch-node1
@@ -18,6 +21,7 @@ services:
       - bootstrap.memory_lock=true
       - "OPENSEARCH_JAVA_OPTS=-Xms512m -Xmx512m"
       - plugins.security.disabled=true
+      - bootstrap.system_call_filter=false
     ulimits:
       memlock:
         soft: -1
@@ -37,6 +41,7 @@ services:
 
   # Document API — RAG / knowledge processing
   document-api:
+    platform: linux/amd64
     build:
       context: .
       dockerfile: docker/document-api/Dockerfile
