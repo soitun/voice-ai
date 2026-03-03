@@ -142,10 +142,12 @@ Detailed step-by-step guides for common development tasks live in `.claude/devel
 | Guide | File | Covers |
 |-------|------|--------|
 | Adding STT/TTS Provider | `.claude/developer/adding-stt-tts-provider.md` | Full frontend-to-backend walkthrough: provider registry, UI config components, backend transformer, factory wiring, required events/metrics, checklist |
+| Adding LLM Provider | `.claude/developer/adding-llm-provider.md` | Full frontend-to-backend walkthrough: provider registry, model constants, UI config component, backend caller, gRPC API handler, router + integration client wiring, metrics, checklist |
+| Adding Telephony Provider | `.claude/developer/adding-telephony-provider.md` | Full frontend-to-backend walkthrough: provider registry, UI config component, WebSocket streamer, telephony webhook handler, factory wiring, audio format/resampling, required events, checklist |
 
 ## Adding New Integrations
 
 - **New STT/TTS provider**: Follow `.claude/developer/adding-stt-tts-provider.md` for the complete guide
-- **New LLM provider**: Add a directory under `api/integration-api/internal/caller/`, register in the router
+- **New LLM provider**: Follow `.claude/developer/adding-llm-provider.md` for the complete guide
 - **New telephony channel**: Add under `api/assistant-api/internal/channel/`
 - **New OAuth connector**: Add under `api/web-api/internal/connect/`

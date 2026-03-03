@@ -11,8 +11,8 @@ services:
     image: opensearchproject/opensearch:2.11.1
     platform: linux/amd64
     container_name: opensearch
-    # ports:
-    #   - "9200:9200"
+    ports:
+      - "9200:9200"
     environment:
       - cluster.name=opensearch-cluster
       - node.name=opensearch-node1

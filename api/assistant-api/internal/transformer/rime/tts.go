@@ -72,7 +72,7 @@ func (ct *rimeTTS) Initialize() error {
 
 	ct.mu.Lock()
 	ct.connection = conn
-	defer ct.mu.Unlock()
+	ct.mu.Unlock()
 
 	go ct.textToSpeechCallback(conn, ct.ctx)
 	ct.onPacket(internal_type.ConversationEventPacket{
@@ -100,11 +100,14 @@ func (rt *rimeTTS) textToSpeechCallback(conn *websocket.Conn, ctx context.Contex
 		default:
 			_, audioChunk, err := conn.ReadMessage()
 			if err != nil {
-				if errors.Is(err, io.EOF) || websocket.IsCloseError(err, websocket.CloseNormalClosure, websocket.CloseGoingAway) {
+				if errors.Is(err, io.EOF) || websocket.IsCloseError(err, websocket.CloseNormalClosure, websocket.CloseGoingAway, websocket.CloseNoStatusReceived) {
 					rt.logger.Infof("rime-tts: websocket closed gracefully")
-					return
+				} else {
+					rt.logger.Errorf("rime-tts: websocket read error: %v", err)
 				}
-				rt.logger.Errorf("rime-tts: websocket read error: %v", err)
+				rt.mu.Lock()
+				rt.connection = nil
+				rt.mu.Unlock()
 				return
 			}
 			var audioData rime_internal.RimeTextToSpeechResponse
@@ -152,33 +155,33 @@ func (t *rimeTTS) Transform(ctx context.Context, in internal_type.LLMPacket) err
 	currentCtx := t.contextId
 	if in.ContextId() != t.contextId {
 		t.contextId = in.ContextId()
+		currentCtx = t.contextId
 		t.ttsStartedAt = time.Time{}
 		t.ttsMetricSent = false
 	}
 	t.mu.Unlock()
-
 	if cnn == nil {
-		return fmt.Errorf("rime-tts: websocket connection is not initialized")
+		return nil
 	}
 
 	switch input := in.(type) {
 	case internal_type.InterruptionPacket:
-		if currentCtx != "" {
-			t.mu.Lock()
-			t.ttsStartedAt = time.Time{}
-			t.ttsMetricSent = false
-			t.mu.Unlock()
-			if err := cnn.WriteJSON(map[string]interface{}{
-				"operation": "clear",
-			}); err != nil {
-				t.logger.Errorf("rime-tts: unable to send clear operation: %v", err)
-			}
-			t.onPacket(internal_type.ConversationEventPacket{
-				Name: "tts",
-				Data: map[string]string{"type": "interrupted"},
-				Time: time.Now(),
-			})
+
+		t.mu.Lock()
+		t.ttsStartedAt = time.Time{}
+		t.ttsMetricSent = false
+		t.mu.Unlock()
+		if err := cnn.WriteJSON(map[string]interface{}{
+			"operation": "clear",
+		}); err != nil {
+			t.logger.Errorf("rime-tts: unable to send clear operation: %v", err)
 		}
+		t.onPacket(internal_type.ConversationEventPacket{
+			ContextID: currentCtx,
+			Name:      "tts",
+			Data:      map[string]string{"type": "interrupted"},
+			Time:      time.Now(),
+		})
 		return nil
 	case internal_type.LLMResponseDeltaPacket:
 		t.mu.Lock()
@@ -188,37 +191,36 @@ func (t *rimeTTS) Transform(ctx context.Context, in internal_type.LLMPacket) err
 		t.mu.Unlock()
 		if err := cnn.WriteJSON(map[string]interface{}{
 			"text":      input.Text,
-			"contextId": t.contextId,
+			"contextId": currentCtx,
 		}); err != nil {
 			t.logger.Errorf("rime-tts: unable to write json for text to speech: %v", err)
 		}
 		t.onPacket(internal_type.ConversationEventPacket{
-			Name: "tts",
+			ContextID: currentCtx,
+			Name:      "tts",
 			Data: map[string]string{
 				"type": "speaking",
 				"text": input.Text,
 			},
 			Time: time.Now(),
 		})
+
 	case internal_type.LLMResponseDonePacket:
+		//
 		if err := cnn.WriteJSON(map[string]interface{}{
-			"operation": "eos",
+			"operation": "flush",
 		}); err != nil {
 			t.logger.Errorf("rime-tts: unable to send eos operation: %v", err)
 		}
-		t.mu.Lock()
-		ctxId := t.contextId
-		t.mu.Unlock()
-		if ctxId != "" {
-			t.onPacket(
-				internal_type.TextToSpeechEndPacket{ContextID: ctxId},
-				internal_type.ConversationEventPacket{
-					Name: "tts",
-					Data: map[string]string{"type": "completed"},
-					Time: time.Now(),
-				},
-			)
-		}
+		t.onPacket(
+			internal_type.TextToSpeechEndPacket{ContextID: currentCtx},
+			internal_type.ConversationEventPacket{
+				ContextID: currentCtx,
+				Name:      "tts",
+				Data:      map[string]string{"type": "completed"},
+				Time:      time.Now(),
+			},
+		)
 		return nil
 	default:
 		return fmt.Errorf("rime-tts: unsupported input type %T", in)
@@ -232,7 +234,7 @@ func (t *rimeTTS) Close(ctx context.Context) error {
 	defer t.mu.Unlock()
 
 	if t.connection != nil {
-		t.connection.Close()
+		_ = t.connection.Close()
 		t.connection = nil
 	}
 	return nil

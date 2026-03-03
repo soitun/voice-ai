@@ -196,12 +196,31 @@ export const RIME_MODEL = () => {
   return require('./rime/models.json');
 };
 
-export const RIME_VOICE = () => {
-  return require('./rime/voices.json');
+export const RIME_VOICE = (model?: string, language?: string) => {
+  const voices = require('./rime/voices.json');
+  if (model && language && voices[model]?.[language]) {
+    return voices[model][language];
+  }
+  if (model && voices[model]) {
+    return Object.values(voices[model]).flat();
+  }
+  return Object.values(voices).flatMap((m: any) => Object.values(m).flat());
 };
 
-export const RIME_LANGUAGE = () => {
-  return require('./rime/languages.json');
+export const RIME_LANGUAGE = (model?: string) => {
+  const allLanguages = require('./rime/languages.json');
+  if (model) {
+    const voices = require('./rime/voices.json');
+    const modelVoices = voices[model];
+    if (modelVoices) {
+      const availableLangIds = Object.keys(modelVoices);
+      return allLanguages.filter((l: any) =>
+        availableLangIds.includes(l.language_id),
+      );
+    }
+    return [];
+  }
+  return allLanguages;
 };
 
 /**

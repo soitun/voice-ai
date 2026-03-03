@@ -476,6 +476,7 @@
     {
         "code": "rime",
         "name": "Rime",
+        "image": "https://rapida-assets-01.s3.ap-south-1.amazonaws.com/providers/rime.jpeg",
         "description": "Rime offers ultra-low-latency text-to-speech with natural-sounding voices via WebSocket streaming.",
         "featureList": [
             "tts",
@@ -530,6 +531,7 @@
     {
         "code": "resembleai",
         "name": "Resemble AI",
+        "image": "https://rapida-assets-01.s3.ap-south-1.amazonaws.com/providers/resemble.png",
         "description": "Resemble AI provides high-quality voice cloning and text-to-speech synthesis with real-time WebSocket streaming.",
         "featureList": [
             "tts",
@@ -547,6 +549,7 @@
     {
         "code": "neuphonic",
         "name": "Neuphonic",
+        "image": "https://rapida-assets-01.s3.ap-south-1.amazonaws.com/providers/neuphonic.png",
         "description": "Neuphonic offers ultra-low-latency text-to-speech with natural-sounding voices and multilingual support.",
         "featureList": [
             "tts",
@@ -565,6 +568,7 @@
         "code": "minimax",
         "name": "MiniMax",
         "description": "MiniMax provides advanced text-to-speech synthesis with streaming SSE support and multiple voice options.",
+        "image": "https://rapida-assets-01.s3.ap-south-1.amazonaws.com/providers/minimax.png",
         "featureList": [
             "tts",
             "external"
@@ -587,6 +591,7 @@
         "code": "groq",
         "name": "Groq",
         "description": "Groq provides ultra-fast AI inference with OpenAI-compatible speech-to-text and text-to-speech APIs.",
+        "image": "https://rapida-assets-01.s3.ap-south-1.amazonaws.com/providers/gorq.png",
         "featureList": [
             "stt",
             "tts",
@@ -605,6 +610,7 @@
         "code": "speechmatics",
         "name": "Speechmatics",
         "description": "Speechmatics offers enterprise-grade speech recognition and text-to-speech with high accuracy and multilingual support.",
+        "image": "https://rapida-assets-01.s3.ap-south-1.amazonaws.com/providers/speechmatics.png",
         "featureList": [
             "stt",
             "tts",
@@ -622,6 +628,7 @@
     {
         "code": "nvidia",
         "name": "NVIDIA",
+        "image": "https://rapida-assets-01.s3.ap-south-1.amazonaws.com/providers/nvidia.png",
         "description": "NVIDIA Riva provides GPU-accelerated speech AI with real-time speech recognition and text-to-speech synthesis.",
         "featureList": [
             "stt",

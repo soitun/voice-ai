@@ -48,6 +48,7 @@ func (co *rimeOption) GetTextToSpeechConnectionString() string {
 	params := url.Values{}
 	params.Add("audioFormat", "pcm")
 	params.Add("samplingRate", "16000")
+	params.Add("segment", "immediate")
 
 	voice := RIME_DEFAULT_VOICE
 	if voiceIDValue, err := co.mdlOpts.GetString("speak.voice.id"); err == nil && voiceIDValue != "" {

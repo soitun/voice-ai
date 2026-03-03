@@ -50,7 +50,7 @@ export const ValidateRimeOptions = (
     !credentialID.getValue() ||
     credentialID.getValue().length === 0
   ) {
-    return 'Please select valid credential for text to speech.';
+    return 'Please select a valid credential for text to speech.';
   }
 
   const voiceID = options.find(opt => opt.getKey() === 'speak.voice.id');
@@ -60,16 +60,16 @@ export const ValidateRimeOptions = (
 
   const validations = [
     {
-      key: 'speak.language',
-      validator: RIME_LANGUAGE(),
-      field: 'language_id',
-      errorMessage: 'Please select valid language for text to speech.',
-    },
-    {
       key: 'speak.model',
       validator: RIME_MODEL(),
       field: 'model_id',
-      errorMessage: 'Please select valid model for text to speech.',
+      errorMessage: 'Please select a valid model for text to speech.',
+    },
+    {
+      key: 'speak.language',
+      validator: RIME_LANGUAGE(),
+      field: 'language_id',
+      errorMessage: 'Please select a valid language for text to speech.',
     },
   ];
 

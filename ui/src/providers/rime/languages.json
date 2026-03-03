@@ -18,5 +18,21 @@
     {
         "language_id": "ger",
         "name": "German"
+    },
+    {
+        "language_id": "ara",
+        "name": "Arabic"
+    },
+    {
+        "language_id": "heb",
+        "name": "Hebrew"
+    },
+    {
+        "language_id": "jpn",
+        "name": "Japanese"
+    },
+    {
+        "language_id": "por",
+        "name": "Portuguese"
     }
 ]

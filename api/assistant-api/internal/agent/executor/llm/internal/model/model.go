@@ -294,6 +294,7 @@ func (executor *modelAssistantExecutor) handleResponse(ctx context.Context, comm
 				Name:      "llm",
 				Data: map[string]string{
 					"type":                "completed",
+					"text":                responseText,
 					"response_char_count": fmt.Sprintf("%d", len(responseText)),
 					"finish_reason":       "stop",
 				},
