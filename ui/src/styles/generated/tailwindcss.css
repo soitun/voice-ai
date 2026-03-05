@@ -4310,6 +4310,12 @@
       background-color: color-mix(in oklab, var(--color-primary) 10%, transparent) !important;
     }
   }
+  .bg-primary\/80 {
+    background-color: color-mix(in srgb, #1e40af 80%, transparent);
+    @supports (color: color-mix(in lab, red, red)) {
+      background-color: color-mix(in oklab, var(--color-primary) 80%, transparent);
+    }
+  }
   .bg-purple-50 {
     background-color: var(--color-purple-50);
   }

@@ -14,7 +14,7 @@ import {
 } from '@rapidaai/react';
 import { useAssistantPageStore } from '@/hooks/use-assistant-page-store';
 import { TabLink } from '@/app/components/tab-link';
-import { IBlueButton, IButton } from '@/app/components/form/button';
+import { IButton } from '@/app/components/form/button';
 import { Bolt, ChevronDown, GitPullRequestCreate } from 'lucide-react';
 import { useGlobalNavigation } from '@/hooks/use-global-navigator';
 import { PageHeaderBlock } from '@/app/components/blocks/page-header-block';
@@ -129,7 +129,7 @@ export const AssistantViewLayout: FC<HTMLAttributes<HTMLDivElement>> = () => {
 
   //
   return (
-    <div className={cn('flex flex-col h-full flex-1 overflow-auto')}>
+    <div className={cn('flex flex-col h-full flex-1 overflow-auto bg-white dark:bg-gray-900')}>
       <Helmet title="Hosted Assistant" />
       <PageHeaderBlock>
         <div className="flex items-center gap-3">
@@ -156,16 +156,17 @@ export const AssistantViewLayout: FC<HTMLAttributes<HTMLDivElement>> = () => {
           <div className="flex items-stretch h-12 border-l border-gray-200 dark:border-gray-800">
             {/* Create New Version */}
             <div className="border-r border-gray-200 dark:border-gray-800 flex items-stretch">
-              <IBlueButton
-                className={cn(
-                  'h-full px-4',
-                  createVersionPopover && 'bg-primary/10!',
-                )}
+              <button
+                type="button"
                 onClick={() => setCreateVersionPopover(true)}
+                className={cn(
+                  'flex items-center gap-2 px-4 text-sm text-white bg-primary hover:bg-primary/90 transition-colors whitespace-nowrap',
+                  createVersionPopover && 'bg-primary/80',
+                )}
               >
                 Create New Version
                 <GitPullRequestCreate className="w-4 h-4" strokeWidth={1.5} />
-              </IBlueButton>
+              </button>
               <Popover
                 align={'bottom-end'}
                 className="w-60 pb-2"

@@ -15,7 +15,7 @@ import { ScrollableResizableTable } from '@/app/components/data-table';
 import { TableRow } from '@/app/components/base/tables/table-row';
 import { TableCell } from '@/app/components/base/tables/table-cell';
 import { StatusIndicator } from '@/app/components/indicators/status';
-import { IBlueButton, IButton } from '@/app/components/form/button';
+import { IButton } from '@/app/components/form/button';
 import toast from 'react-hot-toast/headless';
 import { CardOptionMenu } from '@/app/components/menu';
 import { ActionableEmptyMessage } from '@/app/components/container/message/actionable-empty-message';
@@ -120,12 +120,14 @@ const ConfigureAssistantAnalysis: FC<{ assistantId: string }> = ({
           <IButton onClick={get}>
             <RotateCw className="w-4 h-4" strokeWidth={1.5} />
           </IButton>
-          <IBlueButton
+          <button
+            type="button"
             onClick={() => navigation.goToCreateAssistantAnalysis(assistantId)}
+            className="flex items-center gap-2 px-4 text-sm text-white bg-primary hover:bg-primary/90 transition-colors whitespace-nowrap"
           >
             Create new analysis
-            <Plus className="w-4 h-4 ml-1.5" />
-          </IBlueButton>
+            <Plus className="w-4 h-4" strokeWidth={1.5} />
+          </button>
         </PaginationButtonBlock>
       </BluredWrapper>
       <TableSection>

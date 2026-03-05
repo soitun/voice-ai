@@ -4,7 +4,6 @@ import { useRapidaStore } from '@/hooks';
 import { TabForm } from '@/app/components/form/tab-form';
 import {
   IBlueBGArrowButton,
-  IBlueButton,
   ICancelButton,
 } from '@/app/components/form/button';
 import {
@@ -509,15 +508,15 @@ export function CreateAssistantPage() {
               <div className="relative flex flex-col flex-1">
                 <PageHeaderBlock>
                   <PageTitleBlock>Tools and MCPs</PageTitleBlock>
-                  <div className="flex items-stretch border-l border-gray-200 dark:border-gray-800">
-                    <IBlueButton
-                      onClick={() => {
-                        setConfigureToolOpen(true);
-                      }}
+                  <div className="flex items-stretch h-12 border-l border-gray-200 dark:border-gray-800">
+                    <button
+                      type="button"
+                      onClick={() => setConfigureToolOpen(true)}
+                      className="flex items-center gap-2 px-4 text-sm text-white bg-primary hover:bg-primary/90 transition-colors whitespace-nowrap"
                     >
                       Add another tool
-                      <Plus className="w-4 h-4 ml-1.5" />
-                    </IBlueButton>
+                      <Plus className="w-4 h-4" strokeWidth={1.5} />
+                    </button>
                   </div>
                 </PageHeaderBlock>
                 <DocNoticeBlock docUrl="https://doc.rapida.ai/assistants/tools/">

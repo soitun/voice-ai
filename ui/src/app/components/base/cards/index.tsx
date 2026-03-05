@@ -27,11 +27,11 @@ export const BaseCard: FC<HTMLAttributes<HTMLDivElement>> = ({
 );
 
 /** Navigable card — wraps content in a react-router Link. */
-export const LinkCard: FC<{ to: string; className?: string; children?: ReactNode }> = ({
-  to,
-  className,
-  children,
-}) => (
+export const LinkCard: FC<{
+  to: string;
+  className?: string;
+  children?: ReactNode;
+}> = ({ to, className, children }) => (
   <Link
     to={to}
     className={cn(
@@ -53,7 +53,8 @@ export const ActionCard: FC<HTMLAttributes<HTMLDivElement>> = ({
   ...props
 }) => {
   const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
-    if (e.key === 'Enter' || e.key === ' ') onClick?.(e as unknown as React.MouseEvent<HTMLDivElement>);
+    if (e.key === 'Enter' || e.key === ' ')
+      onClick?.(e as unknown as React.MouseEvent<HTMLDivElement>);
     onKeyDown?.(e);
   };
 
@@ -104,7 +105,12 @@ export const ClickableCard: FC<ClickableCardProps & CustomLinkProps> = ({
   return (
     <CustomLink to={to} isExternal={isExternal}>
       {/* Carbon clickable tile: no shadow, hover = subtle bg tint */}
-      <Card className={cn('group cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-900/60 transition-colors duration-100', className)}>
+      <Card
+        className={cn(
+          'group cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-900/60 transition-colors duration-100',
+          className,
+        )}
+      >
         {children}
       </Card>
     </CustomLink>

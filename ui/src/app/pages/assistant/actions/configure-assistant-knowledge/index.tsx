@@ -1,4 +1,4 @@
-import { IBlueButton, IButton } from '@/app/components/form/button';
+import { IButton } from '@/app/components/form/button';
 import { useRapidaStore } from '@/hooks';
 import { FC, useEffect } from 'react';
 import toast from 'react-hot-toast/headless';
@@ -106,9 +106,9 @@ const ConfigureAssistantKnowledge: FC<{ assistantId: string }> = ({
       <ConfirmDialogComponent />
       <PageHeaderBlock>
         <PageTitleBlock>Configure Knowledge</PageTitleBlock>
-        <div className="flex divide-x">
+        <div className="flex items-stretch h-12 border-l border-gray-200 dark:border-gray-800">
           <TablePagination
-            className="py-0"
+            className="py-0 border-r border-gray-200 dark:border-gray-800"
             currentPage={axtion.page}
             onChangeCurrentPage={axtion.setPage}
             totalItem={axtion.totalCount}
@@ -116,18 +116,22 @@ const ConfigureAssistantKnowledge: FC<{ assistantId: string }> = ({
             onChangePageSize={axtion.setPageSize}
             onChangeColumns={axtion.setColumns}
           />
-          <IBlueButton
-            onClick={() => {
-              navigation.goToCreateAssistantKnowledge(assistantId);
-            }}
+          <button
+            type="button"
+            onClick={() => navigation.goToCreateKnowledge()}
+            className="flex items-center gap-2 px-4 text-sm text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 border-r border-gray-200 dark:border-gray-800 transition-colors whitespace-nowrap"
+          >
+            Create new knowledge
+            <ExternalLink className="w-4 h-4" strokeWidth={1.5} />
+          </button>
+          <button
+            type="button"
+            onClick={() => navigation.goToCreateAssistantKnowledge(assistantId)}
+            className="flex items-center gap-2 px-4 text-sm text-white bg-primary hover:bg-primary/90 transition-colors whitespace-nowrap"
           >
             Connect knowledge
-            <Plus className="w-4 h-4 ml-1.5" />
-          </IBlueButton>
-          <IButton onClick={() => navigation.goToCreateKnowledge()}>
-            Create new knowledge
-            <ExternalLink className="w-4 h-4 ml-1.5" />
-          </IButton>
+            <Plus className="w-4 h-4" strokeWidth={1.5} />
+          </button>
         </div>
       </PageHeaderBlock>
       <div

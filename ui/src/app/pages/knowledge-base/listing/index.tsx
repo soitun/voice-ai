@@ -13,7 +13,7 @@ import { ClickableKnowledgeCard } from '@/app/components/base/cards/knowledge-ca
 import { ActionableEmptyMessage } from '@/app/components/container/message/actionable-empty-message';
 import { HowKnowledgeWorksDialog } from '@/app/components/base/modal/how-it-works-modal/how-knowledge-works';
 import { useGlobalNavigation } from '@/hooks/use-global-navigator';
-import { IBlueButton, IButton } from '@/app/components/form/button';
+import { IButton } from '@/app/components/form/button';
 import { Plus, RotateCw } from 'lucide-react';
 import { PageHeaderBlock } from '@/app/components/blocks/page-header-block';
 import { PageTitleBlock } from '@/app/components/blocks/page-title-block';
@@ -75,23 +75,23 @@ export function KnowledgePage() {
             {`${knowledgeActions.knowledgeBases.length}/${knowledgeActions.totalCount}`}
           </div>
         </div>
-        <div className="flex divide-x dark:divide-gray-800">
-          <IButton
-            onClick={() => {
-              sethiw(!hiw);
-            }}
+        {/* Carbon UI Shell toolbar pattern */}
+        <div className="flex items-stretch h-12 border-l border-gray-200 dark:border-gray-800">
+          <button
+            type="button"
+            onClick={() => sethiw(!hiw)}
+            className="flex items-center px-4 text-sm text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 border-r border-gray-200 dark:border-gray-800 transition-colors whitespace-nowrap"
           >
             How it works?
-          </IButton>
-
-          <IBlueButton
-            onClick={() => {
-              goToCreateKnowledge();
-            }}
+          </button>
+          <button
+            type="button"
+            onClick={() => goToCreateKnowledge()}
+            className="flex items-center gap-2 px-4 text-sm text-white bg-primary hover:bg-primary/90 transition-colors whitespace-nowrap"
           >
             Add new knowledge
-            <Plus strokeWidth={1.5} className="ml-1.5 h-4 w-4" />
-          </IBlueButton>
+            <Plus strokeWidth={1.5} className="w-4 h-4" />
+          </button>
         </div>
       </PageHeaderBlock>
 

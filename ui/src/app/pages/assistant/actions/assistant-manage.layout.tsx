@@ -10,7 +10,7 @@ export const AssistantManageLayout: FC<HTMLAttributes<HTMLDivElement>> = () => {
   const { goToAssistant } = useGlobalNavigation();
 
   return (
-    <div className="flex flex-col h-full flex-1 overflow-auto">
+    <div className="flex flex-col h-full flex-1 overflow-auto bg-white dark:bg-gray-900">
       <PageHeaderBlock>
         <div className="flex items-center gap-1.5 min-w-0">
           <div

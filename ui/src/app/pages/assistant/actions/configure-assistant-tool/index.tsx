@@ -1,4 +1,4 @@
-import { IBlueButton, IButton } from '@/app/components/form/button';
+import { IButton } from '@/app/components/form/button';
 import { useRapidaStore } from '@/hooks';
 import { FC, useEffect } from 'react';
 import toast from 'react-hot-toast/headless';
@@ -100,23 +100,26 @@ const ConfigureAssistantTool: FC<{ assistantId: string }> = ({
   }
 
   return (
-    <div className="relative flex flex-col flex-1">
+    <div className="relative flex flex-col flex-1 bg-white dark:bg-gray-900">
       <ConfirmDialogComponent />
       <PageHeaderBlock>
         <PageTitleBlock>Configure Tools and MCPs</PageTitleBlock>
-        <div className="flex items-stretch border-l border-gray-200 dark:border-gray-800">
-          <IButton type="button" onClick={() => get()}>
+        <div className="flex items-stretch h-12 border-l border-gray-200 dark:border-gray-800">
+          <button
+            type="button"
+            onClick={() => get()}
+            className="flex items-center px-3 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 border-r border-gray-200 dark:border-gray-800 transition-colors"
+          >
             <RotateCw className="w-4 h-4" strokeWidth={1.5} />
-          </IButton>
-          <div className="w-px self-stretch bg-gray-200 dark:bg-gray-800 shrink-0" />
-          <IBlueButton
-            onClick={() => {
-              navigator.goToCreateAssistantTool(assistantId);
-            }}
+          </button>
+          <button
+            type="button"
+            onClick={() => navigator.goToCreateAssistantTool(assistantId)}
+            className="flex items-center gap-2 px-4 text-sm text-white bg-primary hover:bg-primary/90 transition-colors whitespace-nowrap"
           >
             Add another tool
-            <Plus className="w-4 h-4 ml-1.5" />
-          </IBlueButton>
+            <Plus className="w-4 h-4" strokeWidth={1.5} />
+          </button>
         </div>
       </PageHeaderBlock>
       <DocNoticeBlock docUrl="https://doc.rapida.ai/assistants/tools/">
@@ -128,7 +131,7 @@ const ConfigureAssistantTool: FC<{ assistantId: string }> = ({
           <section className="grid content-start grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-[2px] grow shrink-0 m-4">
             {axtion.tools.map((itm, idx) => (
               <SelectToolCard
-                className="col-span-1"
+                className="col-span-1 bg-light-background"
                 tool={itm}
                 key={`tool-card-${idx}`}
                 options={[

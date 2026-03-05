@@ -20,8 +20,7 @@ import { PageHeaderBlock } from '@/app/components/blocks/page-header-block';
 import { PageTitleBlock } from '@/app/components/blocks/page-title-block';
 import { connectionConfig } from '@/configs';
 import { CreateKnowledgeDocumentDialog } from '@/app/components/base/modal/create-knowledge-document-modal';
-import { IBlueButton } from '@/app/components/form/button';
-import { PlusIcon } from '@/app/components/Icon/plus';
+import { Plus } from 'lucide-react';
 
 /**
  *
@@ -155,16 +154,18 @@ export function ViewKnowledgePage() {
                 )}
             </div>
           </div>
-          <div className="flex divide-x">
-            <IBlueButton
-              className="px-4"
+          {/* Carbon UI Shell toolbar pattern */}
+          <div className="flex items-stretch h-12 border-l border-gray-200 dark:border-gray-800">
+            <button
+              type="button"
               onClick={() => {
                 if (currentKnowledge) setCreateKnowledgeOpen(true);
               }}
+              className="flex items-center gap-2 px-4 text-sm text-white bg-primary hover:bg-primary/90 transition-colors whitespace-nowrap"
             >
               Add new document
-              <PlusIcon className="w-4 h-4 ml-2" />
-            </IBlueButton>
+              <Plus strokeWidth={1.5} className="w-4 h-4" />
+            </button>
           </div>
         </PageHeaderBlock>
 
