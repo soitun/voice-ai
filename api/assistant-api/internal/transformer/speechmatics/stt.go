@@ -30,6 +30,7 @@ type speechmaticsSTT struct {
 	ctxCancel context.CancelFunc
 
 	mu            sync.Mutex
+	writeMu       sync.Mutex // serializes all WebSocket writes
 	contextId     string
 	startedAtNano atomic.Int64
 
@@ -74,6 +75,16 @@ func (st *speechmaticsSTT) Initialize() error {
 	st.connection = conn
 	st.mu.Unlock()
 
+	transcriptionConfig := map[string]interface{}{
+		"language":        st.GetLanguage(),
+		"operating_point": "enhanced",
+		"enable_partials": true,
+		"max_delay":       2.0,
+	}
+	if op, err := st.mdlOpts.GetString("listen.operating_point"); err == nil && op != "" {
+		transcriptionConfig["operating_point"] = op
+	}
+
 	startMsg := map[string]interface{}{
 		"message": "StartRecognition",
 		"audio_format": map[string]interface{}{
@@ -81,13 +92,20 @@ func (st *speechmaticsSTT) Initialize() error {
 			"encoding":    "pcm_s16le",
 			"sample_rate": 16000,
 		},
-		"transcription_config": map[string]interface{}{
-			"language":        st.GetLanguage(),
-			"operating_point": "enhanced",
-		},
+		"transcription_config": transcriptionConfig,
 	}
-	if err := conn.WriteJSON(startMsg); err != nil {
+
+	st.writeMu.Lock()
+	err = conn.WriteJSON(startMsg)
+	st.writeMu.Unlock()
+	if err != nil {
 		st.logger.Errorf("speechmatics-stt: error sending start recognition: %v", err)
+		return err
+	}
+
+	// Speechmatics requires the client to wait for RecognitionStarted before sending audio.
+	if err := st.waitForRecognitionStarted(conn); err != nil {
+		st.logger.Errorf("speechmatics-stt: error waiting for RecognitionStarted: %v", err)
 		return err
 	}
 
@@ -102,6 +120,33 @@ func (st *speechmaticsSTT) Initialize() error {
 		Time: time.Now(),
 	})
 	return nil
+}
+
+// waitForRecognitionStarted reads messages from the WebSocket until it receives
+// a RecognitionStarted message or an error. This must be called before the
+// readLoop goroutine starts and before any audio is sent.
+func (st *speechmaticsSTT) waitForRecognitionStarted(conn *websocket.Conn) error {
+	conn.SetReadDeadline(time.Now().Add(10 * time.Second))
+	defer conn.SetReadDeadline(time.Time{}) // clear deadline for readLoop
+
+	for {
+		_, msg, err := conn.ReadMessage()
+		if err != nil {
+			return fmt.Errorf("speechmatics-stt: failed reading RecognitionStarted: %w", err)
+		}
+		var response speechmatics_internal.SpeechmaticsSTTResponse
+		if err := json.Unmarshal(msg, &response); err != nil {
+			return fmt.Errorf("speechmatics-stt: failed parsing RecognitionStarted: %w", err)
+		}
+		if response.Message == "RecognitionStarted" {
+			st.logger.Debugf("speechmatics-stt: RecognitionStarted received")
+			return nil
+		}
+		if response.Message == "Error" {
+			return fmt.Errorf("speechmatics-stt: server error during init: %s", string(msg))
+		}
+		st.logger.Debugf("speechmatics-stt: ignoring pre-start message: %s", response.Message)
+	}
 }
 
 // readLoop owns the WebSocket connection for the lifetime of the STT session.
@@ -191,6 +236,8 @@ func (st *speechmaticsSTT) readLoop(conn *websocket.Conn) {
 				Data: map[string]string{"type": "error"},
 				Time: time.Now(),
 			})
+		case "AudioAdded", "EndOfTranscript", "Info":
+			// Acknowledged — no action needed.
 		default:
 			st.logger.Debugf("speechmatics-stt: unhandled message type: %s", response.Message)
 		}
@@ -209,7 +256,10 @@ func (st *speechmaticsSTT) Transform(ctx context.Context, in internal_type.UserA
 		return fmt.Errorf("speechmatics-stt: websocket connection is not initialized")
 	}
 
-	if err := conn.WriteMessage(websocket.BinaryMessage, in.Audio); err != nil {
+	st.writeMu.Lock()
+	err := conn.WriteMessage(websocket.BinaryMessage, in.Audio)
+	st.writeMu.Unlock()
+	if err != nil {
 		st.logger.Errorf("speechmatics-stt: error sending audio: %v", err)
 		return err
 	}
@@ -224,6 +274,15 @@ func (st *speechmaticsSTT) Close(ctx context.Context) error {
 	if st.connection != nil {
 		conn := st.connection
 		st.connection = nil // mark before Close so readLoop sees intentional
+
+		// Send EndOfStream so the server flushes any pending transcripts.
+		st.writeMu.Lock()
+		_ = conn.WriteJSON(map[string]interface{}{
+			"message":     "EndOfStream",
+			"last_seq_no": 0,
+		})
+		st.writeMu.Unlock()
+
 		conn.Close()
 	}
 	return nil

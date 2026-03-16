@@ -20,17 +20,12 @@ export const DebuggerDeploymentSuccessDialog: FC<
     <GenericModal modalOpen={modalOpen} setModalOpen={setModalOpen}>
       <ModalFitHeightBlock>
         <ModalHeader onClose={() => setModalOpen(false)}>
-          <div>
-            <ModalTitleBlock>Deployment completed</ModalTitleBlock>
-            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-              Debugger deployment has been updated successfully.
-            </p>
-          </div>
+          <ModalTitleBlock>Deployment completed</ModalTitleBlock>
         </ModalHeader>
         <ModalBody>
           <p className="text-sm text-gray-600 dark:text-gray-400 leading-relaxed">
-            Your debugger is ready. Use the preview to test your assistant
-            in a sandbox environment before deploying to other channels.
+            Your debugger is ready. Use the preview to test your assistant in a
+            sandbox environment before deploying to other channels.
           </p>
         </ModalBody>
         <ModalFooter>

@@ -26,11 +26,19 @@ RUN pip install --no-cache-dir onnx && \
     python3 -c "import onnx; m=onnx.load('api/assistant-api/internal/end_of_speech/internal/livekit/models/model_q8.onnx'); \
       used={n.domain for n in m.graph.node}; keep=[o for o in m.opset_import if o.domain=='' or o.domain in used]; \
       del m.opset_import[:]; m.opset_import.extend(keep); onnx.save(m, 'api/assistant-api/internal/end_of_speech/internal/livekit/models/model_q8.onnx')" && \
+    curl -fsSL -o ./api/assistant-api/internal/end_of_speech/internal/livekit/models/model_q8_multilingual.onnx \
+        "https://huggingface.co/livekit/turn-detector/resolve/v0.4.1-intl/onnx/model_q8.onnx" && \
+    python3 -c "import onnx; m=onnx.load('api/assistant-api/internal/end_of_speech/internal/livekit/models/model_q8_multilingual.onnx'); \
+      used={n.domain for n in m.graph.node}; keep=[o for o in m.opset_import if o.domain=='' or o.domain in used]; \
+      del m.opset_import[:]; m.opset_import.extend(keep); onnx.save(m, 'api/assistant-api/internal/end_of_speech/internal/livekit/models/model_q8_multilingual.onnx')" && \
     curl -fsSL -o ./api/assistant-api/internal/end_of_speech/internal/livekit/models/tokenizer.json \
         "https://huggingface.co/livekit/turn-detector/resolve/v1.2.2-en/tokenizer.json" && \
     mkdir -p ./api/assistant-api/internal/end_of_speech/internal/pipecat/models && \
     curl -fsSL -o ./api/assistant-api/internal/end_of_speech/internal/pipecat/models/smart-turn-v3.2-cpu.onnx \
         "https://huggingface.co/pipecat-ai/smart-turn-v3/resolve/main/smart-turn-v3.2-cpu.onnx" && \
+    python3 -c "import onnx; m=onnx.load('api/assistant-api/internal/end_of_speech/internal/pipecat/models/smart-turn-v3.2-cpu.onnx'); \
+      m.ir_version=9; used={n.domain for n in m.graph.node}; keep=[o for o in m.opset_import if o.domain=='' or o.domain in used]; \
+      del m.opset_import[:]; m.opset_import.extend(keep); onnx.save(m, 'api/assistant-api/internal/end_of_speech/internal/pipecat/models/smart-turn-v3.2-cpu.onnx')" && \
     pip uninstall -y onnx
 
 # ---- Install TEN VAD shared library ----

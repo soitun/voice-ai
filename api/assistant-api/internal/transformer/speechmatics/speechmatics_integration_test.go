@@ -1,0 +1,370 @@
+//go:build integration
+
+// Copyright (c) 2023-2025 RapidaAI
+// Author: Prashant Srivastav <prashant@rapida.ai>
+//
+// Licensed under GPL-2.0 with Rapida Additional Terms.
+// See LICENSE.md or contact sales@rapida.ai for commercial usage.
+
+// Speechmatics integration tests — focused on verifying the flow (connection,
+// initialization, event sequence, audio I/O) rather than transcript content.
+
+package internal_transformer_speechmatics
+
+import (
+	"context"
+	"strconv"
+	"strings"
+	"testing"
+	"time"
+
+	testutil "github.com/rapidaai/api/assistant-api/internal/transformer/internal/testutil"
+	internal_type "github.com/rapidaai/api/assistant-api/internal/type"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
+
+// ---------------------------------------------------------------------------
+// Speechmatics STT Integration Tests
+// ---------------------------------------------------------------------------
+
+// TestSpeechmaticsSTTLifecycle verifies the full STT flow:
+// create → initialize (event) → feed audio (no errors) → transcripts arrive →
+// event sequence includes initialized.
+func TestSpeechmaticsSTTLifecycle(t *testing.T) {
+	cfg := testutil.LoadConfig(t)
+	pcfg := cfg.STTProvider(t, "speechmatics")
+	logger := testutil.NewTestLogger()
+	speech := testutil.LoadSpeechPCM(t, "hello_world.pcm")
+	collector := testutil.NewPacketCollector()
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	cred := testutil.BuildCredential(pcfg.Credential)
+	opts := testutil.BuildOptions(pcfg.Options)
+
+	stt, err := NewSpeechmaticsSpeechToText(ctx, logger, cred, collector.OnPacket, opts)
+	require.NoError(t, err)
+	require.NotNil(t, stt)
+	assert.Equal(t, "speechmatics-speech-to-text", stt.Name())
+
+	// Flow: Initialize succeeds and emits "initialized" event
+	require.NoError(t, stt.Initialize())
+	defer stt.Close(ctx)
+
+	events := collector.EventPackets()
+	require.NotEmpty(t, events, "should emit initialized event")
+	assert.Equal(t, "stt", events[0].Name)
+	assert.Equal(t, "initialized", events[0].Data["type"])
+	assert.Equal(t, "speechmatics-speech-to-text", events[0].Data["provider"])
+	_, err = strconv.Atoi(events[0].Data["init_ms"])
+	assert.NoError(t, err, "init_ms should be a valid integer")
+
+	// Flow: Feed audio without errors
+	feedDone := make(chan struct{})
+	go func() {
+		testutil.FeedAudio(ctx, t, stt, speech)
+		close(feedDone)
+	}()
+
+	select {
+	case <-feedDone:
+	case <-ctx.Done():
+		t.Fatal("context cancelled before audio feeding completed")
+	}
+
+	// Wait for transcripts
+	collector.WaitForAnyTranscript(t, 10*time.Second)
+
+	transcripts := collector.TranscriptPackets()
+	interims := collector.InterimTranscripts()
+	finals := collector.FinalTranscripts()
+	t.Logf("transcripts=%d (interims=%d finals=%d)", len(transcripts), len(interims), len(finals))
+
+	// If transcripts arrived, verify their shape
+	for _, tr := range transcripts {
+		assert.NotEmpty(t, tr.Script, "transcript script should not be empty")
+	}
+
+	// If final transcripts arrived, verify events + metrics
+	if len(finals) > 0 {
+		eventTypes := sttEventTypes(collector.EventPackets())
+		assert.Contains(t, eventTypes, "completed")
+		t.Logf("stt_event_sequence=%v", eventTypes)
+
+		interruptions := collector.InterruptionPackets()
+		assert.NotEmpty(t, interruptions, "should emit interruption packets with transcripts")
+
+		assertSTTLatencyMetric(t, collector)
+	}
+}
+
+// TestSpeechmaticsSTTAudioAcceptance verifies that the STT transformer accepts audio
+// chunks without returning errors — the core flow for real-time streaming.
+func TestSpeechmaticsSTTAudioAcceptance(t *testing.T) {
+	cfg := testutil.LoadConfig(t)
+	pcfg := cfg.STTProvider(t, "speechmatics")
+	logger := testutil.NewTestLogger()
+	collector := testutil.NewPacketCollector()
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+
+	cred := testutil.BuildCredential(pcfg.Credential)
+	opts := testutil.BuildOptions(pcfg.Options)
+
+	stt, err := NewSpeechmaticsSpeechToText(ctx, logger, cred, collector.OnPacket, opts)
+	require.NoError(t, err)
+	require.NoError(t, stt.Initialize())
+	defer stt.Close(ctx)
+
+	// Flow: each Transform call accepts the audio chunk without error
+	chunks := testutil.ChunkAudio(testutil.SineTonePCM(440, 1.0), testutil.FrameSize)
+	for i, chunk := range chunks {
+		err := stt.Transform(ctx, internal_type.UserAudioPacket{
+			ContextID: "sm-stt-accept",
+			Audio:     chunk,
+		})
+		require.NoError(t, err, "chunk %d should be accepted", i)
+	}
+	t.Logf("chunks_accepted=%d", len(chunks))
+}
+
+// TestSpeechmaticsSTTSilentAudio verifies that sending silent audio does not
+// produce false transcripts.
+func TestSpeechmaticsSTTSilentAudio(t *testing.T) {
+	cfg := testutil.LoadConfig(t)
+	pcfg := cfg.STTProvider(t, "speechmatics")
+	logger := testutil.NewTestLogger()
+	collector := testutil.NewPacketCollector()
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+
+	cred := testutil.BuildCredential(pcfg.Credential)
+	opts := testutil.BuildOptions(pcfg.Options)
+
+	stt, err := NewSpeechmaticsSpeechToText(ctx, logger, cred, collector.OnPacket, opts)
+	require.NoError(t, err)
+	require.NoError(t, stt.Initialize())
+	defer stt.Close(ctx)
+
+	silence := testutil.SilentPCM(2.0)
+	go testutil.FeedAudio(ctx, t, stt, silence)
+
+	time.Sleep(4 * time.Second)
+
+	finals := collector.FinalTranscripts()
+	t.Logf("final_transcripts_from_silence=%d", len(finals))
+	for _, f := range finals {
+		assert.Empty(t, f.Script,
+			"silence should not produce non-empty final transcripts, got: %q", f.Script)
+	}
+}
+
+// TestSpeechmaticsSTTReconnect verifies two sequential STT sessions work cleanly
+// (create → use → close → create → use → close).
+func TestSpeechmaticsSTTReconnect(t *testing.T) {
+	cfg := testutil.LoadConfig(t)
+	pcfg := cfg.STTProvider(t, "speechmatics")
+	logger := testutil.NewTestLogger()
+	speech := testutil.LoadSpeechPCM(t, "hello_world.pcm")
+	cred := testutil.BuildCredential(pcfg.Credential)
+	opts := testutil.BuildOptions(pcfg.Options)
+
+	for attempt := 0; attempt < 2; attempt++ {
+		collector := testutil.NewPacketCollector()
+		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+
+		stt, err := NewSpeechmaticsSpeechToText(ctx, logger, cred, collector.OnPacket, opts)
+		require.NoError(t, err, "attempt %d", attempt)
+		require.NoError(t, stt.Initialize(), "attempt %d", attempt)
+
+		feedDone := make(chan struct{})
+		go func() {
+			testutil.FeedAudio(ctx, t, stt, speech)
+			close(feedDone)
+		}()
+
+		select {
+		case <-feedDone:
+		case <-ctx.Done():
+			t.Fatalf("attempt %d: context cancelled before audio feeding completed", attempt)
+		}
+
+		events := collector.EventPackets()
+		require.NotEmpty(t, events, "attempt %d: should emit initialized event", attempt)
+		assert.Equal(t, "initialized", events[0].Data["type"])
+		t.Logf("attempt=%d transcripts=%d", attempt, len(collector.TranscriptPackets()))
+
+		stt.Close(ctx)
+		cancel()
+
+		time.Sleep(500 * time.Millisecond)
+	}
+}
+
+// TestSpeechmaticsSTTCloseWhileStreaming verifies that closing the STT transformer
+// while audio is actively being fed does not panic or return unexpected errors.
+func TestSpeechmaticsSTTCloseWhileStreaming(t *testing.T) {
+	cfg := testutil.LoadConfig(t)
+	pcfg := cfg.STTProvider(t, "speechmatics")
+	logger := testutil.NewTestLogger()
+	collector := testutil.NewPacketCollector()
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+
+	stt, err := NewSpeechmaticsSpeechToText(ctx, logger,
+		testutil.BuildCredential(pcfg.Credential), collector.OnPacket,
+		testutil.BuildOptions(pcfg.Options))
+	require.NoError(t, err)
+	require.NoError(t, stt.Initialize())
+
+	go func() {
+		chunks := testutil.ChunkAudio(testutil.SineTonePCM(440, 3.0), testutil.FrameSize)
+		for _, chunk := range chunks {
+			select {
+			case <-ctx.Done():
+				return
+			default:
+			}
+			_ = stt.Transform(ctx, internal_type.UserAudioPacket{
+				ContextID: "sm-stt-close-mid", Audio: chunk})
+			time.Sleep(time.Duration(testutil.FrameDuration) * time.Millisecond)
+		}
+	}()
+
+	time.Sleep(500 * time.Millisecond)
+	err = stt.Close(ctx)
+	assert.NoError(t, err, "closing STT mid-stream should not error")
+
+	events := collector.EventPackets()
+	require.NotEmpty(t, events)
+	assert.Equal(t, "initialized", events[0].Data["type"])
+}
+
+// TestSpeechmaticsSTTTranscriptContent verifies that real speech audio produces
+// a transcript containing the expected words.
+func TestSpeechmaticsSTTTranscriptContent(t *testing.T) {
+	cfg := testutil.LoadConfig(t)
+	pcfg := cfg.STTProvider(t, "speechmatics")
+	logger := testutil.NewTestLogger()
+	speech := testutil.LoadSpeechPCM(t, "hello_world.pcm")
+	collector := testutil.NewPacketCollector()
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	stt, err := NewSpeechmaticsSpeechToText(ctx, logger,
+		testutil.BuildCredential(pcfg.Credential), collector.OnPacket,
+		testutil.BuildOptions(pcfg.Options))
+	require.NoError(t, err)
+	require.NoError(t, stt.Initialize())
+	defer stt.Close(ctx)
+
+	feedDone := make(chan struct{})
+	go func() {
+		testutil.FeedAudio(ctx, t, stt, speech)
+		close(feedDone)
+	}()
+
+	select {
+	case <-feedDone:
+	case <-ctx.Done():
+		t.Fatal("context cancelled before audio feeding completed")
+	}
+
+	collector.WaitForFinalTranscript(t, 10*time.Second)
+
+	finals := collector.FinalTranscripts()
+	require.NotEmpty(t, finals, "should produce at least one final transcript")
+
+	combined := ""
+	for _, f := range finals {
+		combined += " " + f.Script
+	}
+	lower := strings.ToLower(combined)
+	assert.True(t,
+		strings.Contains(lower, "hello") || strings.Contains(lower, "world"),
+		"expected transcript to contain 'hello' or 'world', got: %q", combined)
+	t.Logf("transcript=%q", strings.TrimSpace(combined))
+}
+
+// TestSpeechmaticsSTTInterimAndFinal verifies that Speechmatics emits both interim
+// (AddPartialTranscript) and final (AddTranscript) transcript packets.
+func TestSpeechmaticsSTTInterimAndFinal(t *testing.T) {
+	cfg := testutil.LoadConfig(t)
+	pcfg := cfg.STTProvider(t, "speechmatics")
+	logger := testutil.NewTestLogger()
+	speech := testutil.LoadSpeechPCM(t, "hello_world.pcm")
+	collector := testutil.NewPacketCollector()
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	stt, err := NewSpeechmaticsSpeechToText(ctx, logger,
+		testutil.BuildCredential(pcfg.Credential), collector.OnPacket,
+		testutil.BuildOptions(pcfg.Options))
+	require.NoError(t, err)
+	require.NoError(t, stt.Initialize())
+	defer stt.Close(ctx)
+
+	go testutil.FeedAudio(ctx, t, stt, speech)
+
+	collector.WaitForFinalTranscript(t, 20*time.Second)
+
+	interims := collector.InterimTranscripts()
+	finals := collector.FinalTranscripts()
+
+	t.Logf("interims=%d finals=%d", len(interims), len(finals))
+	assert.NotEmpty(t, finals, "should have at least one final transcript")
+
+	// Verify interim packets are correctly flagged
+	for _, interim := range interims {
+		assert.True(t, interim.Interim, "interim packet should have Interim=true")
+		assert.NotEmpty(t, interim.Script, "interim transcript should have text")
+	}
+
+	// Verify final packets are correctly flagged
+	for _, final := range finals {
+		assert.False(t, final.Interim, "final packet should have Interim=false")
+		assert.NotEmpty(t, final.Script, "final transcript should have text")
+	}
+
+	// Verify event types emitted alongside transcripts
+	eventTypes := sttEventTypes(collector.EventPackets())
+	assert.Contains(t, eventTypes, "initialized")
+	if len(interims) > 0 {
+		assert.Contains(t, eventTypes, "interim")
+	}
+	if len(finals) > 0 {
+		assert.Contains(t, eventTypes, "completed")
+	}
+	t.Logf("event_sequence=%v", eventTypes)
+}
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+func sttEventTypes(events []internal_type.ConversationEventPacket) []string {
+	var out []string
+	for _, ev := range events {
+		if ev.Name == "stt" {
+			out = append(out, ev.Data["type"])
+		}
+	}
+	return out
+}
+
+func assertSTTLatencyMetric(t *testing.T, collector *testutil.PacketCollector) {
+	t.Helper()
+	for _, m := range collector.MetricPackets() {
+		for _, metric := range m.Metrics {
+			if metric.Name == "stt_latency_ms" {
+				ms, err := strconv.Atoi(metric.Value)
+				assert.NoError(t, err)
+				assert.GreaterOrEqual(t, ms, 0, "stt_latency_ms should be non-negative")
+				t.Logf("stt_latency_ms=%d", ms)
+				return
+			}
+		}
+	}
+	t.Error("should have stt_latency_ms metric")
+}

@@ -136,30 +136,6 @@ func TestFormatChatTemplateFromHistory_SkipsEmptyMessages(t *testing.T) {
 	assert.Contains(t, result, "real reply")
 }
 
-// --- softmax tests ---
-
-func TestSoftmaxAt(t *testing.T) {
-	logits := []float32{1.0, 2.0, 3.0}
-	p := softmaxAt(logits, 2) // exp(3)/(exp(1)+exp(2)+exp(3))
-	assert.InDelta(t, 0.6652, p, 0.01)
-
-	p = softmaxAt(logits, 0) // exp(1)/(exp(1)+exp(2)+exp(3))
-	assert.InDelta(t, 0.0900, p, 0.01)
-}
-
-func TestSoftmaxAt_OutOfRange(t *testing.T) {
-	logits := []float32{1.0, 2.0}
-	p := softmaxAt(logits, 5)
-	assert.Equal(t, 0.0, p)
-}
-
-func TestSoftmaxAt_LargeValues(t *testing.T) {
-	// Numerical stability test — large values should not overflow
-	logits := []float32{1000.0, 1001.0, 1002.0}
-	p := softmaxAt(logits, 2)
-	assert.InDelta(t, 0.6652, p, 0.01)
-}
-
 // --- history tracking tests ---
 
 func TestLivekitEOS_HistoryFromPackets(t *testing.T) {

@@ -157,12 +157,12 @@ func (t *TenVAD) Process(ctx context.Context, pkt internal_type.UserAudioPacket)
 	if isSpeaking && t.onPacket != nil {
 		_ = t.onPacket(ctx,
 			internal_type.VadSpeechActivityPacket{},
-			internal_type.ConversationEventPacket{
-				Name: "vad",
-				Data: map[string]string{
-					"type": "heartbeat",
-				},
-			},
+			// internal_type.ConversationEventPacket{
+			// 	Name: "vad",
+			// 	Data: map[string]string{
+			// 		"type": "heartbeat",
+			// 	},
+			// },
 		)
 	}
 

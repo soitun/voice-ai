@@ -151,12 +151,13 @@ func (s *SileroVAD) Process(ctx context.Context, pkt internal_type.UserAudioPack
 	if isSpeaking && s.onPacket != nil {
 		_ = s.onPacket(ctx,
 			internal_type.VadSpeechActivityPacket{},
-			internal_type.ConversationEventPacket{
-				Name: "vad",
-				Data: map[string]string{
-					"type": "heartbeat",
-				},
-			})
+		// internal_type.ConversationEventPacket{
+		// 	Name: "vad",
+		// 	Data: map[string]string{
+		// 		"type": "heartbeat",
+		// 	},
+		// }
+		)
 	}
 
 	return nil

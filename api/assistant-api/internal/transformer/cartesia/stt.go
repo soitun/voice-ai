@@ -24,8 +24,9 @@ import (
 
 type cartesiaSpeechToText struct {
 	*cartesiaOption
-	mu     sync.Mutex
-	logger commons.Logger
+	mu      sync.Mutex
+	writeMu sync.Mutex
+	logger  commons.Logger
 
 	ctx       context.Context
 	ctxCancel context.CancelFunc
@@ -184,8 +185,12 @@ func (cst *cartesiaSpeechToText) Transform(ctx context.Context, in internal_type
 	if conn == nil {
 		return fmt.Errorf("cartesia-stt: websocket connection is not initialized")
 	}
-	if err := conn.WriteMessage(websocket.BinaryMessage, in.Audio); err != nil {
-		return fmt.Errorf("failed to send audio data: %w", err)
+
+	cst.writeMu.Lock()
+	err := conn.WriteMessage(websocket.BinaryMessage, in.Audio)
+	cst.writeMu.Unlock()
+	if err != nil {
+		return fmt.Errorf("cartesia-stt: failed to send audio data: %w", err)
 	}
 	return nil
 }

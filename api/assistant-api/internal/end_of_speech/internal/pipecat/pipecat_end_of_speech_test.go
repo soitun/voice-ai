@@ -59,12 +59,16 @@ func newTestEOS(callback func(context.Context, ...internal_type.Packet) error, o
 	if v, err := opts.GetFloat64("microphone.eos.timeout"); err == nil {
 		fallback = time.Duration(v) * time.Millisecond
 	}
+	silenceTimeout := time.Duration(defaultPctSilenceTimeout) * time.Millisecond
+	if v, err := opts.GetFloat64("microphone.eos.silence_timeout"); err == nil {
+		silenceTimeout = time.Duration(v) * time.Millisecond
+	}
 
 	eos := &PipecatEOS{
 		callback:       callback,
 		threshold:      defaultPctThreshold,
 		quickTimeout:   time.Duration(defaultPctQuickTimeout) * time.Millisecond,
-		silenceTimeout: time.Duration(defaultPctSilenceTimeout) * time.Millisecond,
+		silenceTimeout: silenceTimeout,
 		fallbackMs:     fallback,
 		audioBuf:       make([]float32, 0, maxAudioSamples),
 		cmdCh:          make(chan command, 32),
@@ -590,7 +594,7 @@ func TestEOS_STTAccumulatesText(t *testing.T) {
 		return nil
 	}
 
-	eos := newTestEOS(callback, newTestOpts(map[string]any{"microphone.eos.timeout": 100.0}))
+	eos := newTestEOS(callback, newTestOpts(map[string]any{"microphone.eos.timeout": 100.0, "microphone.eos.silence_timeout": 100.0}))
 	defer eos.Close()
 
 	ctx := context.Background()
@@ -719,7 +723,7 @@ func TestEOS_CloseStopsWorker(t *testing.T) {
 
 func TestEOS_ConcurrentAnalyze(t *testing.T) {
 	callback := func(context.Context, ...internal_type.Packet) error { return nil }
-	eos := newTestEOS(callback, newTestOpts(map[string]any{"microphone.eos.timeout": 100.0}))
+	eos := newTestEOS(callback, newTestOpts(map[string]any{"microphone.eos.timeout": 100.0, "microphone.eos.silence_timeout": 100.0}))
 	defer eos.Close()
 
 	var wg sync.WaitGroup
@@ -759,7 +763,7 @@ func TestEOS_ContextCancelStillFires(t *testing.T) {
 		return nil
 	}
 
-	eos := newTestEOS(callback, newTestOpts(map[string]any{"microphone.eos.timeout": 100.0}))
+	eos := newTestEOS(callback, newTestOpts(map[string]any{"microphone.eos.timeout": 100.0, "microphone.eos.silence_timeout": 100.0}))
 	defer eos.Close()
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -785,7 +789,7 @@ func TestEOS_CallbackFiresOnlyOnce(t *testing.T) {
 		return nil
 	}
 
-	eos := newTestEOS(callback, newTestOpts(map[string]any{"microphone.eos.timeout": 50.0}))
+	eos := newTestEOS(callback, newTestOpts(map[string]any{"microphone.eos.timeout": 50.0, "microphone.eos.silence_timeout": 50.0}))
 	defer eos.Close()
 
 	ctx := context.Background()
@@ -813,7 +817,7 @@ func TestEOS_InterimSTTExtendsTimer(t *testing.T) {
 		return nil
 	}
 
-	eos := newTestEOS(callback, newTestOpts(map[string]any{"microphone.eos.timeout": 150.0}))
+	eos := newTestEOS(callback, newTestOpts(map[string]any{"microphone.eos.timeout": 150.0, "microphone.eos.silence_timeout": 150.0}))
 	defer eos.Close()
 
 	ctx := context.Background()

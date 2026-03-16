@@ -6,7 +6,16 @@ import { ModalFitHeightBlock } from '@/app/components/blocks/modal-fit-height-bl
 import { ModalTitleBlock } from '@/app/components/blocks/modal-title-block';
 import { SectionDivider } from '@/app/components/blocks/section-divider';
 import { IBlueBGButton, ICancelButton } from '@/app/components/form/button';
-import { BarChart2, Bug, ChevronRight, Code, ExternalLink, Globe, PhoneCall, Webhook } from 'lucide-react';
+import {
+  BarChart2,
+  Bug,
+  ChevronRight,
+  Code,
+  ExternalLink,
+  Globe,
+  PhoneCall,
+  Webhook,
+} from 'lucide-react';
 import { FC } from 'react';
 import { useGlobalNavigation } from '@/hooks/use-global-navigator';
 import { Assistant } from '@rapidaai/react';
@@ -19,11 +28,15 @@ interface ConfigureAssistantNextDialogProps extends ModalProps {
 
 // ── Data ──────────────────────────────────────────────────────────────────────
 
-const makeDeploymentOptions = (assistantId: string, nav: ReturnType<typeof useGlobalNavigation>) => [
+const makeDeploymentOptions = (
+  assistantId: string,
+  nav: ReturnType<typeof useGlobalNavigation>,
+) => [
   {
     icon: PhoneCall,
     title: 'Phone call',
-    description: 'Enable voice conversations over inbound and outbound phone calls.',
+    description:
+      'Enable voice conversations over inbound and outbound phone calls.',
     action: 'Configure phone',
     onClick: () => nav.goToConfigureCall(assistantId),
   },
@@ -37,7 +50,8 @@ const makeDeploymentOptions = (assistantId: string, nav: ReturnType<typeof useGl
   {
     icon: Globe,
     title: 'Web Widget',
-    description: 'Embed on your website to handle text and voice customer queries.',
+    description:
+      'Embed on your website to handle text and voice customer queries.',
     action: 'Configure web widget',
     onClick: () => nav.goToConfigureWeb(assistantId),
   },
@@ -50,7 +64,10 @@ const makeDeploymentOptions = (assistantId: string, nav: ReturnType<typeof useGl
   },
 ];
 
-const makeAutomationOptions = (assistantId: string, nav: ReturnType<typeof useGlobalNavigation>) => [
+const makeAutomationOptions = (
+  assistantId: string,
+  nav: ReturnType<typeof useGlobalNavigation>,
+) => [
   {
     icon: BarChart2,
     title: 'Post-conversation analysis',
@@ -71,11 +88,9 @@ const makeAutomationOptions = (assistantId: string, nav: ReturnType<typeof useGl
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-export const ConfigureAssistantNextDialog: FC<ConfigureAssistantNextDialogProps> = ({
-  assistant,
-  modalOpen,
-  setModalOpen,
-}) => {
+export const ConfigureAssistantNextDialog: FC<
+  ConfigureAssistantNextDialogProps
+> = ({ assistant, modalOpen, setModalOpen }) => {
   const nav = useGlobalNavigation();
   const assistantId = assistant.getId();
 
@@ -83,25 +98,19 @@ export const ConfigureAssistantNextDialog: FC<ConfigureAssistantNextDialogProps>
   const automationOptions = makeAutomationOptions(assistantId, nav);
 
   return (
-    <GenericModal className="flex" modalOpen={modalOpen} setModalOpen={setModalOpen}>
+    <GenericModal
+      className="flex"
+      modalOpen={modalOpen}
+      setModalOpen={setModalOpen}
+    >
       <ModalFitHeightBlock className="w-[860px]">
-
         {/* ── Header ───────────────────────────────────────────────── */}
         <ModalHeader onClose={() => setModalOpen(false)}>
-          <div>
-            <ModalTitleBlock>Assistant created</ModalTitleBlock>
-            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-              <span className="font-medium text-gray-700 dark:text-gray-300">
-                {assistant.getName()}
-              </span>{' '}
-              is ready — configure deployments and integrations below.
-            </p>
-          </div>
+          <ModalTitleBlock>Assistant created</ModalTitleBlock>
         </ModalHeader>
 
         {/* ── Body ─────────────────────────────────────────────────── */}
         <ModalBody className="overflow-y-auto max-h-[68dvh] px-6 py-6 flex flex-col gap-8">
-
           {/* Deployment channels */}
           <div className="flex flex-col gap-4">
             <SectionDivider label="Deployment Channels" />
@@ -191,7 +200,6 @@ export const ConfigureAssistantNextDialog: FC<ConfigureAssistantNextDialogProps>
               ))}
             </div>
           </div>
-
         </ModalBody>
 
         {/* ── Footer ───────────────────────────────────────────────── */}
@@ -207,7 +215,6 @@ export const ConfigureAssistantNextDialog: FC<ConfigureAssistantNextDialogProps>
             <ExternalLink className="w-4 h-4 ml-1" strokeWidth={1.5} />
           </IBlueBGButton>
         </ModalFooter>
-
       </ModalFitHeightBlock>
     </GenericModal>
   );

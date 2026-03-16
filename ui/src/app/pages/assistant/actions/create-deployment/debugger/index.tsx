@@ -7,7 +7,6 @@ import { ConfigureAudioInputProvider } from '@/app/pages/assistant/actions/creat
 import { useRapidaStore } from '@/hooks';
 import { useCurrentCredential } from '@/hooks/use-credential';
 import { useGlobalNavigation } from '@/hooks/use-global-navigator';
-import { Bug } from 'lucide-react';
 import { FC, useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import {
@@ -154,9 +153,7 @@ const ConfigureAssistantDebuggerDeployment: FC<{ assistantId: string }> = ({
             provider: provider.getAudioprovider() || 'deepgram',
             parameters: GetDefaultSpeechToTextIfInvalid(
               provider.getAudioprovider() || 'deepgram',
-              GetDefaultMicrophoneConfig(
-                provider.getAudiooptionsList() || [],
-              ),
+              GetDefaultMicrophoneConfig(provider.getAudiooptionsList() || []),
             ),
           });
         }
@@ -167,9 +164,7 @@ const ConfigureAssistantDebuggerDeployment: FC<{ assistantId: string }> = ({
             provider: provider.getAudioprovider() || 'cartesia',
             parameters: GetDefaultTextToSpeechIfInvalid(
               provider.getAudioprovider() || 'cartesia',
-              GetDefaultSpeakerConfig(
-                provider.getAudiooptionsList() || [],
-              ),
+              GetDefaultSpeakerConfig(provider.getAudiooptionsList() || []),
             ),
           });
         }

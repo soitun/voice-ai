@@ -182,12 +182,13 @@ func (v *FireRedVAD) Process(ctx context.Context, pkt internal_type.UserAudioPac
 	if hasSpeech && v.onPacket != nil {
 		_ = v.onPacket(ctx,
 			internal_type.VadSpeechActivityPacket{},
-			internal_type.ConversationEventPacket{
-				Name: "vad",
-				Data: map[string]string{
-					"type": "heartbeat",
-				},
-			})
+			// internal_type.ConversationEventPacket{
+			// 	Name: "vad",
+			// 	Data: map[string]string{
+			// 		"type": "heartbeat",
+			// 	},
+			// },
+		)
 	}
 
 	return nil

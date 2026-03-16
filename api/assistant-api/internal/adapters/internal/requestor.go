@@ -365,10 +365,10 @@ func (r *genericRequestor) SwitchMode(mm type_enums.MessageMode) {
 //
 // Blocked:
 //
-//	* → Unknown                          (no explicit reset)
-//	Unknown     → Interrupt | Interrupted (nothing active — no LLM, no TTS)
-//	Interrupted → Interrupted             (already interrupted)
-//	Interrupt   → Interrupt               (already soft-interrupted)
+//   - → Unknown                          (no explicit reset)
+//     Unknown     → Interrupt | Interrupted (nothing active — no LLM, no TTS)
+//     Interrupted → Interrupted             (already interrupted)
+//     Interrupt   → Interrupt               (already soft-interrupted)
 func (r *genericRequestor) Transition(newState InteractionState) error {
 	r.msgMu.Lock()
 	defer r.msgMu.Unlock()
@@ -386,10 +386,13 @@ func (r *genericRequestor) Transition(newState InteractionState) error {
 		if r.interactionState == Interrupted {
 			return fmt.Errorf("Transition: already interrupted")
 		}
-		if r.interactionState == Unknown {
-			return fmt.Errorf("Transition: nothing active to interrupt in state %s", r.interactionState)
-		}
-		r.contextID = uuid.NewString()
+		nCtxID := uuid.NewString()
+		// r.OnPacket(context.Background(), internal_type.ConversationEventPacket{
+		// 	Name: "behavior",
+		// 	Data: map[string]string{"type": "eos", "turn_change": r.GetID(), "new": nCtxID},
+		// 	Time: time.Now(),
+		// })
+		r.contextID = nCtxID
 	}
 	r.interactionState = newState
 	return nil
