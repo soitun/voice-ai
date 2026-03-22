@@ -212,8 +212,8 @@
     },
     {
         "code": "azure-speech-service",
-        "name": "Azure Congnitive Services",
-        "description": "Azure Congnitive Service enables to access all the cognitive apis like stt, tts",
+        "name": "Azure Cognitive Services",
+        "description": "Azure Cognitive Service enables to access all the cognitive apis like stt, tts",
         "image": "https://rapida-assets-01.s3.ap-south-1.amazonaws.com/providers/198796716894742122.png",
         "url": "/integration/models/azure-speech-service",
         "featureList": [
@@ -233,7 +233,7 @@
                 "label": "Endpoint"
             }
         ],
-        "humanname": "Azure Congnitive Services",
+        "humanname": "Azure Cognitive Services",
         "website": "https://azure.microsoft.com/en-us/products/ai-services/openai-service"
     },
     {

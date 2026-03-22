@@ -1,6 +1,7 @@
 import { useCallback, useState } from 'react';
 import { SpeechToTextProvider } from '@/app/components/providers/speech-to-text';
 import { NoiseCancellationProvider } from '@/app/components/providers/noise-removal';
+import { GetDefaultNoiseCancellationConfig } from '@/app/components/providers/noise-removal/provider';
 import { EndOfSpeechProvider } from '@/app/components/providers/end-of-speech';
 import { Metadata } from '@rapidaai/react';
 import {
@@ -28,15 +29,14 @@ export const ConfigureAudioInputProvider: React.FC<
   const [showAdvanced, setShowAdvanced] = useState(false);
 
   const onChangeAudioInputProvider = (providerName: string) => {
+    const microphoneScopedParameters = audioInputConfig.parameters.filter(
+      p => p.getKey().startsWith('microphone.'),
+    );
     setAudioInputConfig({
       provider: providerName,
       parameters: GetDefaultSpeechToTextIfInvalid(
         providerName,
-        GetDefaultMicrophoneConfig(
-          audioInputConfig.parameters.filter(p =>
-            p.getKey().startsWith('microphone.'),
-          ),
-        ),
+        GetDefaultMicrophoneConfig(microphoneScopedParameters),
       ),
     });
   };
@@ -50,28 +50,6 @@ export const ConfigureAudioInputProvider: React.FC<
     (key: string, defaultValue: any) => {
       const param = audioInputConfig.parameters?.find(p => p.getKey() === key);
       return param ? param.getValue() : defaultValue;
-    },
-    [JSON.stringify(audioInputConfig.parameters)],
-  );
-
-  const updateParameter = useCallback(
-    (key: string, value: string) => {
-      const updatedParams = (audioInputConfig.parameters || []).map(param => {
-        if (param.getKey() === key) {
-          const updatedParam = new Metadata();
-          updatedParam.setKey(key);
-          updatedParam.setValue(value);
-          return updatedParam;
-        }
-        return param;
-      });
-      if (!updatedParams.some(param => param.getKey() === key)) {
-        const newParam = new Metadata();
-        newParam.setKey(key);
-        newParam.setValue(value);
-        updatedParams.push(newParam);
-      }
-      onChangeAudioInputParameter(updatedParams);
     },
     [audioInputConfig.parameters],
   );
@@ -124,8 +102,15 @@ export const ConfigureAudioInputProvider: React.FC<
                     'microphone.denoising.provider',
                     'rn_noise',
                   )}
+                  parameters={audioInputConfig.parameters}
+                  onChangeParameter={onChangeAudioInputParameter}
                   onChangeNoiseCancellationProvider={v =>
-                    updateParameter('microphone.denoising.provider', v)
+                    onChangeAudioInputParameter(
+                      GetDefaultNoiseCancellationConfig(
+                        v,
+                        audioInputConfig.parameters,
+                      ),
+                    )
                   }
                 />
                 <SectionDivider label="End of Speech" />

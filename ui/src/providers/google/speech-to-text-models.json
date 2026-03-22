@@ -1,0 +1,80 @@
+[
+  {
+    "id": "latest_long",
+    "name": "latest_long",
+    "config": {
+      "parameters": [
+        {
+          "key": "listen.region",
+          "label": "Region",
+          "type": "dropdown",
+          "required": true,
+          "default": "global",
+          "data": "speech-to-text-regions.json",
+          "valueField": "id",
+          "errorMessage": "Please select a valid region for speech to text."
+        },
+        {
+          "key": "listen.language",
+          "label": "Language",
+          "type": "dropdown",
+          "required": true,
+          "default": "en-US",
+          "data": "speech-to-text-language.json",
+          "valueField": "code",
+          "errorMessage": "Please provide a valid google language for speech to text."
+        },
+        {
+          "key": "listen.threshold",
+          "label": "Transcript Confidence Threshold",
+          "type": "slider",
+          "required": false,
+          "default": "0.5",
+          "min": 0.1,
+          "max": 0.9,
+          "step": 0.1,
+          "helpText": "Transcripts with a confidence score below this threshold will be filtered out."
+        }
+      ]
+    }
+  },
+  {
+    "id": "telephony",
+    "name": "telephony (only for phone call audio)",
+    "config": {
+      "parameters": [
+        {
+          "key": "listen.region",
+          "label": "Region",
+          "type": "dropdown",
+          "required": true,
+          "default": "global",
+          "data": "speech-to-text-regions.json",
+          "valueField": "id",
+          "errorMessage": "Please select a valid region for speech to text."
+        },
+        {
+          "key": "listen.language",
+          "label": "Language",
+          "type": "dropdown",
+          "required": true,
+          "default": "en-US",
+          "data": "speech-to-text-language.json",
+          "valueField": "code",
+          "errorMessage": "Please provide a valid google language for speech to text."
+        },
+        {
+          "key": "listen.threshold",
+          "label": "Transcript Confidence Threshold",
+          "type": "slider",
+          "required": false,
+          "default": "0.5",
+          "min": 0.1,
+          "max": 0.9,
+          "step": 0.1,
+          "helpText": "Transcripts with a confidence score below this threshold will be filtered out."
+        }
+      ]
+    }
+  }
+]

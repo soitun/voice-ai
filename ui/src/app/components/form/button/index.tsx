@@ -121,7 +121,7 @@ export function IBlueBGArrowButton({ isLoading, ...props }: ButtonProps) {
  * Carbon Secondary button — transparent bg, gray border, gray text.
  * Pairs with a primary button as a non-destructive alternative.
  */
-export function ICancelButton(props: ButtonProps) {
+export function ICancelButton({ isLoading, size, ...props }: ButtonProps) {
   return (
     <button
       type="button"
@@ -141,7 +141,7 @@ export function ICancelButton(props: ButtonProps) {
   );
 }
 
-export function ISecondaryButton(props: ButtonProps) {
+export function ISecondaryButton({ isLoading, size, ...props }: ButtonProps) {
   return (
     <button
       type="button"
@@ -161,7 +161,7 @@ export function ISecondaryButton(props: ButtonProps) {
 }
 
 /** @alias ICancelButton */
-export function BorderButton(props: ButtonProps) {
+export function BorderButton({ isLoading, size, ...props }: ButtonProps) {
   return (
     <button
       type="button"
@@ -227,7 +227,7 @@ export function BlueBorderButton({ isLoading, ...props }: ButtonProps) {
 }
 
 /** @alias BlueBorderButton */
-export function IBlueBorderButton(props: ButtonProps) {
+export function IBlueBorderButton({ isLoading, size, ...props }: ButtonProps) {
   return (
     <button
       type="button"
@@ -295,7 +295,7 @@ export function HoverButton({ isLoading, ...props }: ButtonProps) {
 }
 
 /** @alias HoverButton */
-export function IButton(props: ButtonProps) {
+export function IButton({ isLoading, size, ...props }: ButtonProps) {
   return (
     <button
       type="button"
@@ -314,7 +314,7 @@ export function IButton(props: ButtonProps) {
 }
 
 /** Ghost — primary text color */
-export function IBlueButton(props: ButtonProps) {
+export function IBlueButton({ isLoading, size, ...props }: ButtonProps) {
   return (
     <button
       type="button"
@@ -333,7 +333,7 @@ export function IBlueButton(props: ButtonProps) {
 }
 
 /** Icon button — square, ghost */
-export function IconButton(props: ButtonProps) {
+export function IconButton({ isLoading, size, ...props }: ButtonProps) {
   return (
     <button
       type="button"
@@ -352,7 +352,7 @@ export function IconButton(props: ButtonProps) {
 }
 
 /** Simple hover — minimal ghost, used for toolbar/icon rows */
-export function SimpleButton(props: ButtonProps) {
+export function SimpleButton({ isLoading, size, ...props }: ButtonProps) {
   return (
     <button
       {...props}
@@ -375,7 +375,7 @@ export function SimpleButton(props: ButtonProps) {
  * Carbon Danger button — red fill, white text.
  * Use for destructive or irreversible actions.
  */
-export function IRedBGButton(props: ButtonProps) {
+export function IRedBGButton({ isLoading, size, ...props }: ButtonProps) {
   return (
     <button
       type="button"
@@ -417,7 +417,7 @@ export function IRedBorderButton({ isLoading, ...props }: ButtonProps) {
 // ─── Success ──────────────────────────────────────────────────────────────────
 
 /** Non-Carbon custom: success/green fill */
-export function IGreenBGButton(props: ButtonProps) {
+export function IGreenBGButton({ isLoading, size, ...props }: ButtonProps) {
   return (
     <button
       type="button"
@@ -457,7 +457,7 @@ export const OutlineButton = ({
 // ─── Link variants ────────────────────────────────────────────────────────────
 
 /** Anchor styled as primary button */
-export function ILinkButton(props: LinkProps) {
+export function ILinkButton({ isLoading, ...props }: LinkProps) {
   return (
     <a
       {...props}
