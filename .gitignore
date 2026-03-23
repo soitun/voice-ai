@@ -5,9 +5,10 @@
 !api/assistant-api/internal/vad/internal/firered_vad/models/*.onnx
 .DS_Store
 .venv/
+__pycache__/
+*.pyc
 license-check-and-add.json
-.claude/
-CLAUDE.md
+.claude/settings.local.json
 
 # Integration test credentials (never commit real API keys)
 **/integration_config.yaml
