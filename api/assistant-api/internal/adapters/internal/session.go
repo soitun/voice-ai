@@ -203,8 +203,6 @@ func (r *genericRequestor) resumeSession(
 		return err
 	}
 
-	r.initializeCollectors(ctx)
-
 	r.OnPacket(ctx, internal_type.ConversationEventPacket{
 		Name: "session",
 		Data: map[string]string{
@@ -286,8 +284,6 @@ func (r *genericRequestor) createSession(
 		return err
 	}
 
-	r.initializeCollectors(ctx)
-
 	r.OnPacket(ctx, internal_type.ConversationEventPacket{
 		Name: "session",
 		Data: map[string]string{
@@ -340,9 +336,7 @@ func (r *genericRequestor) createSession(
 		}
 		return nil
 	})
-
 	r.initSessionBackground(ctx, true)
-
 	if err = errGroup.Wait(); err != nil {
 		r.notifyInitializationError(ctx, conversation.Id, err)
 		return err
@@ -355,6 +349,15 @@ func (r *genericRequestor) createSession(
 // initSessionBackground launches non-critical background tasks common to both
 // new and resumed sessions. isNew distinguishes which lifecycle hook to fire.
 func (r *genericRequestor) initSessionBackground(ctx context.Context, isNew bool) {
+	// Initialize telemetry collectors in the background so that DB lookups,
+	// vault credential resolution, and OTLP connection setup do not add
+	// latency to the connect path. The no-op collectors set in
+	// NewGenericRequestor safely absorb any events/metrics collected before
+	// the real exporters are ready.
+	utils.Go(ctx, func() {
+		r.initializeCollectors(ctx)
+	})
+
 	utils.Go(ctx, func() {
 		rc, err := internal_audio_recorder.GetRecorder(r.logger)
 		if err != nil {

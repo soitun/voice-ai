@@ -7,17 +7,7 @@ package providers
 
 import (
 	"context"
-
-	rapida_config "github.com/rapidaai/config"
 )
-
-// AzureMonitorConfig configures Azure Monitor OTLP HTTP export.
-type AzureMonitorConfig = rapida_config.TelemetryAzureMonitorConfig
-
-// AzureMonitorConfigFromOptions parses Azure Monitor options.
-func AzureMonitorConfigFromOptions(opts map[string]interface{}) (AzureMonitorConfig, error) {
-	return rapida_config.AzureMonitorTelemetryConfigFromOptions(opts)
-}
 
 // NewAzureMonitorExporter creates an OTLP exporter pre-configured for Azure Monitor.
 func NewAzureMonitorExporter(ctx context.Context, cfg AzureMonitorConfig) (*OTLPExporter, error) {

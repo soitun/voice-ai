@@ -8,18 +8,9 @@ package providers
 import (
 	"context"
 
-	rapida_config "github.com/rapidaai/config"
 	"github.com/rapidaai/pkg/commons"
 	"github.com/rapidaai/pkg/telemetry"
 )
-
-// LoggingConfig exists for uniform provider configuration.
-type LoggingConfig = rapida_config.TelemetryLoggingConfig
-
-// LoggingConfigFromOptions parses logging options.
-func LoggingConfigFromOptions(opts map[string]interface{}) (LoggingConfig, error) {
-	return rapida_config.LoggingTelemetryConfigFromOptions(opts)
-}
 
 // LoggingExporter logs events and metrics at INFO level.
 type LoggingExporter struct {

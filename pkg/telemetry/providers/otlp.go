@@ -22,19 +22,8 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
-	rapida_config "github.com/rapidaai/config"
 	"github.com/rapidaai/pkg/telemetry"
 )
-
-// OTLPConfig holds configuration for connecting to an OTLP-compatible backend
-// (Datadog APM, AWS X-Ray via ADOT, Google Cloud Trace, Azure Monitor, etc.).
-type OTLPConfig = rapida_config.TelemetryOTLPConfig
-
-// OTLPConfigFromOptions parses an OTLPConfig from a flat string key-value map.
-// providerType ("otlp_http" or "otlp_grpc") is used to infer default protocol.
-func OTLPConfigFromOptions(opts map[string]interface{}, providerType string) OTLPConfig {
-	return rapida_config.OTLPTelemetryConfigFromOptions(opts, providerType)
-}
 
 // OTLPExporter converts EventRecord and MetricRecord to OTEL spans and ships
 // them to any OTLP-compatible backend via the configured endpoint.

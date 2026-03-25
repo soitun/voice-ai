@@ -416,7 +416,6 @@ func (r *genericRequestor) initializeCollectors(ctx context.Context) {
 	if oid := r.auth.GetCurrentOrganizationId(); oid != nil {
 		orgID = *oid
 	}
-
 	meta := observe.SessionMeta{
 		AssistantID:             r.assistant.Id,
 		AssistantConversationID: r.assistantConversation.Id,
@@ -426,7 +425,6 @@ func (r *genericRequestor) initializeCollectors(ctx context.Context) {
 
 	var eventExporters []observe.EventExporter
 	var metricExporters []observe.MetricExporter
-
 	// Register one default telemetry exporter from env config (asset-store style).
 	if r.config != nil && r.config.TelemetryConfig != nil {
 		envProviderType := r.config.TelemetryConfig.Type()
@@ -448,6 +446,27 @@ func (r *genericRequestor) initializeCollectors(ctx context.Context) {
 
 	for _, p := range providers {
 		opts := p.GetOptions()
+		// Resolve vault credential and merge its fields into opts so that
+		// exporter config parsers (e.g. DatadogConfigFromOptions) can read
+		// api_key, headers, access_token etc. from the credential store.
+		if credIDStr, ok := opts["rapida.credential_id"]; ok {
+			credID, parseErr := utils.Option(opts).GetUint64("rapida.credential_id")
+			if parseErr != nil {
+				r.logger.Errorf("observe: invalid credential_id %q for provider %d (%s): %v", credIDStr, p.Id, p.ProviderType, parseErr)
+			} else {
+				credential, credErr := r.VaultCaller().GetCredential(ctx, r.Auth(), credID)
+				if credErr != nil {
+					r.logger.Errorf("observe: vault credential lookup failed for provider %d (%s): %v", p.Id, p.ProviderType, credErr)
+				} else if credential != nil && credential.GetValue() != nil {
+					for k, v := range credential.GetValue().AsMap() {
+						if s, ok := v.(string); ok {
+							opts[k] = s
+						}
+					}
+				}
+			}
+		}
+
 		evtExp, metExp, err := observe_exporters.GetExporter(ctx, r.logger, &r.config.AppConfig, r.opensearch, p.ProviderType, opts)
 		if err != nil {
 			r.logger.Errorf("observe: exporter creation failed for provider %d (%s): %v", p.Id, p.ProviderType, err)

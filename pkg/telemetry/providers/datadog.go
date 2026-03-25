@@ -7,17 +7,7 @@ package providers
 
 import (
 	"context"
-
-	rapida_config "github.com/rapidaai/config"
 )
-
-// DatadogConfig configures Datadog OTLP export.
-type DatadogConfig = rapida_config.TelemetryDatadogConfig
-
-// DatadogConfigFromOptions parses Datadog options.
-func DatadogConfigFromOptions(opts map[string]interface{}) (DatadogConfig, error) {
-	return rapida_config.DatadogTelemetryConfigFromOptions(opts)
-}
 
 // NewDatadogExporter creates an OTLP exporter pre-configured for Datadog APM.
 func NewDatadogExporter(ctx context.Context, cfg DatadogConfig) (*OTLPExporter, error) {

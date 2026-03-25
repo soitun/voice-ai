@@ -88,4 +88,3 @@ func TestTelemetryConfig_ToMap_ByType(t *testing.T) {
 		t.Fatalf("api_key = %v, want abc", m["api_key"])
 	}
 }
-

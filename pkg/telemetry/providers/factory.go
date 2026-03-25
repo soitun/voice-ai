@@ -33,8 +33,6 @@ func NewExporterFromOptions(
 	switch telemetry.ExporterType(provider) {
 	case telemetry.OTLP_HTTP, telemetry.OTLP_GRPC:
 		otlpCfg := OTLPConfigFromOptions(opts, provider)
-		// Preserve current behavior: silently skip OTLP provider when endpoint
-		// is not configured.
 		if otlpCfg.Endpoint == "" {
 			return nil, nil
 		}

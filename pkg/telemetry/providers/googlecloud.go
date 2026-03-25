@@ -7,17 +7,7 @@ package providers
 
 import (
 	"context"
-
-	rapida_config "github.com/rapidaai/config"
 )
-
-// GoogleTraceConfig configures Google Cloud Trace export via OTLP HTTP.
-type GoogleTraceConfig = rapida_config.TelemetryGoogleTraceConfig
-
-// GoogleTraceConfigFromOptions parses Google Trace options.
-func GoogleTraceConfigFromOptions(opts map[string]interface{}) (GoogleTraceConfig, error) {
-	return rapida_config.GoogleTraceTelemetryConfigFromOptions(opts)
-}
 
 // NewGoogleTraceExporter creates an OTLP exporter pre-configured for Google Trace.
 func NewGoogleTraceExporter(ctx context.Context, cfg GoogleTraceConfig) (*OTLPExporter, error) {

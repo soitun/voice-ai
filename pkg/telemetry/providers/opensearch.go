@@ -19,14 +19,6 @@ import (
 	"github.com/rapidaai/pkg/telemetry"
 )
 
-// OpenSearchConfig exists for uniform provider configuration.
-type OpenSearchConfig = rapida_config.TelemetryOpenSearchConfig
-
-// OpenSearchConfigFromOptions parses OpenSearch options.
-func OpenSearchConfigFromOptions(opts map[string]interface{}) (OpenSearchConfig, error) {
-	return rapida_config.OpenSearchTelemetryConfigFromOptions(opts)
-}
-
 // OpenSearchExporter indexes events and metrics to dedicated OpenSearch indices.
 type OpenSearchExporter struct {
 	logger    commons.Logger
