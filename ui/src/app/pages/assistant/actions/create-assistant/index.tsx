@@ -477,6 +477,7 @@ export function CreateAssistantPage() {
                       instanceId={randomString(10)}
                       existingPrompt={template}
                       showRuntimeReplacementHint
+                      enableReservedVariableSuggestions
                       onChange={prompt => setTemplate(prompt)}
                     />
                   </div>

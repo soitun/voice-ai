@@ -13,79 +13,10 @@ import { ScalableTextarea } from '@/app/components/form/textarea';
 import { getNewVar, getVars } from '@/utils/var';
 import { TypeOfVariable } from '@/app/components/configuration/config-prompt/type-of-variable';
 import { InputHelper } from '@/app/components/input-helper';
-
-const RAPIDA_RESERVED_RUNTIME_VARIABLES: {
-  variable: string;
-  runtimeValue: string;
-}[] = [
-  {
-    variable: '{{system.current_date}}',
-    runtimeValue: 'UTC date (YYYY-MM-DD)',
-  },
-  { variable: '{{system.current_time}}', runtimeValue: 'UTC time (HH:MM:SS)' },
-  {
-    variable: '{{system.current_datetime}}',
-    runtimeValue: 'UTC datetime (RFC3339)',
-  },
-  { variable: '{{system.day_of_week}}', runtimeValue: 'UTC weekday name' },
-  {
-    variable: '{{system.date_rfc1123}}',
-    runtimeValue: 'UTC RFC1123 date string',
-  },
-  {
-    variable: '{{system.date_unix}}',
-    runtimeValue: 'UTC Unix timestamp (seconds)',
-  },
-  {
-    variable: '{{system.date_unix_ms}}',
-    runtimeValue: 'UTC Unix timestamp (milliseconds)',
-  },
-  { variable: '{{assistant.name}}', runtimeValue: 'Assistant name' },
-  { variable: '{{assistant.id}}', runtimeValue: 'Assistant identifier' },
-  {
-    variable: '{{assistant.description}}',
-    runtimeValue: 'Assistant description',
-  },
-  { variable: '{{conversation.id}}', runtimeValue: 'Conversation ID' },
-  {
-    variable: '{{conversation.identifier}}',
-    runtimeValue: 'Conversation identifier',
-  },
-  { variable: '{{conversation.source}}', runtimeValue: 'Conversation source' },
-  {
-    variable: '{{conversation.direction}}',
-    runtimeValue: 'Conversation direction',
-  },
-  {
-    variable: '{{conversation.created_date}}',
-    runtimeValue: 'Conversation created datetime',
-  },
-  {
-    variable: '{{message.language}}',
-    runtimeValue: 'Current message language',
-  },
-  { variable: '{{message.text}}', runtimeValue: 'Current message text' },
-];
-
-const RAPIDA_RESERVED_RUNTIME_VARIABLE_KEYS = new Set([
-  'system.current_date',
-  'system.current_time',
-  'system.current_datetime',
-  'system.day_of_week',
-  'system.date_rfc1123',
-  'system.date_unix',
-  'system.date_unix_ms',
-  'assistant.name',
-  'assistant.id',
-  'assistant.description',
-  'conversation.id',
-  'conversation.identifier',
-  'conversation.source',
-  'conversation.direction',
-  'conversation.created_date',
-  'message.language',
-  'message.text',
-]);
+import {
+  RAPIDA_RESERVED_RUNTIME_VARIABLE_KEYS,
+  RAPIDA_RESERVED_RUNTIME_VARIABLES,
+} from '@/utils/prompt-reserved-variables';
 
 const isRapidaReservedRuntimeVariable = (variableName: string): boolean =>
   RAPIDA_RESERVED_RUNTIME_VARIABLE_KEYS.has(variableName) ||
@@ -97,6 +28,7 @@ export type IPromptProps = {
   };
   instanceId?: string;
   showRuntimeReplacementHint?: boolean;
+  enableReservedVariableSuggestions?: boolean;
   onChange: (prompt: {
     prompt: { role: string; content: string }[];
     variables: { name: string; type: string; defaultvalue: string }[];
@@ -108,6 +40,7 @@ export const ConfigPrompt: FC<IPromptProps> = ({
   onChange,
   instanceId,
   showRuntimeReplacementHint = false,
+  enableReservedVariableSuggestions = false,
 }) => {
   const [showReservedVariables, setShowReservedVariables] = useState(false);
 
@@ -263,6 +196,9 @@ export const ConfigPrompt: FC<IPromptProps> = ({
               canDelete={existingPrompt.prompt.length > 1}
               onDelete={() => handlePromptDelete(index)}
               onChange={value => handleValueChange(value, index)}
+              enableReservedVariableSuggestions={
+                enableReservedVariableSuggestions
+              }
             />
           ))}
           {existingPrompt.prompt.length < MAX_PROMPT_MESSAGE_LENGTH && (

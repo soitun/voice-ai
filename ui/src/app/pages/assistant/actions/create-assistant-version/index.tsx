@@ -338,6 +338,7 @@ const CreateNewVersion: FC<{ assistantId: string }> = ({ assistantId }) => {
                       instanceId={randomString(10)}
                       existingPrompt={template}
                       showRuntimeReplacementHint
+                      enableReservedVariableSuggestions
                       onChange={prompt => setTemplate(prompt)}
                     />
                   </div>
