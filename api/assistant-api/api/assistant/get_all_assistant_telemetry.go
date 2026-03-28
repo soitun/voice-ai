@@ -14,6 +14,7 @@ import (
 
 	"google.golang.org/protobuf/types/known/timestamppb"
 
+	"github.com/rapidaai/pkg/configs"
 	"github.com/rapidaai/pkg/exceptions"
 	"github.com/rapidaai/pkg/types"
 	"github.com/rapidaai/protos"
@@ -25,7 +26,7 @@ func (assistantApi *assistantGrpcApi) GetAllAssistantTelemetry(
 	ctx context.Context,
 	request *protos.GetAllAssistantTelemetryRequest,
 ) (*protos.GetAllAssistantTelemetryResponse, error) {
-	_, isAuthenticated := types.GetSimplePrincipleGRPC(ctx)
+	iAuth, isAuthenticated := types.GetSimplePrincipleGRPC(ctx)
 	if !isAuthenticated {
 		assistantApi.logger.Errorf("unauthenticated request for GetAllAssistantTelemetry")
 		return exceptions.AuthenticationError[protos.GetAllAssistantTelemetryResponse]()
@@ -36,6 +37,25 @@ func (assistantApi *assistantGrpcApi) GetAllAssistantTelemetry(
 	}
 
 	assistantId := request.GetAssistant().GetAssistantId()
+
+	// Gate: only query OpenSearch when telemetry is configured to persist there.
+	// Check env config first (global), then DB providers (per-assistant).
+	opensearchEnabled := assistantApi.cfg.TelemetryConfig != nil &&
+		assistantApi.cfg.TelemetryConfig.Type() == configs.OPENSEARCH
+	if !opensearchEnabled && iAuth.HasProject() {
+		cnt, _, _ := assistantApi.assistantTelemetryService.GetAll(
+			ctx, iAuth, assistantId,
+			[]*protos.Criteria{
+				{Key: "provider_type", Logic: "=", Value: "opensearch"},
+				{Key: "enabled", Logic: "=", Value: "true"},
+			},
+			&protos.Paginate{Page: 1, PageSize: 1},
+		)
+		opensearchEnabled = cnt > 0
+	}
+	if !opensearchEnabled {
+		return &protos.GetAllAssistantTelemetryResponse{Code: 200, Success: true}, nil
+	}
 
 	page := int(request.GetPaginate().GetPage())
 	if page < 1 {
