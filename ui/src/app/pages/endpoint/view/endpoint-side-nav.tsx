@@ -87,15 +87,16 @@ export const EndpointSideNav: FC<EndpointSideNavProps> = ({
           onClick={onToggle}
           className={cn(
             'flex items-center h-10 w-full cursor-pointer',
-            'text-gray-700 dark:text-gray-300',
-            'hover:bg-gray-100 dark:hover:bg-gray-800',
+            'text-gray-400 dark:text-gray-500',
+            'hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-600 dark:hover:text-gray-400',
+            'transition-colors duration-100',
           )}
           aria-label={expanded ? 'Collapse nav' : 'Expand nav'}
         >
-          <span className="flex items-center justify-center w-12 h-10 shrink-0">
-            {expanded ? <SidePanelClose size={20} /> : <SidePanelOpen size={20} />}
+          <span className="flex items-center justify-center w-12 h-10 shrink-0 text-gray-400 dark:text-gray-500">
+            {expanded ? <SidePanelClose size={16} /> : <SidePanelOpen size={16} />}
           </span>
-          {expanded && <span className="text-sm font-semibold truncate">Collapse</span>}
+          {expanded && <span className="text-xs truncate">Collapse</span>}
         </button>
       </div>
     </div>

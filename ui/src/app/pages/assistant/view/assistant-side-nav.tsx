@@ -95,7 +95,12 @@ export const AssistantSideNav: FC<AssistantSideNavProps> = ({
     return (
       <div key={idx}>
         {section.label && (
-          <li className="cds--switcher__item--divider">
+          <li
+            className={cn(
+              'cds--switcher__item--divider transition-all duration-200',
+              !expanded && 'opacity-0 h-0 overflow-hidden !py-0 !my-0 !border-none',
+            )}
+          >
             <span>{section.label}</span>
           </li>
         )}
@@ -129,20 +134,17 @@ export const AssistantSideNav: FC<AssistantSideNavProps> = ({
           type="button"
           onClick={onToggle}
           className={cn(
-            'flex items-center h-8 w-full cursor-pointer',
-            'text-gray-500 dark:text-gray-400',
-            'hover:bg-gray-100 dark:hover:bg-gray-800',
+            'flex items-center h-10 w-full cursor-pointer',
+            'text-gray-400 dark:text-gray-500',
+            'hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-600 dark:hover:text-gray-400',
+            'transition-colors duration-100',
           )}
           aria-label={expanded ? 'Collapse nav' : 'Expand nav'}
         >
-          <span className="flex items-center justify-center w-12 h-8 shrink-0">
-            {expanded ? (
-              <SidePanelClose size={20} />
-            ) : (
-              <SidePanelOpen size={20} />
-            )}
+          <span className="flex items-center justify-center w-12 h-10 shrink-0 text-gray-400 dark:text-gray-500">
+            {expanded ? <SidePanelClose size={16} /> : <SidePanelOpen size={16} />}
           </span>
-          {expanded && <span className="text-sm truncate">Collapse</span>}
+          {expanded && <span className="text-xs truncate">Collapse</span>}
         </button>
       </div>
     </div>

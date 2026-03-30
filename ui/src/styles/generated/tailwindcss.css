@@ -657,6 +657,9 @@
   .mx-auto {
     margin-inline: auto;
   }
+  .\!my-0 {
+    margin-block: calc(var(--spacing) * 0) !important;
+  }
   .my-1 {
     margin-block: calc(var(--spacing) * 1);
   }
@@ -2925,6 +2928,12 @@
   .max-h-screen {
     max-height: 100vh;
   }
+  .\!min-h-0 {
+    min-height: calc(var(--spacing) * 0) !important;
+  }
+  .\!min-h-\[2\.5rem\] {
+    min-height: 2.5rem !important;
+  }
   .min-h-\(--header-height\) {
     min-height: var(--header-height);
   }
@@ -3621,6 +3630,9 @@
   }
   .\!justify-between {
     justify-content: space-between !important;
+  }
+  .\!justify-center {
+    justify-content: center !important;
   }
   .\!justify-start {
     justify-content: flex-start !important;
@@ -4811,6 +4823,9 @@
   .\!p-0 {
     padding: calc(var(--spacing) * 0) !important;
   }
+  .\!p-1 {
+    padding: calc(var(--spacing) * 1) !important;
+  }
   .\!p-4 {
     padding: calc(var(--spacing) * 4) !important;
   }
@@ -4859,6 +4874,9 @@
   .p-px {
     padding: 1px;
   }
+  .\!px-0 {
+    padding-inline: calc(var(--spacing) * 0) !important;
+  }
   .px-0 {
     padding-inline: calc(var(--spacing) * 0);
   }
@@ -4906,6 +4924,9 @@
   }
   .px-px {
     padding-inline: 1px;
+  }
+  .\!py-0 {
+    padding-block: calc(var(--spacing) * 0) !important;
   }
   .py-0 {
     padding-block: calc(var(--spacing) * 0);
@@ -4987,6 +5008,9 @@
   }
   .pt-20 {
     padding-top: calc(var(--spacing) * 20);
+  }
+  .\!pr-0 {
+    padding-right: calc(var(--spacing) * 0) !important;
   }
   .pr-0 {
     padding-right: calc(var(--spacing) * 0);
@@ -5275,6 +5299,10 @@
   .\!font-light {
     --tw-font-weight: var(--font-weight-light) !important;
     font-weight: var(--font-weight-light) !important;
+  }
+  .\!font-normal {
+    --tw-font-weight: var(--font-weight-normal) !important;
+    font-weight: var(--font-weight-normal) !important;
   }
   .\!font-semibold {
     --tw-font-weight: var(--font-weight-semibold) !important;

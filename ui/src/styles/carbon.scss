@@ -45,6 +45,19 @@
   max-inline-size: none;
 }
 
+// ─── Batch action buttons ───────────────────────────────────────────────────
+.cds--batch-actions .cds--batch-summary__cancel {
+  background-color: var(--cds-button-secondary, #393939);
+  color: var(--cds-text-on-color, #ffffff);
+}
+.cds--batch-actions .cds--action-list .cds--btn,
+.cds--batch-actions .cds--action-list .cds--btn::before,
+.cds--batch-actions .cds--batch-summary__cancel::before {
+  border: none;
+  border-left: none;
+  box-shadow: none;
+}
+
 // ─── Light theme (default) ───────────────────────────────────────────────────
 :root {
   // Background / layer

@@ -19,7 +19,6 @@ const quickStart = [
     title: 'Build',
     description: 'Explore Rapida with easy starter tutorials and services.',
     tag: 'Getting started',
-    time: '2 min',
     route: '/deployment/assistant/create-assistant',
     featured: true,
   },
@@ -28,7 +27,6 @@ const quickStart = [
     description:
       'Build conversational AI agents with custom skills, tools, and multi-step reasoning for any channel.',
     tag: 'Popular',
-    time: '3 min',
     route: '/deployment/assistant',
   },
   {
@@ -36,7 +34,6 @@ const quickStart = [
     description:
       'Connect OpenAI, Anthropic, Google, and custom LLMs. Manage credentials and model configuration.',
     tag: 'Popular',
-    time: '2 min',
     route: '/integration/models',
   },
   {
@@ -44,7 +41,6 @@ const quickStart = [
     description:
       'Upload documents, manage training data, and build RAG-powered knowledge bases for your assistants.',
     tag: 'Getting started',
-    time: '1 min',
     route: '/knowledge',
   },
   {
@@ -52,7 +48,6 @@ const quickStart = [
     description:
       'Secure API endpoints with fine-grained governance, audit trails, and enterprise access control.',
     tag: 'Advanced',
-    time: '5 min',
     route: '/deployment/endpoint',
   },
 ];
@@ -127,16 +122,11 @@ export const HomePage = () => {
               )}>
                 {item.description}
               </p>
-              <div className="mt-auto pt-4">
+              <div className="mt-auto pt-4 flex items-center justify-between">
                 <Tag size="md" type={item.featured ? 'high-contrast' : 'outline'}>
                   {item.tag}
                 </Tag>
-                <div className="flex items-center justify-between mt-2">
-                  <span className={cn('text-sm', item.featured ? 'opacity-70' : 'text-gray-500 dark:text-gray-400')}>
-                    {item.time}
-                  </span>
-                  <Launch size={16} className={item.featured ? 'opacity-70' : 'text-gray-400 dark:text-gray-500'} />
-                </div>
+                <Launch size={16} className={item.featured ? 'opacity-70' : 'text-gray-400 dark:text-gray-500'} />
               </div>
             </ClickableTile>
           ))}

@@ -119,27 +119,26 @@ export function SidebarNavigation(props: {}) {
           </div>
         </nav>
 
-      {/* ── Footer — lock/collapse button (Carbon SideNav item style) ── */}
+      {/* ── Footer — collapse/expand button ── */}
       <div className="shrink-0 border-t border-gray-200 dark:border-gray-800">
         <button
           type="button"
           onClick={() => setLocked(!locked)}
+          aria-label={locked ? 'Collapse sidebar' : 'Expand sidebar'}
           className={cn(
-            'relative flex items-center h-10 w-full cursor-pointer',
-            'text-gray-700 dark:text-gray-300',
-            'hover:bg-gray-100 dark:hover:bg-gray-800',
-            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary',
+            'flex items-center h-10 w-full cursor-pointer px-4',
+            'text-gray-400 dark:text-gray-500',
+            'hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-600 dark:hover:text-gray-400',
             'transition-colors duration-100',
           )}
-          aria-label={locked ? 'Unlock sidebar' : 'Lock sidebar open'}
         >
-          <span className="flex-shrink-0 flex items-center justify-center w-12 h-10">
-            {locked ? <SidePanelClose size={20} /> : <SidePanelOpen size={20} />}
+          <span className="shrink-0">
+            {locked ? <SidePanelClose size={16} /> : <SidePanelOpen size={16} />}
           </span>
           <span
             className={cn(
-              'text-sm font-semibold truncate flex-1 transition-all duration-200',
-              open ? 'opacity-100' : 'opacity-0 w-0',
+              'text-xs truncate transition-all duration-200 ml-3',
+              open ? 'opacity-100' : 'opacity-0 w-0 ml-0 overflow-hidden',
             )}
           >
             {locked ? 'Collapse' : 'Expand'}
