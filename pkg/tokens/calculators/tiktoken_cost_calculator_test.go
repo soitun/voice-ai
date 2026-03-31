@@ -41,9 +41,9 @@ func TestTikTokenCostCalculator_Token_EmptyMessages(t *testing.T) {
 	metrics := calculator.Token(in, out)
 
 	assert.Len(t, metrics, 3)
-	assert.Equal(t, "INPUT_TOKEN", metrics[0].Name)
-	assert.Equal(t, "OUTPUT_TOKEN", metrics[1].Name)
-	assert.Equal(t, "TOTAL_TOKEN", metrics[2].Name)
+	assert.Equal(t, "input_token", metrics[0].Name)
+	assert.Equal(t, "output_token", metrics[1].Name)
+	assert.Equal(t, "total_token", metrics[2].Name)
 }
 
 func TestTikTokenCostCalculator_Token_SingleInputMessage(t *testing.T) {
@@ -70,9 +70,9 @@ func TestTikTokenCostCalculator_Token_SingleInputMessage(t *testing.T) {
 	metrics := calculator.Token(in, out)
 
 	assert.Len(t, metrics, 3)
-	assert.Equal(t, "INPUT_TOKEN", metrics[0].Name)
-	assert.Equal(t, "OUTPUT_TOKEN", metrics[1].Name)
-	assert.Equal(t, "TOTAL_TOKEN", metrics[2].Name)
+	assert.Equal(t, "input_token", metrics[0].Name)
+	assert.Equal(t, "output_token", metrics[1].Name)
+	assert.Equal(t, "total_token", metrics[2].Name)
 
 	// Values should be positive integers
 	inputTokens := metrics[0].Value
@@ -114,9 +114,9 @@ func TestTikTokenCostCalculator_Token_MultipleInputMessages(t *testing.T) {
 	metrics := calculator.Token(in, out)
 
 	assert.Len(t, metrics, 3)
-	assert.Equal(t, "INPUT_TOKEN", metrics[0].Name)
-	assert.Equal(t, "OUTPUT_TOKEN", metrics[1].Name)
-	assert.Equal(t, "TOTAL_TOKEN", metrics[2].Name)
+	assert.Equal(t, "input_token", metrics[0].Name)
+	assert.Equal(t, "output_token", metrics[1].Name)
+	assert.Equal(t, "total_token", metrics[2].Name)
 }
 
 func TestTikTokenCostCalculator_Token_GPT35Turbo0613(t *testing.T) {
@@ -143,9 +143,9 @@ func TestTikTokenCostCalculator_Token_GPT35Turbo0613(t *testing.T) {
 	metrics := calculator.Token(in, out)
 
 	assert.Len(t, metrics, 3)
-	assert.Equal(t, "INPUT_TOKEN", metrics[0].Name)
-	assert.Equal(t, "OUTPUT_TOKEN", metrics[1].Name)
-	assert.Equal(t, "TOTAL_TOKEN", metrics[2].Name)
+	assert.Equal(t, "input_token", metrics[0].Name)
+	assert.Equal(t, "output_token", metrics[1].Name)
+	assert.Equal(t, "total_token", metrics[2].Name)
 }
 
 func TestTikTokenCostCalculator_Token_GPT4(t *testing.T) {
@@ -172,9 +172,9 @@ func TestTikTokenCostCalculator_Token_GPT4(t *testing.T) {
 	metrics := calculator.Token(in, out)
 
 	assert.Len(t, metrics, 3)
-	assert.Equal(t, "INPUT_TOKEN", metrics[0].Name)
-	assert.Equal(t, "OUTPUT_TOKEN", metrics[1].Name)
-	assert.Equal(t, "TOTAL_TOKEN", metrics[2].Name)
+	assert.Equal(t, "input_token", metrics[0].Name)
+	assert.Equal(t, "output_token", metrics[1].Name)
+	assert.Equal(t, "total_token", metrics[2].Name)
 }
 
 func TestTikTokenCostCalculator_Token_GPT35Turbo0301(t *testing.T) {
@@ -201,9 +201,9 @@ func TestTikTokenCostCalculator_Token_GPT35Turbo0301(t *testing.T) {
 	metrics := calculator.Token(in, out)
 
 	assert.Len(t, metrics, 3)
-	assert.Equal(t, "INPUT_TOKEN", metrics[0].Name)
-	assert.Equal(t, "OUTPUT_TOKEN", metrics[1].Name)
-	assert.Equal(t, "TOTAL_TOKEN", metrics[2].Name)
+	assert.Equal(t, "input_token", metrics[0].Name)
+	assert.Equal(t, "output_token", metrics[1].Name)
+	assert.Equal(t, "total_token", metrics[2].Name)
 }
 
 func TestTikTokenCostCalculator_Token_UnknownModel(t *testing.T) {
@@ -230,9 +230,9 @@ func TestTikTokenCostCalculator_Token_UnknownModel(t *testing.T) {
 	metrics := calculator.Token(in, out)
 
 	assert.Len(t, metrics, 3)
-	assert.Equal(t, "INPUT_TOKEN", metrics[0].Name)
-	assert.Equal(t, "OUTPUT_TOKEN", metrics[1].Name)
-	assert.Equal(t, "TOTAL_TOKEN", metrics[2].Name)
+	assert.Equal(t, "input_token", metrics[0].Name)
+	assert.Equal(t, "output_token", metrics[1].Name)
+	assert.Equal(t, "total_token", metrics[2].Name)
 	assert.Equal(t, "0", metrics[0].Value) // Should be 0 for unknown model
 	assert.Equal(t, "0", metrics[1].Value)
 	assert.Equal(t, "0", metrics[2].Value)
@@ -262,9 +262,9 @@ func TestTikTokenCostCalculator_Token_GPT35TurboVariant(t *testing.T) {
 	metrics := calculator.Token(in, out)
 
 	assert.Len(t, metrics, 3)
-	assert.Equal(t, "INPUT_TOKEN", metrics[0].Name)
-	assert.Equal(t, "OUTPUT_TOKEN", metrics[1].Name)
-	assert.Equal(t, "TOTAL_TOKEN", metrics[2].Name)
+	assert.Equal(t, "input_token", metrics[0].Name)
+	assert.Equal(t, "output_token", metrics[1].Name)
+	assert.Equal(t, "total_token", metrics[2].Name)
 }
 
 func TestTikTokenCostCalculator_Token_GPT4Variant(t *testing.T) {
@@ -291,9 +291,9 @@ func TestTikTokenCostCalculator_Token_GPT4Variant(t *testing.T) {
 	metrics := calculator.Token(in, out)
 
 	assert.Len(t, metrics, 3)
-	assert.Equal(t, "INPUT_TOKEN", metrics[0].Name)
-	assert.Equal(t, "OUTPUT_TOKEN", metrics[1].Name)
-	assert.Equal(t, "TOTAL_TOKEN", metrics[2].Name)
+	assert.Equal(t, "input_token", metrics[0].Name)
+	assert.Equal(t, "output_token", metrics[1].Name)
+	assert.Equal(t, "total_token", metrics[2].Name)
 }
 
 func TestTikTokenCostCalculator_Token_EmptyContent(t *testing.T) {
@@ -320,9 +320,9 @@ func TestTikTokenCostCalculator_Token_EmptyContent(t *testing.T) {
 	metrics := calculator.Token(in, out)
 
 	assert.Len(t, metrics, 3)
-	assert.Equal(t, "INPUT_TOKEN", metrics[0].Name)
-	assert.Equal(t, "OUTPUT_TOKEN", metrics[1].Name)
-	assert.Equal(t, "TOTAL_TOKEN", metrics[2].Name)
+	assert.Equal(t, "input_token", metrics[0].Name)
+	assert.Equal(t, "output_token", metrics[1].Name)
+	assert.Equal(t, "total_token", metrics[2].Name)
 }
 
 func TestTikTokenCostCalculator_Token_UserMessageOnly(t *testing.T) {
@@ -349,9 +349,9 @@ func TestTikTokenCostCalculator_Token_UserMessageOnly(t *testing.T) {
 	metrics := calculator.Token(in, out)
 
 	assert.Len(t, metrics, 3)
-	assert.Equal(t, "INPUT_TOKEN", metrics[0].Name)
-	assert.Equal(t, "OUTPUT_TOKEN", metrics[1].Name)
-	assert.Equal(t, "TOTAL_TOKEN", metrics[2].Name)
+	assert.Equal(t, "input_token", metrics[0].Name)
+	assert.Equal(t, "output_token", metrics[1].Name)
+	assert.Equal(t, "total_token", metrics[2].Name)
 }
 
 func TestTikTokenCostCalculator_Token_NilMessages(t *testing.T) {
@@ -372,9 +372,9 @@ func TestTikTokenCostCalculator_Token_NilMessages(t *testing.T) {
 	metrics := calculator.Token(in, out)
 
 	assert.Len(t, metrics, 3)
-	assert.Equal(t, "INPUT_TOKEN", metrics[0].Name)
-	assert.Equal(t, "OUTPUT_TOKEN", metrics[1].Name)
-	assert.Equal(t, "TOTAL_TOKEN", metrics[2].Name)
+	assert.Equal(t, "input_token", metrics[0].Name)
+	assert.Equal(t, "output_token", metrics[1].Name)
+	assert.Equal(t, "total_token", metrics[2].Name)
 }
 
 func TestTikTokenCostCalculator_Token_LongMessages(t *testing.T) {
@@ -407,9 +407,9 @@ func TestTikTokenCostCalculator_Token_LongMessages(t *testing.T) {
 	metrics := calculator.Token(in, out)
 
 	assert.Len(t, metrics, 3)
-	assert.Equal(t, "INPUT_TOKEN", metrics[0].Name)
-	assert.Equal(t, "OUTPUT_TOKEN", metrics[1].Name)
-	assert.Equal(t, "TOTAL_TOKEN", metrics[2].Name)
+	assert.Equal(t, "input_token", metrics[0].Name)
+	assert.Equal(t, "output_token", metrics[1].Name)
+	assert.Equal(t, "total_token", metrics[2].Name)
 
 	// Long messages should result in higher token counts
 	inputTokens := metrics[0].Value
@@ -442,9 +442,9 @@ func TestTikTokenCostCalculator_Token_SpecialCharacters(t *testing.T) {
 	metrics := calculator.Token(in, out)
 
 	assert.Len(t, metrics, 3)
-	assert.Equal(t, "INPUT_TOKEN", metrics[0].Name)
-	assert.Equal(t, "OUTPUT_TOKEN", metrics[1].Name)
-	assert.Equal(t, "TOTAL_TOKEN", metrics[2].Name)
+	assert.Equal(t, "input_token", metrics[0].Name)
+	assert.Equal(t, "output_token", metrics[1].Name)
+	assert.Equal(t, "total_token", metrics[2].Name)
 }
 
 func TestTikTokenCostCalculator_Token_MultipleAssistantContents(t *testing.T) {
@@ -471,9 +471,9 @@ func TestTikTokenCostCalculator_Token_MultipleAssistantContents(t *testing.T) {
 	metrics := calculator.Token(in, out)
 
 	assert.Len(t, metrics, 3)
-	assert.Equal(t, "INPUT_TOKEN", metrics[0].Name)
-	assert.Equal(t, "OUTPUT_TOKEN", metrics[1].Name)
-	assert.Equal(t, "TOTAL_TOKEN", metrics[2].Name)
+	assert.Equal(t, "input_token", metrics[0].Name)
+	assert.Equal(t, "output_token", metrics[1].Name)
+	assert.Equal(t, "total_token", metrics[2].Name)
 }
 
 func TestTikTokenCostCalculator_Token_AssistantInInput(t *testing.T) {
@@ -514,9 +514,9 @@ func TestTikTokenCostCalculator_Token_AssistantInInput(t *testing.T) {
 	metrics := calculator.Token(in, out)
 
 	assert.Len(t, metrics, 3)
-	assert.Equal(t, "INPUT_TOKEN", metrics[0].Name)
-	assert.Equal(t, "OUTPUT_TOKEN", metrics[1].Name)
-	assert.Equal(t, "TOTAL_TOKEN", metrics[2].Name)
+	assert.Equal(t, "input_token", metrics[0].Name)
+	assert.Equal(t, "output_token", metrics[1].Name)
+	assert.Equal(t, "total_token", metrics[2].Name)
 }
 
 func TestTikTokenCostCalculator_ImplementsTokenCalculatorInterface(t *testing.T) {

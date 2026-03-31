@@ -349,7 +349,7 @@ describe('Debugger deployment voice input intent actions', () => {
 
     const req = (CreateAssistantDebuggerDeployment as jest.Mock).mock.calls[0][1];
     const deployment = req.getDebugger();
-    expect(deployment.getInputaudio()).toBeUndefined();
+    expect(deployment.getInputaudio()).toBeDefined();
     expect(deployment.getOutputaudio()).toBeDefined();
   });
 });

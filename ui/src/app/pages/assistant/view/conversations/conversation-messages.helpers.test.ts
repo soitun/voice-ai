@@ -20,7 +20,7 @@ describe('conversation message helpers', () => {
 
   it('formats latency from TIME_TAKEN metric and handles missing metrics', () => {
     expect(formatLatency([])).toBe('0 ms');
-    expect(formatLatency([metric('TIME_TAKEN', '2500000')])).toBe('2.50 ms');
-    expect(formatLatency([metric('TIME_TAKEN', '1500000000')])).toBe('1.50 s');
+    expect(formatLatency([metric('time_taken', '2500000')])).toBe('2.50 ms');
+    expect(formatLatency([metric('time_taken', '1500000000')])).toBe('1.50 s');
   });
 });
