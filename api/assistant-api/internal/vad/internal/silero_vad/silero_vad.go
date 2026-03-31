@@ -125,7 +125,7 @@ func (s *SileroVAD) Name() string {
 // The packet must contain 16 kHz LINEAR16 mono audio.
 // Returns immediately if the VAD has been terminated.
 // Thread-safe for concurrent calls.
-func (s *SileroVAD) Process(ctx context.Context, pkt internal_type.UserAudioPacket) error {
+func (s *SileroVAD) Process(ctx context.Context, pkt internal_type.UserAudioReceivedPacket) error {
 	// Early termination check
 	if !s.isActive() {
 		return nil
@@ -140,7 +140,7 @@ func (s *SileroVAD) Process(ctx context.Context, pkt internal_type.UserAudioPack
 		return err
 	}
 
-	// Emit InterruptionPacket only on confirmed speech onset — this is the
+	// Emit InterruptionDetectedPacket only on confirmed speech onset — this is the
 	// signal to interrupt assistant TTS/LLM.
 	if hasSpeechStart(segments) {
 		s.notifyActivity(ctx, segments)
@@ -338,7 +338,7 @@ func (s *SileroVAD) notifyActivity(ctx context.Context, segments []Segment) {
 
 	if s.onPacket != nil {
 		s.onPacket(ctx,
-			internal_type.InterruptionPacket{
+			internal_type.InterruptionDetectedPacket{
 				Source:  internal_type.InterruptionSourceVad,
 				StartAt: minStart,
 				EndAt:   maxEnd,

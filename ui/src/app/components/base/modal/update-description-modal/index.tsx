@@ -1,17 +1,10 @@
-import { IBlueBGButton, ICancelButton } from '@/app/components/form/button';
-import { ErrorMessage } from '@/app/components/form/error-message';
-import { GenericModal, ModalProps } from '@/app/components/base/modal';
+import { PrimaryButton, SecondaryButton } from '@/app/components/carbon/button';
+import { ModalProps } from '@/app/components/base/modal';
+import { Modal, ModalHeader, ModalBody, ModalFooter } from '@/app/components/carbon/modal';
+import { Notification } from '@/app/components/carbon/notification';
+import { Stack, TextInput, TextArea } from '@/app/components/carbon/form';
 import { useRapidaStore } from '@/hooks';
 import React, { useEffect, useState } from 'react';
-import { FieldSet } from '@/app/components/form/fieldset';
-import { Input } from '@/app/components/form/input';
-import { FormLabel } from '@/app/components/form-label';
-import { ModalBody } from '@/app/components/base/modal/modal-body';
-import { ModalFooter } from '@/app/components/base/modal/modal-footer';
-import { ModalHeader } from '@/app/components/base/modal/modal-header';
-import { ModalFitHeightBlock } from '@/app/components/blocks/modal-fit-height-block';
-import { ModalTitleBlock } from '@/app/components/blocks/modal-title-block';
-import { Textarea } from '@/app/components/form/textarea';
 
 interface UpdateDescriptionDialogProps extends ModalProps {
   title?: string;
@@ -53,49 +46,51 @@ export function UpdateDescriptionDialog(props: UpdateDescriptionDialogProps) {
   };
 
   return (
-    <GenericModal modalOpen={props.modalOpen} setModalOpen={props.setModalOpen}>
-      <ModalFitHeightBlock className="w-[592px]">
-        <ModalHeader onClose={() => props.setModalOpen(false)}>
-          <ModalTitleBlock>{props.title}</ModalTitleBlock>
-        </ModalHeader>
-
-        <ModalBody>
-          <FieldSet>
-            <FormLabel>Name</FormLabel>
-            <Input
-              name="usecase"
-              value={name}
-              placeholder="e.g. emotion detector"
-              onChange={e => setName(e.target.value)}
-            />
-          </FieldSet>
-
-          <FieldSet>
-            <FormLabel>Description</FormLabel>
-            <Textarea
-              rows={4}
-              value={description}
-              placeholder="Provide a readable description and how to use it."
-              onChange={v => setDescription(v.target.value)}
-            />
-          </FieldSet>
-
-          <ErrorMessage message={error} />
-        </ModalBody>
-
-        <ModalFooter>
-          <ICancelButton onClick={() => props.setModalOpen(false)}>
-            Cancel
-          </ICancelButton>
-          <IBlueBGButton
-            type="button"
-            onClick={onUpdateDescription}
-            isLoading={rapidaStore.loading}
-          >
-            Save changes
-          </IBlueBGButton>
-        </ModalFooter>
-      </ModalFitHeightBlock>
-    </GenericModal>
+    <Modal
+      open={props.modalOpen}
+      onClose={() => props.setModalOpen(false)}
+      size="sm"
+      selectorPrimaryFocus="#edit-name"
+    >
+      <ModalHeader
+        label="Details"
+        title={props.title || 'Edit details'}
+        onClose={() => props.setModalOpen(false)}
+      />
+      <ModalBody hasForm>
+        <Stack gap={6}>
+          <TextInput
+            id="edit-name"
+            labelText="Name"
+            value={name}
+            placeholder="e.g. emotion detector"
+            onChange={e => setName(e.target.value)}
+          />
+          <TextArea
+            id="edit-description"
+            labelText="Description"
+            rows={4}
+            value={description}
+            placeholder="Provide a readable description and how to use it."
+            onChange={e => setDescription(e.target.value)}
+          />
+          {error && (
+            <Notification kind="error" title="Error" subtitle={error} />
+          )}
+        </Stack>
+      </ModalBody>
+      <ModalFooter>
+        <SecondaryButton size="lg" onClick={() => props.setModalOpen(false)}>
+          Cancel
+        </SecondaryButton>
+        <PrimaryButton
+          size="lg"
+          onClick={onUpdateDescription}
+          isLoading={rapidaStore.loading}
+        >
+          Save changes
+        </PrimaryButton>
+      </ModalFooter>
+    </Modal>
   );
 }

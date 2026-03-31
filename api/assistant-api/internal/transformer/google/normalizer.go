@@ -44,12 +44,9 @@ func NewGoogleNormalizer(logger commons.Logger, opts utils.Option) internal_type
 	if language == "" {
 		language = "en-US"
 	}
-
-	// Parse conjunction boundaries from options
 	var conjunctionPattern *regexp.Regexp
 	if conjunctionBoundaries, err := opts.GetString("speaker.conjunction.boundaries"); err == nil && conjunctionBoundaries != "" {
 		cfg.Conjunctions = strings.Split(conjunctionBoundaries, commons.SEPARATOR)
-
 		escaped := make([]string, len(cfg.Conjunctions))
 		for i, c := range cfg.Conjunctions {
 			escaped[i] = regexp.QuoteMeta(strings.TrimSpace(c))

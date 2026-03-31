@@ -19,12 +19,13 @@ export type ProviderConfigCategory =
   | 'text'
   | 'vad'
   | 'eos'
-  | 'noise';
+  | 'noise'
+  | 'telemetry';
 
 export interface ParameterConfig {
   key: string;
   label: string;
-  type: 'dropdown' | 'slider' | 'number' | 'input' | 'textarea' | 'select' | 'json';
+  type: 'dropdown' | 'slider' | 'number' | 'input' | 'textarea' | 'select' | 'json' | 'key_value';
   required?: boolean;
   default?: string;
   errorMessage?: string;
@@ -63,6 +64,7 @@ export interface ProviderConfig {
   vad?: CategoryConfig;
   eos?: CategoryConfig;
   noise?: CategoryConfig;
+  telemetry?: CategoryConfig;
 }
 
 export interface MetadataLike {
@@ -208,6 +210,7 @@ export function loadProviderConfig(provider: string): ProviderConfig | null {
     'vad',
     'eos',
     'noise',
+    'telemetry',
   ];
 
   for (const category of categories) {

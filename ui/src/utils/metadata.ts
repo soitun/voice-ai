@@ -1,10 +1,63 @@
 import { Metadata, Metric } from '@rapidaai/react';
 import { Struct, Value } from 'google-protobuf/google/protobuf/struct_pb';
 
-// these are metric we as rapida support
-const TIME_TAKEN = 'TIME_TAKEN';
-const STATUS = 'STATUS';
-const TOTAL_TOKEN = 'TOTAL_TOKEN';
+// Metric name constants
+const TIME_TAKEN = 'time_taken';
+const STATUS = 'status';
+const TOTAL_TOKEN = 'agent_total_token';
+
+// ── Universal metric finder ─────────────────────────────────────────────────
+// Proto metrics may expose the name via getName() or getKey() depending on the
+// message type (conversation-level vs message-level). This helper checks both.
+
+export function findMetricByName(metrics: any[], name: string): string {
+  const m = metrics.find(
+    (x: any) => (x.getName?.() || x.getKey?.()) === name,
+  );
+  return m ? m.getValue() : '';
+}
+
+// ── Conversation status helpers ─────────────────────────────────────────────
+
+export function isConversationCompleted(metrics: any[]): boolean {
+  const s = findMetricByName(metrics, STATUS).toUpperCase();
+  return s === 'COMPLETE' || s === 'COMPLETED';
+}
+
+export function isConversationActive(metrics: any[]): boolean {
+  return !isConversationCompleted(metrics);
+}
+
+// ── Duration formatting ─────────────────────────────────────────────────────
+
+/** Format seconds into human-readable duration (e.g. "2m 30s", "45s") */
+export function formatDurationSeconds(secs: number): string {
+  if (isNaN(secs) || secs <= 0) return '–';
+  if (secs >= 3600) {
+    const h = Math.floor(secs / 3600);
+    const m = Math.floor((secs % 3600) / 60);
+    return m > 0 ? `${h}h ${m}m` : `${h}h`;
+  }
+  if (secs >= 60) {
+    const m = Math.floor(secs / 60);
+    const s = Math.round(secs % 60);
+    return s > 0 ? `${m}m ${s}s` : `${m}m`;
+  }
+  return `${Math.round(secs)}s`;
+}
+
+/** Read conversation_duration metric (seconds) or fallback to TIME_TAKEN (nanoseconds) */
+export function getConversationDuration(metrics: any[]): string {
+  const conversationDuration = findMetricByName(
+    metrics,
+    'duration',
+  );
+  if (conversationDuration)
+    return formatDurationSeconds(Number(conversationDuration) / 1e9);
+  const timeTakenNano = findMetricByName(metrics, TIME_TAKEN);
+  if (timeTakenNano) return formatDurationSeconds(Number(timeTakenNano) / 1e9);
+  return '–';
+}
 
 /**
  *

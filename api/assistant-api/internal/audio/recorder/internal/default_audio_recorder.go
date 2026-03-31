@@ -108,9 +108,9 @@ func durationBytes(d time.Duration) int {
 // appended. Both tracks share the same timeline (Start → Persist).
 //
 // Supported packet types:
-//   - UserAudioPacket:          placed on the user track at wall-clock offset
+//   - UserAudioReceivedPacket:          placed on the user track at wall-clock offset
 //   - TextToSpeechAudioPacket:  placed on the system track with burst pacing
-//   - InterruptionPacket:       truncates system track at current wall-clock,
+//   - InterruptionDetectedPacket:       truncates system track at current wall-clock,
 //     mirroring the streamer's ClearOutputBuffer behaviour
 //
 // Unrecognised packet types are silently ignored.
@@ -125,11 +125,11 @@ func (r *audioRecorder) Record(_ context.Context, p internal_type.Packet) error 
 		}
 		return r.push(pkt.Audio, trackSystem)
 	// Legacy packet types kept for backward compatibility
-	case internal_type.UserAudioPacket:
+	case internal_type.UserAudioReceivedPacket:
 		return r.push(pkt.Audio, trackUser)
 	case internal_type.TextToSpeechAudioPacket:
 		return r.push(pkt.AudioChunk, trackSystem)
-	case internal_type.InterruptionPacket:
+	case internal_type.InterruptionDetectedPacket:
 		r.truncateSystemTrack()
 		return nil
 	}

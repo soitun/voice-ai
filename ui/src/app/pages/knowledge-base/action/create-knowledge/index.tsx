@@ -7,9 +7,10 @@ import { useCallback, useEffect, useState } from 'react';
 import { useCredential } from '@/hooks/use-credential';
 import { useRapidaStore } from '@/hooks/use-rapida-store';
 import {
-  IBlueBGArrowButton,
-  ICancelButton,
-} from '@/app/components/form/button';
+  PrimaryButton,
+  SecondaryButton,
+} from '@/app/components/carbon/button';
+import { ButtonSet } from '@carbon/react';
 import { KnowledgeDocument } from '@rapidaai/react';
 import { TabForm } from '@/app/components/form/tab-form';
 import { useCreateKnowledgeDocumentPageStore } from '@/hooks/use-create-knowledge-document-page-store';
@@ -165,19 +166,18 @@ export function CreateKnowledgePage() {
               </>
             ),
             actions: [
-              <ICancelButton
-                className="w-full h-full"
-                onClick={() => setIsShow(true)}
-              >
-                Cancel
-              </ICancelButton>,
-              <IBlueBGArrowButton
-                type="button"
-                className="w-full h-full"
-                onClick={onValidateEmbedding}
-              >
-                Define knowledge profile
-              </IBlueBGArrowButton>,
+              <ButtonSet className="!w-full [&>button]:!flex-1 [&>button]:!max-w-none">
+                <SecondaryButton size="lg"
+                  onClick={() => setIsShow(true)}
+                >
+                  Cancel
+                </SecondaryButton>
+                <PrimaryButton size="lg"
+                  onClick={onValidateEmbedding}
+                >
+                  Define knowledge profile
+                </PrimaryButton>
+              </ButtonSet>,
             ],
           },
           {
@@ -267,20 +267,19 @@ export function CreateKnowledgePage() {
               </div>
             ),
             actions: [
-              <ICancelButton
-                className="w-full h-full"
-                onClick={() => setIsShow(true)}
-              >
-                Cancel
-              </ICancelButton>,
-              <IBlueBGArrowButton
-                type="button"
-                className="w-full h-full"
-                onClick={createKnowledge}
-                isLoading={loading}
-              >
-                Create knowledge
-              </IBlueBGArrowButton>,
+              <ButtonSet className="!w-full [&>button]:!flex-1 [&>button]:!max-w-none">
+                <SecondaryButton size="lg"
+                  onClick={() => setIsShow(true)}
+                >
+                  Cancel
+                </SecondaryButton>
+                <PrimaryButton size="lg"
+                  onClick={createKnowledge}
+                  isLoading={loading}
+                >
+                  Create knowledge
+                </PrimaryButton>
+              </ButtonSet>,
             ],
           },
           {
@@ -290,22 +289,21 @@ export function CreateKnowledgePage() {
             code: 'add-documents',
             body: <ManualFile />,
             actions: [
-              <ICancelButton
-                className="w-full h-full"
-                onClick={() => {
-                  if (knowledge?.getId()) goToKnowledge(knowledge?.getId());
-                }}
-              >
-                Skip
-              </ICancelButton>,
-              <IBlueBGArrowButton
-                type="button"
-                className="w-full h-full"
-                onClick={createKnowledgeDocument}
-                isLoading={loading}
-              >
-                Upload documents
-              </IBlueBGArrowButton>,
+              <ButtonSet className="!w-full [&>button]:!flex-1 [&>button]:!max-w-none">
+                <SecondaryButton size="lg"
+                  onClick={() => {
+                    if (knowledge?.getId()) goToKnowledge(knowledge?.getId());
+                  }}
+                >
+                  Skip
+                </SecondaryButton>
+                <PrimaryButton size="lg"
+                  onClick={createKnowledgeDocument}
+                  isLoading={loading}
+                >
+                  Upload documents
+                </PrimaryButton>
+              </ButtonSet>,
             ],
           },
         ]}

@@ -227,14 +227,14 @@ type AssistantConversationService interface {
 		auth types.SimplePrinciple,
 		assistantConversationId uint64,
 		assistantConversationMessageId string,
-		metadata map[string]interface{},
+		metadata []*protos.Metadata,
 	) ([]*internal_message_gorm.AssistantConversationMessageMetadata, error)
 
 	ApplyMessageMetrics(ctx context.Context,
 		auth types.SimplePrinciple,
 		assistantConversationId uint64,
 		assistantConversationMessageId string,
-		metrics []*types.Metric,
+		metrics []*protos.Metric,
 	) ([]*internal_message_gorm.AssistantConversationMessageMetric, error)
 
 	//

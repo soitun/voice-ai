@@ -1,19 +1,14 @@
 import { FC } from 'react';
 import { Knowledge } from '@rapidaai/react';
-import { InfoIcon } from 'lucide-react';
+import { Information, Checkmark } from '@carbon/icons-react';
 import { cn } from '@/utils';
-import { Card } from '@/app/components/base/cards';
+import { CornerBorderOverlay } from '@/app/components/base/corner-border';
 import { KnowledgeDropdown } from '@/app/components/dropdown/knowledge-dropdown';
-import { FormLabel } from '@/app/components/form-label';
-import CheckboxCard from '@/app/components/form/checkbox-card';
-import { FieldSet } from '@/app/components/form/fieldset';
-import { Input } from '@/app/components/form/input';
-import { Slider } from '@/app/components/form/slider';
+import { Slider } from '@carbon/react';
 import { HybridSearchIcon } from '@/app/components/Icon/hybrid-search';
 import { TextSearchIcon } from '@/app/components/Icon/text-search';
 import { VectorSearchIcon } from '@/app/components/Icon/vector-search';
-import { Tooltip } from '@/app/components/tooltip';
-import { InputGroup } from '@/app/components/input-group';
+import { Tooltip } from '@carbon/react';
 import { RETRIEVE_METHOD } from '@/models/datasets';
 import {
   ConfigureToolProps,
@@ -70,8 +65,8 @@ export const ConfigureKnowledgeRetrieval: FC<ConfigureToolProps> = ({
 
   return (
     <>
-      <InputGroup title="Action Definition">
-        <div className="flex flex-col gap-8 max-w-6xl">
+      <div className="px-6 pb-6">
+        <div className="flex flex-col gap-6 max-w-6xl">
           <KnowledgeDropdown
             className={cn('bg-light-background', inputClass)}
             currentKnowledge={getParamValue('tool.knowledge_id')}
@@ -82,14 +77,13 @@ export const ConfigureKnowledgeRetrieval: FC<ConfigureToolProps> = ({
             }}
           />
 
-          <FieldSet>
-            <FormLabel>Retrieval setting</FormLabel>
+          <div>
+            <p className="text-xs font-medium mb-2">Retrieval setting</p>
             <div className="grid grid-cols-3 gap-3">
               {SEARCH_TYPE_CONFIG.map(config => (
                 <SearchTypeCard
                   key={config.id}
                   {...config}
-                  inputClass={inputClass}
                   isSelected={
                     getParamValue('tool.search_type') === config.value
                   }
@@ -99,11 +93,11 @@ export const ConfigureKnowledgeRetrieval: FC<ConfigureToolProps> = ({
                 />
               ))}
             </div>
-          </FieldSet>
+          </div>
 
           <div className="grid grid-cols-2 w-full gap-4">
             <SliderField
-              id="top_k"
+              id="top-k"
               label="Top K"
               tooltip="Used to filter chunks that are most similar to user questions. The system will also dynamically adjust the value of Top K, according to max_tokens of the selected model."
               min={1}
@@ -111,24 +105,21 @@ export const ConfigureKnowledgeRetrieval: FC<ConfigureToolProps> = ({
               step={1}
               value={getParamValue('tool.top_k')}
               onChange={value => updateParameter('tool.top_k', value)}
-              inputClass={inputClass}
             />
 
             <SliderField
-              id="score_threshold"
+              id="score-threshold"
               label="Score Threshold"
               tooltip="Used to filter chunks that are most similar to user questions. The system will also dynamically adjust the value of Top K, according to max_tokens of the selected model."
               min={0}
               max={1}
-              step={0.1}
-              inputStep={0.01}
+              step={0.01}
               value={getParamValue('tool.score_threshold')}
               onChange={value => updateParameter('tool.score_threshold', value)}
-              inputClass={inputClass}
             />
           </div>
         </div>
-      </InputGroup>
+      </div>
 
       {toolDefinition && onChangeToolDefinition && (
         <ToolDefinitionForm
@@ -152,45 +143,44 @@ interface SearchTypeCardProps {
   icon: FC<{ className?: string }>;
   title: string;
   description: string;
-  inputClass?: string;
   isSelected: boolean;
   onSelect: () => void;
 }
 
 const SearchTypeCard: FC<SearchTypeCardProps> = ({
   id,
-  value,
   icon: Icon,
   title,
   description,
-  inputClass,
   isSelected,
   onSelect,
 }) => (
-  <CheckboxCard
-    type="radio"
-    name="search-type"
-    id={id}
-    value={value}
-    wrapperClassNames="h-auto"
-    checked={isSelected}
-    onChange={onSelect}
+  <button
+    type="button"
+    onClick={onSelect}
+    className={cn(
+      'relative group text-left p-4 border transition-colors duration-100',
+      isSelected
+        ? 'border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-950/50'
+        : 'border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-950/50 hover:bg-gray-50 dark:hover:bg-gray-900/60',
+    )}
   >
-    <Card
-      className={cn(
-        'p-3 flex flex-row space-x-3 bg-light-background h-auto',
-        inputClass,
-      )}
-    >
-      <div className="rounded-[2px] flex items-center justify-center bg-blue-200/30 dark:bg-blue-200/10 shrink-0 h-10 w-10">
+    <CornerBorderOverlay className={isSelected ? 'opacity-100' : undefined} />
+    {isSelected && (
+      <span className="absolute top-3 right-3 h-5 w-5 inline-flex items-center justify-center bg-primary z-20">
+        <Checkmark size={14} className="text-white" />
+      </span>
+    )}
+    <div className="flex items-center gap-3 mb-2">
+      <div className="flex items-center justify-center bg-blue-100 dark:bg-blue-900/30 shrink-0 h-8 w-8">
         <Icon className="text-blue-600" />
       </div>
-      <div className="flex flex-col">
-        <span className="font-medium text-[14px]">{title}</span>
-        <span className="text-sm opacity-80">{description}</span>
-      </div>
-    </Card>
-  </CheckboxCard>
+      <span className="text-sm font-medium">{title}</span>
+    </div>
+    <p className="text-xs text-gray-500 dark:text-gray-400 leading-relaxed">
+      {description}
+    </p>
+  </button>
 );
 
 // ============================================================================
@@ -204,10 +194,8 @@ interface SliderFieldProps {
   min: number;
   max: number;
   step: number;
-  inputStep?: number;
   value: string;
   onChange: (value: string) => void;
-  inputClass?: string;
 }
 
 const SliderField: FC<SliderFieldProps> = ({
@@ -217,39 +205,25 @@ const SliderField: FC<SliderFieldProps> = ({
   min,
   max,
   step,
-  inputStep,
   value,
   onChange,
-  inputClass,
 }) => (
-  <FieldSet className="flex justify-between">
-    <FormLabel htmlFor={id}>
-      {label}
-      <Tooltip icon={<InfoIcon className="w-4 h-4 ml-1" />}>
-        <p className={cn('font-normal text-sm p-1 w-64')}>{tooltip}</p>
-      </Tooltip>
-    </FormLabel>
-    <div className="flex justify-between items-center space-x-2">
-      <Slider
-        min={min}
-        max={max}
-        step={step}
-        value={value}
-        onSlide={(val: number) => onChange(val.toString())}
-      />
-      <Input
-        id={id}
-        className={cn(
-          'py-0 px-1 tabular-nums w-10 h-6 text-xs bg-light-background',
-          inputClass,
-        )}
-        min={min}
-        max={max}
-        type="number"
-        step={inputStep ?? step}
-        value={value}
-        onChange={e => onChange(e.target.value)}
-      />
-    </div>
-  </FieldSet>
+  <div className="[&_.cds--slider-container]:!mt-0 [&_.cds--slider__range-label]:hidden">
+    <Slider
+      id={id}
+      labelText={
+        <Tooltip align="top" label={tooltip}>
+          <span className="inline-flex items-center gap-1">
+            {label}
+            <Information size={14} />
+          </span>
+        </Tooltip>
+      }
+      min={min}
+      max={max}
+      step={step}
+      value={Number(value) || min}
+      onChange={({ value: v }: { value: number }) => onChange(v.toString())}
+    />
+  </div>
 );

@@ -60,7 +60,7 @@ func (pc *packetCollector) Clear() {
 func createTestCallback(opts utils.Option) (*packetCollector, commons.Logger, msginterfaces.LiveMessageCallback) {
 	logger, _ := commons.NewApplicationLogger()
 	collector := newPacketCollector()
-	callback := NewDeepgramSttCallback(logger, collector.OnPacket, opts, new(atomic.Int64))
+	callback := NewDeepgramSttCallback(logger, collector.OnPacket, opts, new(atomic.Int64), func() string { return "ctx-test" })
 	return collector, logger, callback
 }
 
@@ -145,12 +145,12 @@ func TestMessage(t *testing.T) {
 
 		require.NoError(t, err)
 		packets := collector.GetPackets()
-		// Final: InterruptionPacket + SpeechToTextPacket + ConversationEventPacket + MessageMetricPacket
+		// Final: InterruptionDetectedPacket + SpeechToTextPacket + ConversationEventPacket + UserMessageMetricPacket
 		require.Len(t, packets, 4)
 
-		// First packet should be InterruptionPacket
-		interruption, ok := packets[0].(internal_type.InterruptionPacket)
-		assert.True(t, ok, "first packet should be InterruptionPacket")
+		// First packet should be InterruptionDetectedPacket
+		interruption, ok := packets[0].(internal_type.InterruptionDetectedPacket)
+		assert.True(t, ok, "first packet should be InterruptionDetectedPacket")
 		assert.Equal(t, internal_type.InterruptionSourceWord, interruption.Source)
 
 		// Second packet should be SpeechToTextPacket
@@ -161,9 +161,9 @@ func TestMessage(t *testing.T) {
 		assert.Equal(t, "en", stt.Language)
 		assert.False(t, stt.Interim) // IsFinal=true means Interim=false
 
-		// Fourth packet should be MessageMetricPacket with stt_latency_ms
-		metric, ok := packets[3].(internal_type.MessageMetricPacket)
-		assert.True(t, ok, "fourth packet should be MessageMetricPacket")
+		// Fourth packet should be UserMessageMetricPacket with stt_latency_ms
+		metric, ok := packets[3].(internal_type.UserMessageMetricPacket)
+		assert.True(t, ok, "fourth packet should be UserMessageMetricPacket")
 		assert.Len(t, metric.Metrics, 1)
 		assert.Equal(t, "stt_latency_ms", metric.Metrics[0].Name)
 	})
@@ -176,7 +176,7 @@ func TestMessage(t *testing.T) {
 
 		require.NoError(t, err)
 		packets := collector.GetPackets()
-		// Interim: InterruptionPacket + SpeechToTextPacket + ConversationEventPacket (no metric)
+		// Interim: InterruptionDetectedPacket + SpeechToTextPacket + ConversationEventPacket (no metric)
 		require.Len(t, packets, 3)
 
 		stt := packets[1].(internal_type.SpeechToTextPacket)
@@ -206,7 +206,7 @@ func TestMessage(t *testing.T) {
 
 		require.NoError(t, err)
 		packets := collector.GetPackets()
-		// Final: InterruptionPacket + SpeechToTextPacket + ConversationEventPacket + MessageMetricPacket
+		// Final: InterruptionDetectedPacket + SpeechToTextPacket + ConversationEventPacket + UserMessageMetricPacket
 		require.Len(t, packets, 4)
 
 		stt := packets[1].(internal_type.SpeechToTextPacket)
@@ -284,7 +284,7 @@ func TestMessageWithConfidenceThreshold(t *testing.T) {
 
 		require.NoError(t, err)
 		packets := collector.GetPackets()
-		// Final above threshold: InterruptionPacket + SpeechToTextPacket + ConversationEventPacket + MessageMetricPacket
+		// Final above threshold: InterruptionDetectedPacket + SpeechToTextPacket + ConversationEventPacket + UserMessageMetricPacket
 		require.Len(t, packets, 4)
 
 		stt := packets[1].(internal_type.SpeechToTextPacket)
@@ -303,7 +303,7 @@ func TestMessageWithConfidenceThreshold(t *testing.T) {
 
 		require.NoError(t, err)
 		packets := collector.GetPackets()
-		// Final at boundary: InterruptionPacket + SpeechToTextPacket + ConversationEventPacket + MessageMetricPacket
+		// Final at boundary: InterruptionDetectedPacket + SpeechToTextPacket + ConversationEventPacket + UserMessageMetricPacket
 		require.Len(t, packets, 4)
 
 		stt := packets[1].(internal_type.SpeechToTextPacket)
@@ -319,7 +319,7 @@ func TestMessageWithConfidenceThreshold(t *testing.T) {
 
 		require.NoError(t, err)
 		packets := collector.GetPackets()
-		// Final without threshold: InterruptionPacket + SpeechToTextPacket + ConversationEventPacket + MessageMetricPacket
+		// Final without threshold: InterruptionDetectedPacket + SpeechToTextPacket + ConversationEventPacket + UserMessageMetricPacket
 		require.Len(t, packets, 4)
 
 		stt := packets[1].(internal_type.SpeechToTextPacket)
@@ -338,7 +338,7 @@ func TestMessageWithConfidenceThreshold(t *testing.T) {
 
 		require.NoError(t, err)
 		packets := collector.GetPackets()
-		// Final above zero threshold: InterruptionPacket + SpeechToTextPacket + ConversationEventPacket + MessageMetricPacket
+		// Final above zero threshold: InterruptionDetectedPacket + SpeechToTextPacket + ConversationEventPacket + UserMessageMetricPacket
 		require.Len(t, packets, 4)
 
 		stt := packets[1].(internal_type.SpeechToTextPacket)

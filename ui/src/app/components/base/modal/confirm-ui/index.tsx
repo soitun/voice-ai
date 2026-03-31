@@ -1,9 +1,6 @@
-import { ICancelButton, IRedBGButton } from '@/app/components/form/button';
-import { InfoIcon } from '@/app/components/Icon/Info';
-import { GenericModal } from '@/app/components/base/modal';
-import { ModalFooter } from '@/app/components/base/modal/modal-footer';
 import type { FC } from 'react';
 import React from 'react';
+import { Modal } from '@carbon/react';
 
 export type ConfirmDialogProps = {
   showing: boolean;
@@ -22,31 +19,27 @@ const ConfirmDialog: FC<ConfirmDialogProps> = ({
   type,
   title,
   content,
-  confirmText,
-  cancelText,
+  confirmText = 'Confirm',
+  cancelText = 'Cancel',
   onClose,
   onConfirm,
   onCancel,
 }) => {
   return (
-    <GenericModal modalOpen={showing} setModalOpen={onClose}>
-      <div className="flex flex-col dark:bg-gray-900 bg-white rounded-md">
-        <div className="w-[500px] min-w-max rounded-2xl relative py-8 px-4 flex flex-col">
-          {type === 'info' && <InfoIcon className="w-10 h-10 text-blue-500" />}
-          {type === 'warning' && (
-            <InfoIcon className="w-10 h-10 text-red-500" />
-          )}
-          <div className="text-lg font-medium mt-2">{title}</div>
-          <div className="text-base leading-normal">{content}</div>
-        </div>
-        <ModalFooter>
-          <ICancelButton onClick={onCancel}>{cancelText}</ICancelButton>
-          <IRedBGButton type="button" onClick={onConfirm}>
-            {confirmText}
-          </IRedBGButton>
-        </ModalFooter>
-      </div>
-    </GenericModal>
+    <Modal
+      danger={type === 'warning'}
+      open={showing}
+      modalHeading={title}
+      modalLabel={type === 'warning' ? 'Warning' : 'Confirm'}
+      primaryButtonText={confirmText}
+      secondaryButtonText={cancelText}
+      onRequestSubmit={onConfirm}
+      onRequestClose={onClose}
+      onSecondarySubmit={onCancel}
+      size="xs"
+    >
+      <p className="text-sm">{content}</p>
+    </Modal>
   );
 };
 export default React.memo(ConfirmDialog);

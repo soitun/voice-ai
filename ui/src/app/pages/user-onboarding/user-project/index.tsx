@@ -1,20 +1,18 @@
 import React, { useCallback, useContext, useState } from 'react';
 import { Helmet } from '@/app/components/helmet';
-import { Textarea } from '@/app/components/form/textarea';
-import { Input } from '@/app/components/form/input';
 import { useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { CreateProject } from '@rapidaai/react';
 import { CreateProjectResponse } from '@rapidaai/react';
 import { useCurrentCredential } from '@/hooks/use-credential';
 import { useRapidaStore } from '@/hooks';
-import { IBlueBGArrowButton } from '@/app/components/form/button';
 import { ServiceError } from '@rapidaai/react';
 import { AuthContext } from '@/context/auth-context';
-import { FieldSet } from '@/app/components/form/fieldset';
-import { FormLabel } from '@/app/components/form-label';
 import { connectionConfig } from '@/configs';
-import { AlertCircle } from 'lucide-react';
+import { Stack, TextInput, TextArea } from '@/app/components/carbon/form';
+import { PrimaryButton } from '@/app/components/carbon/button';
+import { Notification } from '@/app/components/carbon/notification';
+import { ArrowRight } from '@carbon/icons-react';
 
 export function CreateProjectPage() {
   const navigate = useNavigate();
@@ -34,12 +32,8 @@ export function CreateProjectPage() {
       if (cpr?.getSuccess()) {
         authorize &&
           authorize(
-            () => {
-              navigate('/dashboard');
-            },
-            () => {
-              setError('Unable to create project. Please check the details.');
-            },
+            () => navigate('/dashboard'),
+            () => setError('Unable to create project. Please check the details.'),
           );
       } else {
         setError('Unable to create project. Please check the details.');
@@ -54,10 +48,7 @@ export function CreateProjectPage() {
       connectionConfig,
       data.projectName,
       data.projectDescription,
-      {
-        authorization: token,
-        'x-auth-id': authId,
-      },
+      { authorization: token, 'x-auth-id': authId },
       afterCreateProject,
     );
   };
@@ -65,75 +56,43 @@ export function CreateProjectPage() {
   return (
     <>
       <Helmet title="Onboarding: Create a Project" />
-
-      {/* Heading */}
-      <div className="mb-8">
-        {user?.name && (
-          <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">
-            Almost there,{' '}
-            <span className="font-medium text-gray-700 dark:text-gray-300">
-              {user.name}
-            </span>
-          </p>
-        )}
-        <h1 className="text-[28px] leading-9 font-light text-gray-900 dark:text-gray-100">
-          Create your first project
-        </h1>
-        <p className="mt-2 text-sm text-gray-500 dark:text-gray-400 leading-5">
-          Projects group your AI assistants, deployments, and knowledge bases.
-          You can create more projects later.
-        </p>
+      <div className="mb-4">
+        <h1 className="text-xl font-light tracking-tight">Create your first project</h1>
       </div>
 
-      <form className="flex flex-col gap-5" onSubmit={handleSubmit(onCreateProject)}>
-
-        <div className="flex flex-col gap-1">
-          <FieldSet>
-            <FormLabel>Project Name</FormLabel>
-            <Input
-              required
-              type="text"
-              defaultValue={`${user?.name}'s Workspace`}
-              placeholder="eg: Customer Support Bot"
-              {...register('projectName')}
-            />
-          </FieldSet>
-          <p className="text-xs text-gray-500 dark:text-gray-500">
-            Choose a name that reflects the purpose or team for this project.
-          </p>
-        </div>
-
-        <div className="flex flex-col gap-1">
-          <FieldSet>
-            <FormLabel>Project Description</FormLabel>
-            <Textarea
-              {...register('projectDescription')}
-              row={3}
-              placeholder="eg: Voice assistant for handling customer inquiries 24/7"
-            />
-          </FieldSet>
-          <p className="text-xs text-gray-500 dark:text-gray-500">
-            Optional — helps your team understand the project's goals at a glance.
-          </p>
-        </div>
-
-        {error && (
-          <div className="flex rounded-none">
-            <div className="w-[3px] flex-shrink-0 bg-red-600" />
-            <div className="flex items-center gap-3 px-4 py-2.5 bg-red-50 dark:bg-red-950/30 flex-1">
-              <AlertCircle className="w-4 h-4 text-red-600 flex-shrink-0" />
-              <p className="text-sm text-red-600">{error}</p>
-            </div>
-          </div>
-        )}
-
-        <IBlueBGArrowButton
-          type="submit"
-          className="w-full justify-between h-12 mt-2"
-          isLoading={loading}
-        >
-          Go to dashboard
-        </IBlueBGArrowButton>
+      <form onSubmit={handleSubmit(onCreateProject)}>
+        <Stack gap={5}>
+          <TextInput
+            id="project-name"
+            labelText="Project Name"
+            type="text"
+            required
+            defaultValue={`${user?.name}'s Workspace`}
+            placeholder="eg: Customer Support Bot"
+            helperText="Choose a name that reflects the purpose or team for this project."
+            {...register('projectName')}
+          />
+          <TextArea
+            id="project-description"
+            labelText="Project Description"
+            rows={3}
+            placeholder="eg: Voice assistant for handling customer inquiries 24/7"
+            helperText="Optional — helps your team understand the project's goals at a glance."
+            {...register('projectDescription')}
+          />
+          {error && (
+            <Notification kind="error" title="Error" subtitle={error} />
+          )}
+          <PrimaryButton
+            size="lg"
+            renderIcon={ArrowRight}
+            type="submit"
+            isLoading={loading}
+            className="!w-full !max-w-none !justify-between"
+          >
+            Go to dashboard
+          </PrimaryButton>
+        </Stack>
       </form>
     </>
   );

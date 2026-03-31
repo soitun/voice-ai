@@ -5,38 +5,21 @@
 // See LICENSE.md or contact sales@rapida.ai for commercial usage.
 package observe
 
-import (
-	"context"
-)
+import "github.com/rapidaai/pkg/telemetry"
 
-// EventExporter writes event records to an external observability backend.
-type EventExporter interface {
-	ExportEvent(ctx context.Context, meta SessionMeta, rec EventRecord) error
-	Shutdown(ctx context.Context) error
-}
-
-// MetricExporter writes metric records to an external observability backend.
-// Implementations receive a MetricRecord and should type-switch to handle
-// ConversationMetricRecord and MessageMetricRecord appropriately.
-type MetricExporter interface {
-	ExportMetric(ctx context.Context, meta SessionMeta, rec MetricRecord) error
-	Shutdown(ctx context.Context) error
-}
+type EventExporter = telemetry.Exporter
+type MetricExporter = telemetry.Exporter
 
 // ExporterType enumerates supported telemetry exporter backends.
-type ExporterType string
+type ExporterType = telemetry.ExporterType
 
 const (
-	OTLP_HTTP     ExporterType = "otlp_http"
-	OTLP_GRPC     ExporterType = "otlp_grpc"
-	XRAY          ExporterType = "xray"
-	GOOGLE_TRACE  ExporterType = "google_trace"
-	AZURE_MONITOR ExporterType = "azure_monitor"
-	DATADOG       ExporterType = "datadog"
-	OPENSEARCH    ExporterType = "opensearch"
-	LOGGING       ExporterType = "logging"
+	OTLP_HTTP     ExporterType = telemetry.OTLP_HTTP
+	OTLP_GRPC     ExporterType = telemetry.OTLP_GRPC
+	XRAY          ExporterType = telemetry.XRAY
+	GOOGLE_TRACE  ExporterType = telemetry.GOOGLE_TRACE
+	AZURE_MONITOR ExporterType = telemetry.AZURE_MONITOR
+	DATADOG       ExporterType = telemetry.DATADOG
+	OPENSEARCH    ExporterType = telemetry.OPENSEARCH
+	LOGGING       ExporterType = telemetry.LOGGING
 )
-
-func (et ExporterType) String() string {
-	return string(et)
-}

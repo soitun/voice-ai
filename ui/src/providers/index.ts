@@ -121,6 +121,10 @@ export const EMBEDDING_PROVIDERS = allProvider().filter(x =>
   x.featureList.includes('embedding'),
 );
 
+export const TELEMETRY_PROVIDER = allProvider().filter(x =>
+  x.featureList.includes('telemetry'),
+);
+
 /**
  *
  * Azure speech service constants

@@ -6,47 +6,11 @@
 package observe
 
 import (
-	"time"
-
-	"github.com/rapidaai/protos"
+	"github.com/rapidaai/pkg/telemetry"
 )
 
-// SessionMeta holds stable per-session identifiers passed to every exporter.
-type SessionMeta struct {
-	AssistantID             uint64
-	AssistantConversationID uint64
-	ProjectID               uint64
-	OrganizationID          uint64
-}
-
-// EventRecord represents a named event fired during a voice session.
-// MessageID identifies the interaction turn (context ID) in which the event occurred.
-type EventRecord struct {
-	MessageID string // turn/interaction context ID
-	Name      string
-	Data      map[string]string
-	Time      time.Time
-}
-
-// MetricRecord is a sealed interface for typed metrics.
-// Implementations: ConversationMetricRecord, MessageMetricRecord.
-type MetricRecord interface{ isMetricRecord() }
-
-// ConversationMetricRecord carries metrics scoped to an entire conversation.
-type ConversationMetricRecord struct {
-	ConversationID string
-	Metrics        []*protos.Metric
-	Time           time.Time
-}
-
-func (ConversationMetricRecord) isMetricRecord() {}
-
-// MessageMetricRecord carries metrics scoped to a single message/turn.
-type MessageMetricRecord struct {
-	MessageID      string // turn context ID
-	ConversationID string // for correlation
-	Metrics        []*protos.Metric
-	Time           time.Time
-}
-
-func (MessageMetricRecord) isMetricRecord() {}
+type SessionMeta = telemetry.SessionMeta
+type EventRecord = telemetry.EventRecord
+type MetricRecord = telemetry.MetricRecord
+type ConversationMetricRecord = telemetry.ConversationMetricRecord
+type MessageMetricRecord = telemetry.MessageMetricRecord

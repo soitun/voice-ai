@@ -1,0 +1,24 @@
+{
+  "parameters": [
+    {
+      "key": "endpoint",
+      "label": "Endpoint",
+      "type": "input",
+      "required": true,
+      "placeholder": "e.g. cloudtrace.googleapis.com",
+      "errorMessage": "Endpoint is required for Google Trace."
+    },
+    {
+      "key": "insecure",
+      "label": "Insecure",
+      "type": "select",
+      "required": false,
+      "default": "false",
+      "choices": [
+        { "label": "No", "value": "false" },
+        { "label": "Yes", "value": "true" }
+      ],
+      "helpText": "Skip TLS verification."
+    }
+  ]
+}

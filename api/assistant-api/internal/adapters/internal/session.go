@@ -34,9 +34,6 @@ import (
 // =============================================================================
 
 const (
-	// clientInfoMetadataKey is the metadata key used to store client information.
-	clientInfoMetadataKey = "talk.client_information"
-
 	// dbWriteTimeout is the maximum duration allowed for database write operations
 	// (inserts, updates, metric flushes). Uses a background context so that writes
 	// are not cancelled by the caller's context lifecycle.
@@ -95,6 +92,12 @@ func (r *genericRequestor) Disconnect(ctx context.Context) {
 		}
 	})
 	waitGroup.Wait()
+
+	// Drain low-priority packets (STT/TTS duration metrics, close events)
+	// enqueued by the Close() calls above. The dispatcher goroutines have
+	// already exited because the streamer context was cancelled before
+	// Disconnect() runs, so these would otherwise be silently lost.
+	r.drainLowChannel()
 
 	// Phase 2: Trigger end-of-conversation hooks
 	r.OnEndConversation(ctx)
@@ -203,8 +206,6 @@ func (r *genericRequestor) resumeSession(
 		return err
 	}
 
-	r.initializeCollectors(ctx)
-
 	r.OnPacket(ctx, internal_type.ConversationEventPacket{
 		Name: "session",
 		Data: map[string]string{
@@ -286,8 +287,6 @@ func (r *genericRequestor) createSession(
 		return err
 	}
 
-	r.initializeCollectors(ctx)
-
 	r.OnPacket(ctx, internal_type.ConversationEventPacket{
 		Name: "session",
 		Data: map[string]string{
@@ -340,9 +339,7 @@ func (r *genericRequestor) createSession(
 		}
 		return nil
 	})
-
 	r.initSessionBackground(ctx, true)
-
 	if err = errGroup.Wait(); err != nil {
 		r.notifyInitializationError(ctx, conversation.Id, err)
 		return err
@@ -355,6 +352,15 @@ func (r *genericRequestor) createSession(
 // initSessionBackground launches non-critical background tasks common to both
 // new and resumed sessions. isNew distinguishes which lifecycle hook to fire.
 func (r *genericRequestor) initSessionBackground(ctx context.Context, isNew bool) {
+	// Initialize telemetry collectors in the background so that DB lookups,
+	// vault credential resolution, and OTLP connection setup do not add
+	// latency to the connect path. The no-op collectors set in
+	// NewGenericRequestor safely absorb any events/metrics collected before
+	// the real exporters are ready.
+	utils.Go(ctx, func() {
+		r.initializeCollectors(ctx)
+	})
+
 	utils.Go(ctx, func() {
 		rc, err := internal_audio_recorder.GetRecorder(r.logger)
 		if err != nil {
@@ -370,6 +376,13 @@ func (r *genericRequestor) initSessionBackground(ctx context.Context, isNew bool
 		})
 	})
 
+	// Input normalizer init is synchronous — it only sets a callback, no I/O.
+	// Must be ready before the first EndOfSpeechPacket arrives, otherwise the
+	// turn is silently dropped (onPacket == nil in the OutputPipeline stage).
+	if err := r.initializeInputNormalizer(ctx); err != nil {
+		r.logger.Tracef(ctx, "failed to initialize input normalizer: %+v", err)
+	}
+
 	utils.Go(ctx, func() {
 		if err := r.initializeEndOfSpeech(ctx); err != nil {
 			r.logger.Tracef(ctx, "failed to initialize input: %+v", err)
@@ -378,8 +391,8 @@ func (r *genericRequestor) initSessionBackground(ctx context.Context, isNew bool
 
 	utils.Go(ctx, func() {
 		metrics := []*protos.Metric{{
-			Name:        type_enums.STATUS.String(),
-			Value:       type_enums.RECORD_IN_PROGRESS.String(),
+			Name:        type_enums.CONVERSATION_STATUS.String(),
+			Value:       type_enums.CONVERSATION_IN_PROGRESS.String(),
 			Description: "Conversation is currently in progress",
 		}}
 		r.onAddMetrics(ctx, metrics...)
@@ -451,12 +464,34 @@ func (r *genericRequestor) storeClientInformation(ctx context.Context) {
 	if clientInfo == nil {
 		return
 	}
-	clientJSON, err := clientInfo.ToJson()
-	if err != nil {
-		r.logger.Tracef(ctx, "failed to serialize client information: %+v", err)
-		return
+
+	// Flatten client info into metadata with "client." prefix (same pattern
+	// as telephony.toPhone, telephony.fromPhone). This makes fields like
+	// timezone, platform, language directly available in prompt context via
+	// r.metadata["client.timezone"] etc.
+	flat := map[string]interface{}{}
+	if clientInfo.Timezone != "" {
+		flat["client.timezone"] = clientInfo.Timezone
 	}
-	r.onSetMetadata(ctx, r.Auth(), map[string]interface{}{
-		clientInfoMetadataKey: clientJSON,
-	})
+	if clientInfo.Platform != "" {
+		flat["client.platform"] = clientInfo.Platform
+	}
+	if clientInfo.Language != "" {
+		flat["client.language"] = clientInfo.Language
+	}
+	if clientInfo.UserAgent != "" {
+		flat["client.user_agent"] = clientInfo.UserAgent
+	}
+	if clientInfo.Referrer != "" {
+		flat["client.referrer"] = clientInfo.Referrer
+	}
+	if clientInfo.ConnectionType != "" {
+		flat["client.connection_type"] = clientInfo.ConnectionType
+	}
+	if clientInfo.Latitude != 0 || clientInfo.Longitude != 0 {
+		flat["client.latitude"] = fmt.Sprintf("%f", clientInfo.Latitude)
+		flat["client.longitude"] = fmt.Sprintf("%f", clientInfo.Longitude)
+	}
+
+	r.onSetMetadata(ctx, r.Auth(), flat)
 }

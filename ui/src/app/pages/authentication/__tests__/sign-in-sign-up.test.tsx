@@ -122,15 +122,6 @@ jest.mock('@/app/components/form/fieldset', () => ({
   FieldSet: ({ children, ...props }: any) => <fieldset {...props}>{children}</fieldset>,
 }));
 
-jest.mock('@/app/components/heading/action-heading/form-action-heading', () => ({
-  FormActionHeading: ({ heading, action }: any) => (
-    <div>
-      <h2>{heading}</h2>
-      {action}
-    </div>
-  ),
-}));
-
 const renderWithAuth = (
   ui: React.ReactElement,
   setAuthentication = jest.fn(),
@@ -250,7 +241,7 @@ describe('Authentication pages', () => {
       expect(emailInput.value).toBe('prefilled@rapida.ai');
     });
 
-    fireEvent.change(screen.getByPlaceholderText('eg: John deo'), {
+    fireEvent.change(screen.getByPlaceholderText('eg: John Doe'), {
       target: { value: 'John Doe' },
     });
     fireEvent.change(screen.getByPlaceholderText('********'), {
@@ -281,7 +272,7 @@ describe('Authentication pages', () => {
 
     renderWithAuth(<SignUpPage />);
 
-    fireEvent.change(screen.getByPlaceholderText('eg: John deo'), {
+    fireEvent.change(screen.getByPlaceholderText('eg: John Doe'), {
       target: { value: 'John Doe' },
     });
     fireEvent.change(screen.getByPlaceholderText('eg: john@rapida.ai'), {

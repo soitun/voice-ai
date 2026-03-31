@@ -1,10 +1,6 @@
-import { GenericModal, ModalProps } from '@/app/components/base/modal';
-import { ModalBody } from '@/app/components/base/modal/modal-body';
-import { ModalFooter } from '@/app/components/base/modal/modal-footer';
-import { ModalHeader } from '@/app/components/base/modal/modal-header';
-import { ModalFormBlock } from '@/app/components/blocks/modal-form-block';
-import { ModalTitleBlock } from '@/app/components/blocks/modal-title-block';
-import { IBlueBGButton, ICancelButton } from '@/app/components/form/button';
+import { ModalProps } from '@/app/components/base/modal';
+import { Modal, ModalHeader, ModalBody, ModalFooter } from '@/app/components/carbon/modal';
+import { PrimaryButton, SecondaryButton } from '@/app/components/carbon/button';
 import { Textarea } from '@/app/components/form/textarea';
 import { Check } from 'lucide-react';
 import { FC, useState } from 'react';
@@ -14,49 +10,47 @@ export const MessageFeedbackDialog: FC<
 > = props => {
   const [feedbackText, setFeedbackText] = useState('');
   return (
-    <GenericModal modalOpen={props.modalOpen} setModalOpen={props.setModalOpen}>
-      <ModalFormBlock>
-        <ModalHeader
-          onClose={() => {
-            props.setModalOpen(false);
-          }}
-        >
-          <ModalTitleBlock>What can be improved?</ModalTitleBlock>
-        </ModalHeader>
-        <ModalBody>
-          <div className="px-4 py-6">
-            <p className="font-semibold text-base mt-1">
-              Tell us what went wrong or how we can make this answer more
-              helpful.
-            </p>
-            <div className="mt-4">
-              <Textarea
-                required
-                rows={3}
-                placeholder="Your feedback..."
-                value={feedbackText}
-                onChange={e => setFeedbackText(e.target.value)}
-              />
-            </div>
+    <Modal open={props.modalOpen} onClose={() => props.setModalOpen(false)} size="sm">
+      <ModalHeader
+        title="What can be improved?"
+        onClose={() => {
+          props.setModalOpen(false);
+        }}
+      />
+      <ModalBody hasForm>
+        <div className="px-4 py-6">
+          <p className="font-semibold text-base mt-1">
+            Tell us what went wrong or how we can make this answer more
+            helpful.
+          </p>
+          <div className="mt-4">
+            <Textarea
+              required
+              rows={3}
+              placeholder="Your feedback..."
+              value={feedbackText}
+              onChange={e => setFeedbackText(e.target.value)}
+            />
           </div>
-        </ModalBody>
-        <ModalFooter>
-          <ICancelButton onClick={() => props.setModalOpen(false)}>
-            Cancel
-          </ICancelButton>
-          <IBlueBGButton
-            type="button"
-            onClick={() => {
-              props.setModalOpen(false);
-              props.onSubmitFeedback(feedbackText);
-            }}
-            disabled={!feedbackText.trim()}
-          >
-            Submit feedback
-            <Check className="ml-2" strokeWidth={1.5} />
-          </IBlueBGButton>
-        </ModalFooter>
-      </ModalFormBlock>
-    </GenericModal>
+        </div>
+      </ModalBody>
+      <ModalFooter>
+        <SecondaryButton size="lg" onClick={() => props.setModalOpen(false)}>
+          Cancel
+        </SecondaryButton>
+        <PrimaryButton
+          size="lg"
+          type="button"
+          onClick={() => {
+            props.setModalOpen(false);
+            props.onSubmitFeedback(feedbackText);
+          }}
+          disabled={!feedbackText.trim()}
+        >
+          Submit feedback
+          <Check className="ml-2" strokeWidth={1.5} />
+        </PrimaryButton>
+      </ModalFooter>
+    </Modal>
   );
 };

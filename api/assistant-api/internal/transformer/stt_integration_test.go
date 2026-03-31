@@ -155,7 +155,7 @@ func TestSTTMetricsAndEvents(t *testing.T) {
 
 			events := collector.EventPackets()
 			metrics := collector.MetricPackets()
-			interruptions := collector.InterruptionPackets()
+			interruptions := collector.InterruptionDetectedPackets()
 
 			t.Logf("provider=%s events=%d metrics=%d interruptions=%d transcripts=%d",
 				provider, len(events), len(metrics), len(interruptions),

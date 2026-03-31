@@ -1,0 +1,158 @@
+import {
+  Dashboard,
+  Chat,
+  RecentlyViewed,
+  Settings,
+  Deploy,
+  ToolKit,
+  Webhook,
+  Activity,
+  Debug,
+  Phone,
+  ChartLine,
+} from '@carbon/icons-react';
+import type { ComponentType } from 'react';
+
+// ─── Types ───────────────────────────────────────────────────────────────────
+
+export interface AssistantNavChild {
+  key: string;
+  label: string;
+  path: string;
+  action?: string;
+}
+
+export interface AssistantNavItem {
+  key: string;
+  label: string;
+  icon: ComponentType<{ size?: number }>;
+  path: string;
+  exact?: boolean;
+  action?: string;
+  visible?: (assistant: any) => boolean;
+  /** Sub-items — renders as SideNavMenu with children */
+  children?: AssistantNavChild[];
+}
+
+export interface AssistantNavSection {
+  label: string;
+  items: AssistantNavItem[];
+}
+
+// ─── Config ──────────────────────────────────────────────────────────────────
+
+export const assistantNavSections: AssistantNavSection[] = [
+  {
+    label: '',
+    items: [
+      {
+        key: 'overview',
+        label: 'Overview',
+        icon: Dashboard,
+        path: 'overview',
+        exact: true,
+      },
+      {
+        key: 'sessions',
+        label: 'Sessions',
+        icon: Chat,
+        path: 'sessions',
+      },
+      {
+        key: 'versions',
+        label: 'Versions',
+        icon: RecentlyViewed,
+        path: 'version-history',
+        children: [
+          { key: 'versions-list', label: 'View all', path: 'version-history' },
+          { key: 'versions-create', label: 'Add new version', path: 'create-new-version' },
+          { key: 'versions-agentkit', label: 'Add AgentKit', path: 'create-agentkit-version' },
+        ],
+      },
+    ],
+  },
+  {
+    label: 'Settings',
+    items: [
+      {
+        key: 'general',
+        label: 'General',
+        icon: Settings,
+        path: 'edit-assistant',
+      },
+      {
+        key: 'deployment',
+        label: 'Deployment',
+        icon: Deploy,
+        path: 'deployment',
+        children: [
+          { key: 'deployment-list', label: 'View all', path: 'deployment' },
+          { key: 'deployment-debugger', label: 'Add Debugger', path: 'deployment/debugger' },
+          { key: 'deployment-web', label: 'Add Web Widget', path: 'deployment/web' },
+          { key: 'deployment-api', label: 'Add SDK / API', path: 'deployment/api' },
+          { key: 'deployment-call', label: 'Add Phone Call', path: 'deployment/call' },
+        ],
+      },
+      {
+        key: 'tools',
+        label: 'Tools & MCP',
+        icon: ToolKit,
+        path: 'configure-tool',
+        children: [
+          { key: 'tools-list', label: 'View all', path: 'configure-tool' },
+          { key: 'tools-create', label: 'Add tool', path: 'configure-tool/create' },
+        ],
+      },
+      {
+        key: 'webhooks',
+        label: 'Webhooks',
+        icon: Webhook,
+        path: 'configure-webhook',
+        children: [
+          { key: 'webhooks-list', label: 'View all', path: 'configure-webhook' },
+          { key: 'webhooks-create', label: 'Add webhook', path: 'configure-webhook/create' },
+        ],
+      },
+      {
+        key: 'telemetry',
+        label: 'Telemetry',
+        icon: Activity,
+        path: 'configure-telemetry',
+        children: [
+          { key: 'telemetry-list', label: 'View all', path: 'configure-telemetry' },
+          { key: 'telemetry-create', label: 'Add provider', path: 'configure-telemetry/create' },
+        ],
+      },
+      {
+        key: 'analysis',
+        label: 'Analysis',
+        icon: ChartLine,
+        path: 'configure-analysis',
+        children: [
+          { key: 'analysis-list', label: 'View all', path: 'configure-analysis' },
+          { key: 'analysis-create', label: 'Add analysis', path: 'configure-analysis/create' },
+        ],
+      },
+    ],
+  },
+  {
+    label: 'Playground',
+    items: [
+      {
+        key: 'debugging',
+        label: 'Debugging',
+        icon: Debug,
+        path: 'preview',
+        action: 'preview',
+      },
+      {
+        key: 'phone-preview',
+        label: 'Phone Preview',
+        icon: Phone,
+        path: 'preview-call',
+        action: 'preview-call',
+        visible: (assistant: any) => !!assistant?.getPhonedeployment?.(),
+      },
+    ],
+  },
+];

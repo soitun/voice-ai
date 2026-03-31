@@ -2,11 +2,7 @@ import { DeleteKnowledgeDocumentSegment } from '@rapidaai/react';
 import { BaseResponse } from '@rapidaai/react';
 import { KnowledgeDocumentSegment } from '@rapidaai/react';
 import { ServiceError } from '@rapidaai/react';
-import { GenericModal } from '@/app/components/base/modal';
-import { ModalBody } from '@/app/components/base/modal/modal-body';
-import { ModalFooter } from '@/app/components/base/modal/modal-footer';
-import { ModalHeader } from '@/app/components/base/modal/modal-header';
-import { ModalTitleBlock } from '@/app/components/blocks/modal-title-block';
+import { Modal, ModalHeader, ModalBody, ModalFooter } from '@/app/components/carbon/modal';
 import { FormLabel } from '@/app/components/form-label';
 import { Button, HoverButton } from '@/app/components/form/button';
 import { ErrorMessage } from '@/app/components/form/error-message';
@@ -55,13 +51,12 @@ export const DeleteKnowledgeDocumentSegmentDialog: FC<{
   };
 
   return (
-    <GenericModal modalOpen={true} setModalOpen={onClose}>
-      <ModalHeader onClose={onClose}>
-        <ModalTitleBlock>
-          Are you sure you want to delete this document segment?
-        </ModalTitleBlock>
-      </ModalHeader>
-      <ModalBody>
+    <Modal open={true} onClose={onClose} size="sm" danger>
+      <ModalHeader
+        title="Are you sure you want to delete this document segment?"
+        onClose={onClose}
+      />
+      <ModalBody hasForm>
         <FieldSet>
           <FormLabel htmlFor="delete-reason">Reason</FormLabel>
           <Textarea
@@ -74,7 +69,7 @@ export const DeleteKnowledgeDocumentSegmentDialog: FC<{
         </FieldSet>
         <ErrorMessage message={error || ''} />
       </ModalBody>
-      <ModalFooter>
+      <ModalFooter danger>
         <HoverButton type="button" onClick={onClose}>
           Cancel
         </HoverButton>
@@ -82,6 +77,6 @@ export const DeleteKnowledgeDocumentSegmentDialog: FC<{
           Delete Segment
         </Button>
       </ModalFooter>
-    </GenericModal>
+    </Modal>
   );
 };

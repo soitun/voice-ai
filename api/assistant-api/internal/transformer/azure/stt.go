@@ -20,6 +20,7 @@ import (
 	azure_internal "github.com/rapidaai/api/assistant-api/internal/transformer/azure/internal"
 	internal_type "github.com/rapidaai/api/assistant-api/internal/type"
 	"github.com/rapidaai/pkg/commons"
+	type_enums "github.com/rapidaai/pkg/types/enums"
 	"github.com/rapidaai/pkg/utils"
 	"github.com/rapidaai/protos"
 )
@@ -41,7 +42,9 @@ type azureSpeechToText struct {
 	onPacket         func(pkt ...internal_type.Packet) error
 
 	// observability: time when speech started
-	startedAt time.Time
+	startedAt      time.Time
+	contextId      string
+	sttConnectedAt time.Time
 }
 
 // NewAzureSpeechToText creates a new Azure Speech-to-Text transformer instance.
@@ -99,13 +102,15 @@ func (s *azureSpeechToText) Initialize() error {
 	s.client = client
 	s.azureAudioConfig = audioConfig
 	s.inputstream = inputStream
+	s.sttConnectedAt = time.Now()
 	s.mu.Unlock()
 
 	s.registerEventHandlers()
 	s.client.StartContinuousRecognitionAsync()
 
 	s.onPacket(internal_type.ConversationEventPacket{
-		Name: "stt",
+		ContextID: s.contextId,
+		Name:      "stt",
 		Data: map[string]string{
 			"type":     "initialized",
 			"provider": s.Name(),
@@ -131,20 +136,37 @@ func (s *azureSpeechToText) Name() string {
 }
 
 // Transform writes audio data to the input stream for recognition.
-func (s *azureSpeechToText) Transform(_ context.Context, in internal_type.UserAudioPacket) error {
-	s.mu.Lock()
-	stream := s.inputstream
-	s.mu.Unlock()
+func (s *azureSpeechToText) Transform(_ context.Context, in internal_type.Packet) error {
+	switch pkt := in.(type) {
+	case internal_type.TurnChangePacket:
+		s.mu.Lock()
+		s.contextId = pkt.ContextID
+		s.mu.Unlock()
+		return nil
+	case internal_type.InterruptionDetectedPacket:
+		s.mu.Lock()
+		if pkt.Source == internal_type.InterruptionSourceVad && s.startedAt.IsZero() {
+			s.startedAt = time.Now()
+		}
+		s.mu.Unlock()
+		return nil
+	case internal_type.UserAudioReceivedPacket:
+		s.mu.Lock()
+		stream := s.inputstream
+		s.mu.Unlock()
 
-	if stream == nil {
-		return fmt.Errorf("azure-stt: transform called before initialize")
+		if stream == nil {
+			return fmt.Errorf("azure-stt: transform called before initialize")
+		}
+
+		if err := stream.Write(pkt.Content()); err != nil {
+			return fmt.Errorf("failed to write audio data: %w", err)
+		}
+
+		return nil
+	default:
+		return nil
 	}
-
-	if err := stream.Write(in.Content()); err != nil {
-		return fmt.Errorf("failed to write audio data: %w", err)
-	}
-
-	return nil
 }
 
 func (s *azureSpeechToText) OnSessionStarted(event speech.SessionEventArgs) {
@@ -172,9 +194,7 @@ func (s *azureSpeechToText) OnRecognizing(event speech.SpeechRecognitionEventArg
 	}
 
 	s.mu.Lock()
-	if s.startedAt.IsZero() {
-		s.startedAt = time.Now()
-	}
+	ctxID := s.contextId
 	s.mu.Unlock()
 
 	language := result.PrimaryLanguage.Language
@@ -183,15 +203,17 @@ func (s *azureSpeechToText) OnRecognizing(event speech.SpeechRecognitionEventArg
 	}
 
 	s.onPacket(
-		internal_type.InterruptionPacket{Source: internal_type.InterruptionSourceWord},
+		internal_type.InterruptionDetectedPacket{ContextID: ctxID, Source: internal_type.InterruptionSourceWord},
 		internal_type.SpeechToTextPacket{
+			ContextID:  ctxID,
 			Script:     result.Text,
 			Confidence: defaultConfidence,
 			Language:   language,
 			Interim:    true,
 		},
 		internal_type.ConversationEventPacket{
-			Name: "stt",
+			ContextID: ctxID,
+			Name:      "stt",
 			Data: map[string]string{
 				"type":       "interim",
 				"script":     result.Text,
@@ -227,7 +249,8 @@ func (s *azureSpeechToText) OnRecognized(event speech.SpeechRecognitionEventArgs
 				// emit event for low confidence and skip stt processing
 				s.onPacket(
 					internal_type.ConversationEventPacket{
-						Name: "stt",
+						ContextID: s.contextId,
+						Name:      "stt",
 						Data: map[string]string{
 							"type":       "low_confidence",
 							"script":     text,
@@ -256,19 +279,22 @@ func (s *azureSpeechToText) OnRecognized(event speech.SpeechRecognitionEventArgs
 		latencyMs = now.Sub(s.startedAt).Milliseconds()
 		s.startedAt = time.Time{}
 	}
+	ctxID := s.contextId
 	s.mu.Unlock()
 
 	confStr := fmt.Sprintf("%.4f", confidence)
 	s.onPacket(
-		internal_type.InterruptionPacket{Source: internal_type.InterruptionSourceWord},
+		internal_type.InterruptionDetectedPacket{ContextID: ctxID, Source: internal_type.InterruptionSourceWord},
 		internal_type.SpeechToTextPacket{
+			ContextID:  ctxID,
 			Script:     text,
 			Confidence: confidence,
 			Language:   "en-US",
 			Interim:    false,
 		},
 		internal_type.ConversationEventPacket{
-			Name: "stt",
+			ContextID: ctxID,
+			Name:      "stt",
 			Data: map[string]string{
 				"type":       "completed",
 				"script":     text,
@@ -279,8 +305,9 @@ func (s *azureSpeechToText) OnRecognized(event speech.SpeechRecognitionEventArgs
 			},
 			Time: now,
 		},
-		internal_type.MessageMetricPacket{
-			Metrics: []*protos.Metric{{Name: "stt_latency_ms", Value: fmt.Sprintf("%d", latencyMs)}},
+		internal_type.UserMessageMetricPacket{
+			ContextID: ctxID,
+			Metrics:   []*protos.Metric{{Name: "stt_latency_ms", Value: fmt.Sprintf("%d", latencyMs)}},
 		},
 	)
 }
@@ -288,9 +315,10 @@ func (s *azureSpeechToText) OnRecognized(event speech.SpeechRecognitionEventArgs
 func (s *azureSpeechToText) OnCancelled(event speech.SpeechRecognitionCanceledEventArgs) {
 	defer event.Close()
 	s.onPacket(internal_type.ConversationEventPacket{
-		Name: "stt",
-		Data: map[string]string{"type": "error", "error": "recognition cancelled"},
-		Time: time.Now(),
+		ContextID: s.contextId,
+		Name:      "stt",
+		Data:      map[string]string{"type": "error", "error": "recognition cancelled"},
+		Time:      time.Now(),
 	})
 }
 
@@ -299,7 +327,9 @@ func (s *azureSpeechToText) Close(_ context.Context) error {
 	s.ctxCancel()
 
 	s.mu.Lock()
-	defer s.mu.Unlock()
+	ctxID := s.contextId
+	connectedAt := s.sttConnectedAt
+	s.sttConnectedAt = time.Time{}
 
 	if s.client != nil {
 		s.client.StopContinuousRecognitionAsync()
@@ -310,6 +340,29 @@ func (s *azureSpeechToText) Close(_ context.Context) error {
 	}
 	if s.azureAudioConfig != nil {
 		s.azureAudioConfig.Close()
+	}
+	s.mu.Unlock()
+
+	if !connectedAt.IsZero() {
+		s.onPacket(
+			internal_type.ConversationEventPacket{
+				ContextID: ctxID,
+				Name:      "stt",
+				Data: map[string]string{
+					"type":     "closed",
+					"provider": s.Name(),
+				},
+				Time: time.Now(),
+			},
+			internal_type.ConversationMetricPacket{
+				ContextID: 0,
+				Metrics: []*protos.Metric{{
+					Name:        type_enums.CONVERSATION_STT_DURATION.String(),
+					Value:       fmt.Sprintf("%d", time.Since(connectedAt).Nanoseconds()),
+					Description: "Total STT connection duration in nanoseconds",
+				}},
+			},
+		)
 	}
 
 	return nil

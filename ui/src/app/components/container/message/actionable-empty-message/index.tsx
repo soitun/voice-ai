@@ -9,7 +9,14 @@ export const ActionableEmptyMessage: FC<{
   onActionClick?: () => void;
   /** Wrap in a flex-1 full-width centering container */
   centered?: boolean;
-}> = ({ title, subtitle, action, actionComponent, onActionClick, centered }) => {
+}> = ({
+  title,
+  subtitle,
+  action,
+  actionComponent,
+  onActionClick,
+  centered,
+}) => {
   const content = (
     <div className="px-4 py-6 flex flex-col justify-center items-center">
       <div className="font-semibold">{title}</div>

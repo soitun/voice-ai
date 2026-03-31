@@ -1,11 +1,7 @@
-import { ICancelButton, IRedBGButton } from '@/app/components/form/button';
-import { Input } from '@/app/components/form/input';
-import { InfoIcon } from '@/app/components/Icon/Info';
-import { GenericModal } from '@/app/components/base/modal';
-import { ModalFooter } from '@/app/components/base/modal/modal-footer';
-import { ModalFitHeightBlock } from '@/app/components/blocks/modal-fit-height-block';
 import type { FC } from 'react';
 import React, { useState } from 'react';
+import { Modal } from '@carbon/react';
+import { TextInput } from '@/app/components/carbon/form';
 
 type ConfirmDeleteDialogProps = {
   showing: boolean;
@@ -35,34 +31,38 @@ export const ConfirmDeleteDialog: FC<ConfirmDeleteDialogProps> = ({
   const handleConfirm = () => {
     if (inputName === objectName) {
       onConfirm();
+      setInputName('');
     }
   };
 
   return (
-    <GenericModal modalOpen={showing} setModalOpen={onClose}>
-      <ModalFitHeightBlock className="w-[300px] min-w-max ">
-        <div className="rounded-2xl relative py-8 px-4 flex flex-col">
-          <InfoIcon className="w-10 h-10 text-red-500" />
-          <div className="text-lg font-medium mt-2">{title}</div>
-          <div className="text-base leading-normal mb-4">{content}</div>
-          <Input
-            type="text"
-            value={inputName}
-            onChange={e => setInputName(e.target.value)}
-            placeholder={`Type "${objectName}" to confirm`}
-          />
-        </div>
-        <ModalFooter>
-          <ICancelButton onClick={onCancel}>{cancelText}</ICancelButton>
-          <IRedBGButton
-            type="button"
-            onClick={handleConfirm}
-            disabled={inputName !== objectName}
-          >
-            {confirmText}
-          </IRedBGButton>
-        </ModalFooter>
-      </ModalFitHeightBlock>
-    </GenericModal>
+    <Modal
+      danger
+      open={showing}
+      modalHeading={title}
+      modalLabel="Confirm action"
+      primaryButtonText={confirmText}
+      secondaryButtonText={cancelText}
+      primaryButtonDisabled={inputName !== objectName}
+      onRequestSubmit={handleConfirm}
+      onRequestClose={() => {
+        setInputName('');
+        onClose();
+      }}
+      onSecondarySubmit={() => {
+        setInputName('');
+        onCancel();
+      }}
+      size="sm"
+    >
+      <p className="text-sm mb-4">{content}</p>
+      <TextInput
+        id="confirm-delete-input"
+        labelText={`Type "${objectName}" to confirm`}
+        value={inputName}
+        onChange={e => setInputName(e.target.value)}
+        placeholder={objectName}
+      />
+    </Modal>
   );
 };

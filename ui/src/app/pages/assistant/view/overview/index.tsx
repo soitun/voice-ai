@@ -3,16 +3,13 @@ import { SectionLoader } from '@/app/components/loader/section-loader';
 import { AssistantAnalytics } from '@/app/pages/assistant/view/overview/assistant-analytics';
 import { useRapidaStore } from '@/hooks';
 import { FC } from 'react';
-import { YellowNoticeBlock } from '@/app/components/container/message/notice-block';
-import { ExternalLink, Info } from 'lucide-react';
+import { LinkNotification } from '@/app/components/carbon/notification';
 import { useGlobalNavigation } from '@/hooks/use-global-navigator';
-/**
- *
- * @param props
- * @returns
- */
-export const Overview: FC<{ currentAssistant: Assistant }> = (props: {
-  currentAssistant: Assistant;
+import { toHumanReadableRelativeTime } from '@/utils/date';
+import { Breadcrumb, BreadcrumbItem, ComboButton, MenuItem } from '@carbon/react';
+
+export const Overview: FC<{ currentAssistant: Assistant }> = ({
+  currentAssistant,
 }) => {
   const rapidaContext = useRapidaStore();
   const navigation = useGlobalNavigation();
@@ -27,36 +24,64 @@ export const Overview: FC<{ currentAssistant: Assistant }> = (props: {
 
   return (
     <div className="flex flex-col flex-1 grow">
-      {!props.currentAssistant.getApideployment() &&
-        !props.currentAssistant.getDebuggerdeployment() &&
-        !props.currentAssistant.getWebplugindeployment() &&
-        !props.currentAssistant.getPhonedeployment() && (
-          <YellowNoticeBlock className="flex items-center">
-            <Info className="shrink-0 w-4 h-4" strokeWidth={1.5} />
-            <div className="ms-3 text-sm font-medium">
-              <strong className="font-semibold">
-                Your assistant is ready, but not live yet,
-              </strong>{' '}
-              It looks like your assistant isn’t deployed to any channel.
-            </div>
-            <button
-              type="button"
-              onClick={() => {
-                navigation.goToDeploymentAssistant(
-                  props.currentAssistant.getId(),
-                );
-              }}
-              className="h-7 flex items-center font-medium hover:underline ml-auto text-yellow-600"
-            >
-              Enable deployment
-              <ExternalLink
-                className="shrink-0 w-4 h-4 ml-1.5"
-                strokeWidth={1.5}
-              />
-            </button>
-          </YellowNoticeBlock>
+      {/* ── IBM Page header — breadcrumb + title + actions ── */}
+      <div className="px-4 pt-4 pb-6 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800">
+        <div className="flex items-start justify-between">
+          <div>
+            <Breadcrumb noTrailingSlash className="mb-2">
+              <BreadcrumbItem href="/deployment/assistant">
+                Assistants
+              </BreadcrumbItem>
+            </Breadcrumb>
+            <h1 className="text-2xl font-light tracking-tight">
+              {currentAssistant.getName()}
+            </h1>
+            {currentAssistant.getAssistantprovidermodel()?.getCreateddate() && (
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 tabular-nums">
+                Last updated{' '}
+                {toHumanReadableRelativeTime(
+                  currentAssistant.getAssistantprovidermodel()?.getCreateddate()!,
+                )}
+              </p>
+            )}
+          </div>
+          <ComboButton
+            label="Create new version"
+            size="md"
+            onClick={() =>
+              navigation.goToCreateAssistantVersion(currentAssistant.getId())
+            }
+          >
+            <MenuItem
+              label="Create AgentKit"
+              onClick={() =>
+                navigation.goToCreateAssistantAgentKitVersion(
+                  currentAssistant.getId(),
+                )
+              }
+            />
+          </ComboButton>
+        </div>
+      </div>
+
+      {/* ── Notifications ── */}
+      {!currentAssistant.getApideployment() &&
+        !currentAssistant.getDebuggerdeployment() &&
+        !currentAssistant.getWebplugindeployment() &&
+        !currentAssistant.getPhonedeployment() && (
+          <LinkNotification
+            kind="warning"
+            title="Your assistant is ready, but not live yet."
+            subtitle="It looks like your assistant isn't deployed to any channel."
+            linkText="Enable deployment"
+            onLinkClick={() =>
+              navigation.goToDeploymentAssistant(currentAssistant.getId())
+            }
+          />
         )}
-      <AssistantAnalytics assistant={props.currentAssistant} />
+
+      {/* ── Dashboard content ── */}
+      <AssistantAnalytics assistant={currentAssistant} />
     </div>
   );
 };

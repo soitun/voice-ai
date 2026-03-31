@@ -126,7 +126,7 @@ func (t *TenVAD) Name() string {
 
 // Process analyzes an audio packet for voice activity.
 // The packet must contain 16 kHz LINEAR16 mono audio.
-func (t *TenVAD) Process(ctx context.Context, pkt internal_type.UserAudioPacket) error {
+func (t *TenVAD) Process(ctx context.Context, pkt internal_type.UserAudioReceivedPacket) error {
 	if !t.isActive() {
 		return nil
 	}
@@ -143,7 +143,7 @@ func (t *TenVAD) Process(ctx context.Context, pkt internal_type.UserAudioPacket)
 		return err
 	}
 
-	// Emit InterruptionPacket only on confirmed speech onset — this is the
+	// Emit InterruptionDetectedPacket only on confirmed speech onset — this is the
 	// signal to interrupt assistant TTS/LLM.
 	if hasSpeechStart(segments) {
 		t.notifyActivity(ctx, segments)
@@ -295,7 +295,7 @@ func (t *TenVAD) notifyActivity(ctx context.Context, segments []segment) {
 
 	if t.onPacket != nil {
 		t.onPacket(ctx,
-			internal_type.InterruptionPacket{
+			internal_type.InterruptionDetectedPacket{
 				Source:  internal_type.InterruptionSourceVad,
 				StartAt: minStart,
 				EndAt:   maxEnd,

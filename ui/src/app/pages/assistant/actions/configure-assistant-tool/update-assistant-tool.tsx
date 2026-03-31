@@ -3,9 +3,10 @@ import { CONFIG } from '@/configs';
 import { useConfirmDialog } from '@/app/pages/assistant/actions/hooks/use-confirmation';
 import { useGlobalNavigation } from '@/hooks/use-global-navigator';
 import {
-  IBlueBGArrowButton,
-  ICancelButton,
-} from '@/app/components/form/button';
+  PrimaryButton,
+  SecondaryButton,
+} from '@/app/components/carbon/button';
+import { ButtonSet } from '@carbon/react';
 import { useCurrentCredential } from '@/hooks/use-credential';
 import {
   BuildinTool,
@@ -208,27 +209,27 @@ export const UpdateTool: FC<{ assistantId: string }> = ({ assistantId }) => {
             description:
               'Select the action type and configure its connection options.',
             actions: [
-              <ICancelButton
-                className="w-full h-full"
-                type="button"
-                onClick={() => showDialog(navigator.goBack)}
-              >
-                Cancel
-              </ICancelButton>,
-              <IBlueBGArrowButton
-                type="button"
-                isLoading={isMCP ? loading : undefined}
-                className="w-full h-full"
-                onClick={() => {
-                  if (isMCP) {
-                    if (validateAction()) onSubmit();
-                  } else {
-                    if (validateAction()) setActiveTab('definition');
-                  }
-                }}
-              >
-                {isMCP ? 'Update Tool' : 'Continue'}
-              </IBlueBGArrowButton>,
+              <ButtonSet className="!w-full [&>button]:!flex-1 [&>button]:!max-w-none">
+                <SecondaryButton
+                  size="lg"
+                  onClick={() => showDialog(navigator.goBack)}
+                >
+                  Cancel
+                </SecondaryButton>
+                <PrimaryButton
+                  size="lg"
+                  isLoading={isMCP ? loading : undefined}
+                  onClick={() => {
+                    if (isMCP) {
+                      if (validateAction()) onSubmit();
+                    } else {
+                      if (validateAction()) setActiveTab('definition');
+                    }
+                  }}
+                >
+                  {isMCP ? 'Update Tool' : 'Continue'}
+                </PrimaryButton>
+              </ButtonSet>,
             ],
             body: (
               <BuildinTool
@@ -249,21 +250,21 @@ export const UpdateTool: FC<{ assistantId: string }> = ({ assistantId }) => {
                   description:
                     'Define the tool name, description, and JSON parameter schema.',
                   actions: [
-                    <ICancelButton
-                      className="w-full h-full"
-                      type="button"
-                      onClick={() => showDialog(navigator.goBack)}
-                    >
-                      Cancel
-                    </ICancelButton>,
-                    <IBlueBGArrowButton
-                      type="button"
-                      isLoading={loading}
-                      className="w-full h-full"
-                      onClick={onSubmit}
-                    >
-                      Update Tool
-                    </IBlueBGArrowButton>,
+                    <ButtonSet className="!w-full [&>button]:!flex-1 [&>button]:!max-w-none">
+                      <SecondaryButton
+                        size="lg"
+                        onClick={() => showDialog(navigator.goBack)}
+                      >
+                        Cancel
+                      </SecondaryButton>
+                      <PrimaryButton
+                        size="lg"
+                        isLoading={loading}
+                        onClick={onSubmit}
+                      >
+                        Update Tool
+                      </PrimaryButton>
+                    </ButtonSet>,
                   ],
                   body: (
                     <ToolDefinitionForm

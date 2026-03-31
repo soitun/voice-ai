@@ -311,13 +311,13 @@ export const CreateKnowledge: FC<{ assistantId: string }> = ({
       </div>
       <PageActionButtonBlock errorMessage={errorMessage}>
         <ICancelButton
-          className="px-4 rounded-[2px]"
+          className="px-4"
           onClick={() => showDialog(navigator.goBack)}
           type="button"
         >
           Cancel
         </ICancelButton>
-        <IBlueBGButton type="submit" className="px-4 rounded-[2px]">
+        <IBlueBGButton type="submit" className="px-4">
           Connect knowledge
         </IBlueBGButton>
       </PageActionButtonBlock>

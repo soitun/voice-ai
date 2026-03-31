@@ -1,6 +1,6 @@
 import { cn } from '@/utils';
 import { FC, HTMLAttributes, ReactElement } from 'react';
-import { PageActionButtonBlock } from '@/app/components/blocks/page-action-button-block';
+import { Notification } from '@/app/components/carbon/notification';
 
 interface TabFormProps extends HTMLAttributes<HTMLDivElement> {
   activeTab?: string;
@@ -169,20 +169,21 @@ export const TabForm: FC<TabFormProps> = ({
           )}
         </div>
 
-        {/* Footer — outside scroll, always visible at bottom */}
+        {/* Footer — full width buttons like Carbon modal footer */}
         {form.map(
           item =>
             item.code === activeTab && (
-              <PageActionButtonBlock
+              <div
                 key={`footer-${item.code}`}
-                errorMessage={errorMessage}
+                className="shrink-0"
               >
+                {errorMessage && (
+                  <Notification kind="error" title="Error" subtitle={errorMessage} />
+                )}
                 {item.actions.map((action, idx) => (
-                  <div key={`action-${idx}`} className="flex-1 h-full flex">
-                    {action}
-                  </div>
+                  <div key={`action-${idx}`}>{action}</div>
                 ))}
-              </PageActionButtonBlock>
+              </div>
             ),
         )}
       </div>

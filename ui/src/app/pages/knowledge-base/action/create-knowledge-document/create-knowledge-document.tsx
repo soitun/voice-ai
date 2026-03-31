@@ -5,9 +5,10 @@ import { useRapidaStore } from '@/hooks/use-rapida-store';
 import { KnowledgeDocument } from '@rapidaai/react';
 import { useCreateKnowledgeDocumentPageStore } from '@/hooks/use-create-knowledge-document-page-store';
 import {
-  IBlueBGArrowButton,
-  ICancelButton,
-} from '@/app/components/form/button';
+  PrimaryButton,
+  SecondaryButton,
+} from '@/app/components/carbon/button';
+import { ButtonSet } from '@carbon/react';
 import { ManualFile } from '@/app/pages/knowledge-base/action/components/datasource-uploader/manual-file';
 import { useGlobalNavigation } from '@/hooks/use-global-navigator';
 import { ErrorMessage } from '@/app/components/form/error-message';
@@ -76,16 +77,15 @@ export function CreateKnowledgeDocumentPage() {
 
       <div className="flex items-center justify-between px-6 pb-6">
         <ErrorMessage message={errorMessage} className="rounded-none!" />
-        <div className="flex gap-3">
-          <ICancelButton onClick={() => goBack()}>Cancel</ICancelButton>
-          <IBlueBGArrowButton
+        <ButtonSet className="!w-full [&>button]:!flex-1 [&>button]:!max-w-none">
+          <SecondaryButton size="lg" onClick={() => goBack()}>Cancel</SecondaryButton>
+          <PrimaryButton size="lg"
             isLoading={loading}
-            type="button"
             onClick={onCreateKnowledgeDocument}
           >
             Upload new document
-          </IBlueBGArrowButton>
-        </div>
+          </PrimaryButton>
+        </ButtonSet>
       </div>
     </div>
   );

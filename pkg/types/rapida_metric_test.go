@@ -233,7 +233,7 @@ func TestNewStatusMetric(t *testing.T) {
 }
 
 func TestMetricName_String(t *testing.T) {
-	if type_enums.TIME_TAKEN.String() != "TIME_TAKEN" {
-		t.Errorf("TIME_TAKEN.String() = %v, want %v", type_enums.TIME_TAKEN.String(), "TIME_TAKEN")
+	if type_enums.TIME_TAKEN.String() != "time_taken" {
+		t.Errorf("TIME_TAKEN.String() = %v, want %v", type_enums.TIME_TAKEN.String(), "time_taken")
 	}
 }

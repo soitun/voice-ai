@@ -145,7 +145,7 @@ export const useConversationLogPageStore = create<ConversationLog>(
       { name: 'Created Date', key: 'created_date', visible: true },
       { name: 'Action ', key: 'action', visible: true },
       { name: 'Status', key: 'status', visible: true },
-      { name: 'Time Taken', key: 'time_taken', visible: true },
+      { name: 'Time Taken', key: 'time_taken', visible: false },
       { name: 'Total Token', key: 'total_token', visible: false },
       { name: 'Feedback', key: 'user_feedback', visible: false },
       { name: 'User Feedback', key: 'user_text_feedback', visible: false },

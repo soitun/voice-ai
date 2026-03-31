@@ -8,12 +8,15 @@ package adapter_internal
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
 
+	"github.com/google/uuid"
 	internal_assistant_entity "github.com/rapidaai/api/assistant-api/internal/entity/assistants"
 	internal_conversation_entity "github.com/rapidaai/api/assistant-api/internal/entity/conversations"
 	internal_telemetry_entity "github.com/rapidaai/api/assistant-api/internal/entity/telemetry"
 	internal_services "github.com/rapidaai/api/assistant-api/internal/services"
+	internal_type "github.com/rapidaai/api/assistant-api/internal/type"
 	"github.com/rapidaai/pkg/types"
 	"github.com/rapidaai/pkg/utils"
 	"github.com/rapidaai/protos"
@@ -56,10 +59,13 @@ func (gr *genericRequestor) GetSpeechToTextTransformer() (
 }
 
 func (gr *genericRequestor) GetTelemetryProvider(ctx context.Context) ([]*internal_telemetry_entity.AssistantTelemetryProvider, error) {
-	if gr.assistant != nil && gr.assistant.AssistantTelemetryProviders != nil {
-		return gr.assistant.AssistantTelemetryProviders, nil
+	if gr.assistant == nil {
+		return nil, errors.New("assistant is not initialized")
 	}
-	return nil, errors.New("telemetry is not enabled for assistant")
+	if gr.assistant.AssistantTelemetryProviders == nil {
+		return []*internal_telemetry_entity.AssistantTelemetryProvider{}, nil
+	}
+	return gr.assistant.AssistantTelemetryProviders, nil
 }
 
 func (gr *genericRequestor) GetTextToSpeechTransformer() (*internal_assistant_entity.AssistantDeploymentAudio, error) {
@@ -98,14 +104,11 @@ func (gr *genericRequestor) GetAssistant(
 		//
 		InjectAssistantProvider:      true,
 		InjectKnowledgeConfiguration: true,
-
-		// these are very specific for deployment
-
-		InjectTool:              true,
-		InjectAnalysis:          true,
-		InjectWebhook:           true,
-		InjectConversations:     false,
-		InjectTelemetryProvider: true,
+		InjectTool:                   true,
+		InjectAnalysis:               true,
+		InjectWebhook:                true,
+		InjectConversations:          false,
+		InjectTelemetryProvider:      true,
 	}
 	switch gr.source {
 	case utils.PhoneCall:
@@ -224,12 +227,45 @@ func (tc *genericRequestor) onAddMetrics(ctx context.Context, metrics ...*protos
 	return err
 }
 
-func (deb *genericRequestor) onMessageMetric(ctx context.Context, messageId string, metrics []*protos.Metric) error {
+func (deb *genericRequestor) onAddMessage(ctx context.Context, msg internal_type.MessagePacket) error {
+	deb.histories = append(deb.histories, msg)
 	dbCtx, cancel := context.WithTimeout(context.Background(), dbWriteTimeout)
 	defer cancel()
-	if _, err := deb.conversationService.ApplyMessageMetrics(dbCtx, deb.Auth(), deb.Conversation().Id, messageId, types.ToMetrics(metrics)); err != nil {
+	_, err := deb.conversationService.CreateConversationMessage(dbCtx, deb.Auth(), deb.GetSource(), deb.Assistant().Id, deb.Assistant().AssistantProviderId, deb.Conversation().Id,
+		fmt.Sprintf("%s-%s", msg.Role(), msg.ContextId()), msg.Role(), msg.Content())
+	if err != nil {
+		deb.logger.Error("unable to create message for the user")
+		return err
+	}
+	return nil
+}
+
+func (deb *genericRequestor) onAddMessageMetric(ctx context.Context, prefix string, messageId string, metrics []*protos.Metric) error {
+	dbCtx, cancel := context.WithTimeout(context.Background(), dbWriteTimeout)
+	defer cancel()
+	if _, err := deb.conversationService.ApplyMessageMetrics(dbCtx, deb.Auth(), deb.Conversation().Id, fmt.Sprintf("%s-%s", prefix, messageId), metrics); err != nil {
 		deb.logger.Errorf("error updating metrics for message: %v", err)
 		return err
 	}
 	return nil
+}
+
+func (deb *genericRequestor) onAddMessageMetadata(ctx context.Context, prefix string, messageId string, metadata []*protos.Metadata) error {
+	dbCtx, cancel := context.WithTimeout(context.Background(), dbWriteTimeout)
+	defer cancel()
+	if _, err := deb.conversationService.ApplyMessageMetadata(dbCtx, deb.Auth(), deb.Conversation().Id, fmt.Sprintf("%s-%s", prefix, messageId), metadata); err != nil {
+		deb.logger.Errorf("Error in ApplyMessageMetadata: %v", err)
+	}
+	return nil
+}
+
+func (r *genericRequestor) identifier(config *protos.ConversationInitialization) string {
+	switch identity := config.GetUserIdentity().(type) {
+	case *protos.ConversationInitialization_Phone:
+		return identity.Phone.GetPhoneNumber()
+	case *protos.ConversationInitialization_Web:
+		return identity.Web.GetUserId()
+	default:
+		return uuid.NewString()
+	}
 }

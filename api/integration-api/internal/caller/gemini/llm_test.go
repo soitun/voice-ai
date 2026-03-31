@@ -7,10 +7,13 @@ import (
 	"encoding/json"
 	"testing"
 
+	internal_callers "github.com/rapidaai/api/integration-api/internal/type"
 	"github.com/rapidaai/pkg/commons"
 	"github.com/rapidaai/protos"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/types/known/anypb"
+	"google.golang.org/protobuf/types/known/structpb"
 )
 
 func newTestLogger() commons.Logger {
@@ -198,4 +201,49 @@ func TestBuildHistory_ModelRole(t *testing.T) {
 	require.NotNil(t, instruction)
 	assert.Equal(t, "model", instruction.Role)
 	assert.Equal(t, "Response", instruction.Parts[0].Text)
+}
+
+func mustAnyValue(t *testing.T, input interface{}) *anypb.Any {
+	t.Helper()
+	v, err := structpb.NewValue(input)
+	require.NoError(t, err)
+	a, err := anypb.New(v)
+	require.NoError(t, err)
+	return a
+}
+
+func TestGetContentConfig_AcceptsLegacyGeminiKeys(t *testing.T) {
+	caller := newTestCaller()
+	opts := &internal_callers.ChatCompletionOptions{
+		AIOptions: internal_callers.AIOptions{
+			ModelParameter: map[string]*anypb.Any{
+				"model.name":              mustAnyValue(t, "gemini/gemini-2.5-flash"),
+				"model.max_output_tokens": mustAnyValue(t, float64(1234)),
+				"model.stop_sequences":    mustAnyValue(t, "END,STOP"),
+			},
+		},
+	}
+
+	model, config := caller.getContentConfig(opts)
+	assert.Equal(t, "gemini/gemini-2.5-flash", model)
+	assert.Equal(t, int32(1234), config.MaxOutputTokens)
+	assert.Equal(t, []string{"END", "STOP"}, config.StopSequences)
+}
+
+func TestGetContentConfig_MapsThinkingBudget(t *testing.T) {
+	caller := newTestCaller()
+	opts := &internal_callers.ChatCompletionOptions{
+		AIOptions: internal_callers.AIOptions{
+			ModelParameter: map[string]*anypb.Any{
+				"model.name":            mustAnyValue(t, "gemini/gemini-2.5-flash"),
+				"model.thinking_budget": mustAnyValue(t, float64(1200)),
+			},
+		},
+	}
+
+	model, config := caller.getContentConfig(opts)
+	assert.Equal(t, "gemini/gemini-2.5-flash", model)
+	require.NotNil(t, config.ThinkingConfig)
+	require.NotNil(t, config.ThinkingConfig.ThinkingBudget)
+	assert.Equal(t, int32(1200), *config.ThinkingConfig.ThinkingBudget)
 }

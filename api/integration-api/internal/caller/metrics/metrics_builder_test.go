@@ -34,14 +34,14 @@ func TestOnStart_InitializesMetrics(t *testing.T) {
 	metrics := mb.Build()
 	assert.Len(t, metrics, 3, "OnStart should produce TIME_TAKEN, LLM_REQUEST_ID, STATUS")
 
-	timeTaken := findMetric(metrics, "TIME_TAKEN")
+	timeTaken := findMetric(metrics, "time_taken")
 	require.NotNil(t, timeTaken)
 
-	requestID := findMetric(metrics, "LLM_REQUEST_ID")
+	requestID := findMetric(metrics, "llm_request_id")
 	require.NotNil(t, requestID)
 	assert.Equal(t, "99", requestID.Value)
 
-	status := findMetric(metrics, "STATUS")
+	status := findMetric(metrics, "status")
 	require.NotNil(t, status)
 	assert.Equal(t, "FAILED", status.Value, "initial status should be FAILED")
 }
@@ -51,7 +51,7 @@ func TestOnSuccess_UpdatesStatus(t *testing.T) {
 	mb.OnStart().OnSuccess()
 
 	metrics := mb.Build()
-	status := findMetric(metrics, "STATUS")
+	status := findMetric(metrics, "status")
 	require.NotNil(t, status)
 	assert.Equal(t, "SUCCESS", status.Value)
 }
@@ -61,7 +61,7 @@ func TestOnFailure_KeepsFailedStatus(t *testing.T) {
 	mb.OnStart().OnFailure()
 
 	metrics := mb.Build()
-	status := findMetric(metrics, "STATUS")
+	status := findMetric(metrics, "status")
 	require.NotNil(t, status)
 	assert.Equal(t, "FAILED", status.Value)
 }
@@ -106,7 +106,7 @@ func TestChaining(t *testing.T) {
 		Build()
 
 	assert.Len(t, metrics, 4)
-	status := findMetric(metrics, "STATUS")
+	status := findMetric(metrics, "status")
 	require.NotNil(t, status)
 	assert.Equal(t, "SUCCESS", status.Value)
 }

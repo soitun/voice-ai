@@ -1,18 +1,11 @@
 import { FC, useState, useCallback } from 'react';
-import { ArrowRight, Plus, Trash2 } from 'lucide-react';
 import { cn } from '@/utils';
-import { FormLabel } from '@/app/components/form-label';
-import { FieldSet } from '@/app/components/form/fieldset';
-import { Input } from '@/app/components/form/input';
-import { Select } from '@/app/components/form/select';
-import { Textarea } from '@/app/components/form/textarea';
 import { CodeEditor } from '@/app/components/form/editor/code-editor';
-import { InputGroup } from '@/app/components/input-group';
 import { DocNoticeBlock } from '@/app/components/container/message/notice-block/doc-notice-block';
-import {
-  IBlueBorderButton,
-  IRedBorderButton,
-} from '@/app/components/form/button';
+import { Add, TrashCan, ArrowRight } from '@carbon/icons-react';
+import { TertiaryButton } from '@/app/components/carbon/button';
+import { Stack, TextInput, TextArea } from '@/app/components/carbon/form';
+import { Select, SelectItem, Button } from '@carbon/react';
 import {
   ToolDefinition,
   ParameterType,
@@ -37,9 +30,7 @@ export const DocumentationNotice: FC<DocumentationNoticeProps> = ({
   title = 'Know more about knowledge tool definition that can be supported by rapida',
   documentationUrl,
 }) => (
-  <div className="-mx-6 -mt-6">
-    <DocNoticeBlock docUrl={documentationUrl}>{title}</DocNoticeBlock>
-  </div>
+  <DocNoticeBlock docUrl={documentationUrl}>{title}</DocNoticeBlock>
 );
 
 // ============================================================================
@@ -61,55 +52,44 @@ export const ToolDefinitionForm: FC<ToolDefinitionFormProps> = ({
   documentationUrl = 'https://doc.rapida.ai/assistants/overview',
   documentationTitle,
 }) => {
-  const handleChange = <K extends keyof ToolDefinition>(
-    field: K,
-    value: ToolDefinition[K],
-  ) => {
-    onChangeToolDefinition({ ...toolDefinition, [field]: value });
-  };
-
   return (
-    <InputGroup title="Tool Definition">
+    <div>
       <DocumentationNotice
         title={documentationTitle}
         documentationUrl={documentationUrl}
       />
-      <div className={cn('mt-4 flex flex-col gap-8 max-w-6xl')}>
-        <FieldSet className="relative w-full">
-          <FormLabel>Name</FormLabel>
-          <Input
+      <div className="px-6 pb-6 mt-4 max-w-6xl">
+        <Stack gap={6}>
+          <TextInput
+            id="tool-def-name"
+            labelText="Name"
             value={toolDefinition.name}
-            onChange={e => handleChange('name', e.target.value)}
+            onChange={e =>
+              onChangeToolDefinition({ ...toolDefinition, name: e.target.value })
+            }
             placeholder="Enter tool name"
-            className={cn('bg-light-background', inputClass)}
           />
-        </FieldSet>
-
-        <FieldSet className="relative w-full">
-          <FormLabel>Description</FormLabel>
-          <Textarea
+          <TextArea
+            id="tool-def-description"
+            labelText="Description"
             value={toolDefinition.description}
-            onChange={e => handleChange('description', e.target.value)}
-            className={cn('bg-light-background', inputClass)}
+            onChange={e =>
+              onChangeToolDefinition({ ...toolDefinition, description: e.target.value })
+            }
             placeholder="A tool description or definition of when this tool will get triggered."
             rows={2}
           />
-        </FieldSet>
-
-        <FieldSet className="relative w-full">
-          <FormLabel>Parameters</FormLabel>
           <CodeEditor
-            placeholder="Provide a tool parameters that will be passed to llm"
+            labelText="Parameters"
+            placeholder="Provide tool parameters as JSON that will be passed to LLM"
             value={toolDefinition.parameters}
-            onChange={value => handleChange('parameters', value)}
-            className={cn(
-              'min-h-40 max-h-dvh bg-light-background dark:bg-gray-950',
-              inputClass,
-            )}
+            onChange={value =>
+              onChangeToolDefinition({ ...toolDefinition, parameters: value })
+            }
           />
-        </FieldSet>
+        </Stack>
       </div>
-    </InputGroup>
+    </div>
   );
 };
 
@@ -130,127 +110,53 @@ export const TypeKeySelector: FC<TypeKeySelectorProps> = ({
   onChange,
   inputClass,
 }) => {
-  const selectClassName = cn('bg-light-background border-none', inputClass);
+  const options = (() => {
+    switch (type) {
+      case 'assistant': return ASSISTANT_KEY_OPTIONS;
+      case 'conversation': return CONVERSATION_KEY_OPTIONS;
+      case 'tool': return TOOL_KEY_OPTIONS;
+      default: return null;
+    }
+  })();
 
-  switch (type) {
-    case 'assistant':
-      return (
-        <Select
-          value={value}
-          onChange={e => onChange(e.target.value)}
-          className={selectClassName}
-          options={[...ASSISTANT_KEY_OPTIONS]}
-        />
-      );
-    case 'conversation':
-      return (
-        <Select
-          value={value}
-          onChange={e => onChange(e.target.value)}
-          className={selectClassName}
-          options={[...CONVERSATION_KEY_OPTIONS]}
-        />
-      );
-    case 'tool':
-      return (
-        <Select
-          value={value}
-          onChange={e => onChange(e.target.value)}
-          className={selectClassName}
-          options={[...TOOL_KEY_OPTIONS]}
-        />
-      );
-    default:
-      return (
-        <Input
-          value={value}
-          onChange={e => onChange(e.target.value)}
-          placeholder="Key"
-          className={cn('bg-light-background w-full border-none', inputClass)}
-        />
-      );
-  }
-};
-
-// ============================================================================
-// Parameter Row
-// ============================================================================
-
-interface ParameterRowProps {
-  type: ParameterType;
-  paramKey: string;
-  value: string;
-  inputClass?: string;
-  typeOptions: Array<{ name: string; value: string }>;
-  onTypeChange: (type: string) => void;
-  onKeyChange: (key: string) => void;
-  onValueChange: (value: string) => void;
-  onRemove: () => void;
-}
-
-export const ParameterRow: FC<ParameterRowProps> = ({
-  type,
-  paramKey,
-  value,
-  inputClass,
-  typeOptions,
-  onTypeChange,
-  onKeyChange,
-  onValueChange,
-  onRemove,
-}) => (
-  <div className="grid grid-cols-2 border-b border-gray-300 dark:border-gray-700">
-    <div className="flex col-span-1 items-center">
+  if (options) {
+    return (
       <Select
-        value={type}
-        onChange={e => onTypeChange(e.target.value)}
-        className={cn('bg-light-background border-none', inputClass)}
-        options={typeOptions}
-      />
-      <TypeKeySelector
-        type={type}
-        inputClass={inputClass}
-        value={paramKey}
-        onChange={onKeyChange}
-      />
-      <div
-        className={cn(
-          'bg-light-background dark:bg-gray-950 h-full flex items-center justify-center',
-          inputClass,
-        )}
-      >
-        <ArrowRight strokeWidth={1.5} className="w-4 h-4" />
-      </div>
-    </div>
-    <div className="col-span-1 flex">
-      <Input
+        id={`key-${type}-${value}`}
+        labelText=""
+        hideLabel
         value={value}
-        onChange={e => onValueChange(e.target.value)}
-        placeholder="Value"
-        className={cn('bg-light-background w-full border-none', inputClass)}
-      />
-      <IRedBorderButton
-        className="border-none outline-hidden h-10"
-        onClick={onRemove}
-        type="button"
+        onChange={e => onChange(e.target.value)}
+        className={cn('flex-1', inputClass)}
       >
-        <Trash2 className="w-4 h-4" strokeWidth={1.5} />
-      </IRedBorderButton>
-    </div>
-  </div>
-);
+        {options.map(opt => (
+          <SelectItem key={opt.value} value={opt.value} text={opt.name} />
+        ))}
+      </Select>
+    );
+  }
+
+  return (
+    <TextInput
+      id={`key-custom-${value}`}
+      labelText=""
+      hideLabel
+      value={value}
+      onChange={e => onChange(e.target.value)}
+      placeholder="Key"
+      size="md"
+    />
+  );
+};
 
 // ============================================================================
 // Parameter Editor
 // ============================================================================
 
 interface ParameterEditorProps {
-  /** JSON-serialised key-value map, e.g. '{"assistant.name":"Alice"}' */
   value: string;
   onChange: (value: string) => void;
-  /** Overrides the default full PARAMETER_TYPE_OPTIONS list */
   typeOptions?: Array<{ name: string; value: string }>;
-  /** Type prefix used for newly-added rows (default: 'assistant') */
   defaultNewType?: string;
   inputClass?: string;
 }
@@ -260,7 +166,6 @@ export const ParameterEditor: FC<ParameterEditorProps> = ({
   onChange,
   typeOptions = [...PARAMETER_TYPE_OPTIONS],
   defaultNewType = 'assistant',
-  inputClass,
 }) => {
   const [params, setParams] = useState<KeyValueParameter[]>(() =>
     parseJsonParameters(value),
@@ -314,34 +219,57 @@ export const ParameterEditor: FC<ParameterEditorProps> = ({
   }, [params, commit, defaultNewType]);
 
   return (
-    <FieldSet>
-      <FormLabel>Parameters ({params.length})</FormLabel>
-      <div className="text-sm grid w-full">
-        {params.map(({ key, value: val }, index) => {
-          const [type, paramKey] = key.split('.');
-          return (
-            <ParameterRow
-              key={index}
-              type={type as ParameterType}
-              paramKey={paramKey}
-              value={val}
-              inputClass={inputClass}
-              typeOptions={typeOptions}
-              onTypeChange={newType => handleTypeChange(index, newType)}
-              onKeyChange={newKey => handleKeyChange(index, newKey)}
-              onValueChange={newValue => handleValueChange(index, newValue)}
-              onRemove={() => handleRemove(index)}
-            />
-          );
-        })}
+    <div>
+      <p className="text-xs font-medium mb-2">Mapping ({params.length})</p>
+      <table className="w-full border-collapse border border-gray-200 dark:border-gray-700 text-sm [&_input]:!border-none [&_.cds--text-input]:!border-none [&_.cds--text-input]:!outline-none [&_.cds--select-input]:!border-none [&_.cds--form-item]:!m-0">
+        <thead>
+          <tr className="bg-gray-50 dark:bg-gray-900">
+            <th className="text-left text-xs font-medium text-gray-500 dark:text-gray-400 px-3 py-2 border-b border-r border-gray-200 dark:border-gray-700 w-1/4">Type</th>
+            <th className="text-left text-xs font-medium text-gray-500 dark:text-gray-400 px-3 py-2 border-b border-r border-gray-200 dark:border-gray-700 w-1/4">Key</th>
+            <th className="border-b border-r border-gray-200 dark:border-gray-700 w-8" />
+            <th className="text-left text-xs font-medium text-gray-500 dark:text-gray-400 px-3 py-2 border-b border-r border-gray-200 dark:border-gray-700 w-1/4">Value</th>
+            <th className="border-b border-gray-200 dark:border-gray-700 w-8" />
+          </tr>
+        </thead>
+        <tbody>
+          {params.map(({ key, value: val }, index) => {
+            const [type, pk] = key.split('.');
+            return (
+              <tr key={index} className="border-b border-gray-200 dark:border-gray-700 last:border-b-0">
+                <td className="border-r border-gray-200 dark:border-gray-700 p-0">
+                  <Select id={`param-type-${index}`} labelText="" hideLabel value={type} onChange={e => handleTypeChange(index, e.target.value)} size="md">
+                    {typeOptions.map(opt => (
+                      <SelectItem key={opt.value} value={opt.value} text={opt.name} />
+                    ))}
+                  </Select>
+                </td>
+                <td className="border-r border-gray-200 dark:border-gray-700 p-0">
+                  <TypeKeySelector type={type as ParameterType} value={pk} onChange={newKey => handleKeyChange(index, newKey)} />
+                </td>
+                <td className="border-r border-gray-200 dark:border-gray-700 p-0 text-center text-gray-400">
+                  <ArrowRight size={16} className="mx-auto" />
+                </td>
+                <td className="border-r border-gray-200 dark:border-gray-700 p-0">
+                  <TextInput id={`param-val-${index}`} labelText="" hideLabel value={val} onChange={e => handleValueChange(index, e.target.value)} placeholder="Value" size="md" />
+                </td>
+                <td className="p-0 text-center">
+                  <Button hasIconOnly renderIcon={TrashCan} iconDescription="Remove" kind="danger--ghost" size="sm" onClick={() => handleRemove(index)} />
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+      <div className="pt-4">
+        <TertiaryButton
+          size="md"
+          renderIcon={Add}
+          onClick={handleAdd}
+          className="!w-full !max-w-none"
+        >
+          Add parameter
+        </TertiaryButton>
       </div>
-      <IBlueBorderButton
-        onClick={handleAdd}
-        className="justify-between space-x-8"
-      >
-        <span>Add parameter</span>
-        <Plus className="h-4 w-4 ml-1.5" />
-      </IBlueBorderButton>
-    </FieldSet>
+    </div>
   );
 };

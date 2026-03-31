@@ -22,6 +22,7 @@ import (
 
 	internal_type "github.com/rapidaai/api/assistant-api/internal/type"
 	"github.com/rapidaai/pkg/commons"
+	type_enums "github.com/rapidaai/pkg/types/enums"
 	"github.com/rapidaai/pkg/utils"
 	"github.com/rapidaai/protos"
 )
@@ -31,10 +32,11 @@ type awsSTT struct {
 	ctx       context.Context
 	ctxCancel context.CancelFunc
 
-	mu            sync.Mutex
-	contextId     string
-	audioBuffer   bytes.Buffer
-	startedAtNano atomic.Int64
+	mu             sync.Mutex
+	contextId      string
+	sttConnectedAt time.Time
+	audioBuffer    bytes.Buffer
+	startedAtNano  atomic.Int64
 
 	logger   commons.Logger
 	onPacket func(pkt ...internal_type.Packet) error
@@ -64,8 +66,13 @@ func (*awsSTT) Name() string {
 
 func (st *awsSTT) Initialize() error {
 	start := time.Now()
+	st.mu.Lock()
+	st.sttConnectedAt = time.Now()
+	ctxID := st.contextId
+	st.mu.Unlock()
 	st.onPacket(internal_type.ConversationEventPacket{
-		Name: "stt",
+		ContextID: ctxID,
+		Name:      "stt",
 		Data: map[string]string{
 			"type":     "initialized",
 			"provider": st.Name(),
@@ -76,20 +83,32 @@ func (st *awsSTT) Initialize() error {
 	return nil
 }
 
-func (st *awsSTT) Transform(ctx context.Context, in internal_type.UserAudioPacket) error {
-	st.startedAtNano.CompareAndSwap(0, time.Now().UnixNano())
+func (st *awsSTT) Transform(ctx context.Context, in internal_type.Packet) error {
+	switch pkt := in.(type) {
+	case internal_type.TurnChangePacket:
+		st.mu.Lock()
+		st.contextId = pkt.ContextID
+		st.mu.Unlock()
+		return nil
+	case internal_type.InterruptionDetectedPacket:
+		if pkt.Source == internal_type.InterruptionSourceVad {
+			st.startedAtNano.Store(time.Now().UnixNano())
+		}
+		return nil
+	case internal_type.UserAudioReceivedPacket:
+		st.mu.Lock()
+		st.audioBuffer.Write(pkt.Audio)
+		audioData := make([]byte, st.audioBuffer.Len())
+		copy(audioData, st.audioBuffer.Bytes())
+		st.audioBuffer.Reset()
+		ctxId := st.contextId
+		st.mu.Unlock()
 
-	st.mu.Lock()
-	st.contextId = in.ContextID
-	st.audioBuffer.Write(in.Audio)
-	audioData := make([]byte, st.audioBuffer.Len())
-	copy(audioData, st.audioBuffer.Bytes())
-	st.audioBuffer.Reset()
-	ctxId := st.contextId
-	st.mu.Unlock()
-
-	go st.transcribe(audioData, ctxId)
-	return nil
+		go st.transcribe(audioData, ctxId)
+		return nil
+	default:
+		return nil
+	}
 }
 
 func (st *awsSTT) transcribe(audioData []byte, ctxId string) {
@@ -155,29 +174,29 @@ func (st *awsSTT) transcribe(audioData []byte, ctxId string) {
 	}
 
 	if transcript != "" {
-		startedNano := st.startedAtNano.Load()
+		startedNano := st.startedAtNano.Swap(0)
 		if startedNano > 0 {
-			st.onPacket(internal_type.MessageMetricPacket{
+			st.onPacket(internal_type.UserMessageMetricPacket{
 				ContextID: ctxId,
 				Metrics: []*protos.Metric{{
 					Name:  "stt_latency_ms",
 					Value: fmt.Sprintf("%d", (time.Now().UnixNano()-startedNano)/int64(time.Millisecond)),
 				}},
 			})
-			st.startedAtNano.Store(0)
 		}
 
 		st.onPacket(
-			internal_type.InterruptionPacket{ContextID: ctxId, Source: "word"},
+			internal_type.InterruptionDetectedPacket{ContextID: ctxId, Source: "word"},
 			internal_type.SpeechToTextPacket{
 				ContextID: ctxId,
 				Script:    transcript,
 				Interim:   false,
 			},
 			internal_type.ConversationEventPacket{
-				Name: "stt",
-				Data: map[string]string{"type": "completed"},
-				Time: time.Now(),
+				ContextID: ctxId,
+				Name:      "stt",
+				Data:      map[string]string{"type": "completed"},
+				Time:      time.Now(),
 			},
 		)
 	}
@@ -230,5 +249,32 @@ func getSignatureKey(secret, dateStamp, region, service string) []byte {
 
 func (st *awsSTT) Close(ctx context.Context) error {
 	st.ctxCancel()
+	st.mu.Lock()
+	ctxID := st.contextId
+	connectedAt := st.sttConnectedAt
+	st.sttConnectedAt = time.Time{}
+	st.mu.Unlock()
+
+	if !connectedAt.IsZero() {
+		st.onPacket(
+			internal_type.ConversationEventPacket{
+				ContextID: ctxID,
+				Name:      "stt",
+				Data: map[string]string{
+					"type":     "closed",
+					"provider": st.Name(),
+				},
+				Time: time.Now(),
+			},
+			internal_type.ConversationMetricPacket{
+				ContextID: 0,
+				Metrics: []*protos.Metric{{
+					Name:        type_enums.CONVERSATION_STT_DURATION.String(),
+					Value:       fmt.Sprintf("%d", time.Since(connectedAt).Nanoseconds()),
+					Description: "Total STT connection duration in nanoseconds",
+				}},
+			},
+		)
+	}
 	return nil
 }

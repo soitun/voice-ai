@@ -3,9 +3,10 @@ import { Helmet } from '@/app/components/helmet';
 import { useRapidaStore } from '@/hooks';
 import { TabForm } from '@/app/components/form/tab-form';
 import {
-  IBlueBGArrowButton,
-  ICancelButton,
-} from '@/app/components/form/button';
+  PrimaryButton,
+  SecondaryButton,
+} from '@/app/components/carbon/button';
+import { ButtonSet } from '@carbon/react';
 import {
   Assistant,
   ConnectionConfig,
@@ -20,10 +21,7 @@ import { useCurrentCredential } from '@/hooks/use-credential';
 import { useAllProviderCredentials } from '@/hooks/use-model';
 import { ConfigPrompt } from '@/app/components/configuration/config-prompt';
 import { randomMeaningfullName, randomString } from '@/utils';
-import { FieldSet } from '@/app/components/form/fieldset';
-import { FormLabel } from '@/app/components/form-label';
-import { Input } from '@/app/components/form/input';
-import { Textarea } from '@/app/components/form/textarea';
+import { TextInput, TextArea, Stack } from '@/app/components/carbon/form';
 import { TagInput } from '@/app/components/form/tag-input';
 import { AssistantTag } from '@/app/components/form/tag-input/assistant-tags';
 import {
@@ -51,7 +49,6 @@ import { Struct } from 'google-protobuf/google/protobuf/struct_pb';
 import { connectionConfig } from '@/configs';
 import { ChatCompletePrompt } from '@/utils/prompt';
 import toast from 'react-hot-toast/headless';
-import { InputHelper } from '@/app/components/input-helper';
 import { ConfigureAssistantNextDialog } from '@/app/components/base/modal/assistant-configure-next-modal';
 import { SectionDivider } from '@/app/components/blocks/section-divider';
 import { CornerBorderOverlay } from '@/app/components/base/corner-border';
@@ -465,9 +462,19 @@ export function CreateAssistantPage() {
                   {/* Prompt template section */}
                   <div className="flex flex-col gap-6">
                     <SectionDivider label="Prompt Template" />
+                    <DocNoticeBlock
+                      docUrl="https://doc.rapida.ai/assistants/prompt-templating"
+                      tone="blue"
+                    >
+                      Prompt variables and system arguments are resolved at
+                      runtime. Read the prompt templating guide before
+                      finalizing your instruction.
+                    </DocNoticeBlock>
                     <ConfigPrompt
                       instanceId={randomString(10)}
                       existingPrompt={template}
+                      showRuntimeReplacementHint
+                      enableReservedVariableSuggestions
                       onChange={prompt => setTemplate(prompt)}
                     />
                   </div>
@@ -475,22 +482,21 @@ export function CreateAssistantPage() {
               </>
             ),
             actions: [
-              <ICancelButton
-                className="w-full h-full"
-                onClick={() => showDialog(goBack)}
-              >
-                Cancel
-              </ICancelButton>,
-              <IBlueBGArrowButton
-                type="button"
-                isLoading={loading}
-                className="w-full h-full"
-                onClick={() => {
-                  if (validateInstruction()) setActiveTab('tools');
-                }}
-              >
-                Continue
-              </IBlueBGArrowButton>,
+              <ButtonSet className="!w-full [&>button]:!flex-1 [&>button]:!max-w-none">
+                <SecondaryButton size="lg"
+                  onClick={() => showDialog(goBack)}
+                >
+                  Cancel
+                </SecondaryButton>
+                <PrimaryButton size="lg"
+                  isLoading={loading}
+                  onClick={() => {
+                    if (validateInstruction()) setActiveTab('tools');
+                  }}
+                >
+                  Continue
+                </PrimaryButton>
+              </ButtonSet>,
             ],
           },
           {
@@ -499,28 +505,27 @@ export function CreateAssistantPage() {
             description:
               'Let your assistant work with different tools on behalf of you.',
             actions: [
-              <ICancelButton
-                className="w-full h-full"
-                onClick={() => showDialog(goBack)}
-              >
-                Cancel
-              </ICancelButton>,
-              <IBlueBGArrowButton
-                type="button"
-                isLoading={loading}
-                className="w-full h-full"
-                onClick={() => {
-                  if (tools.length === 0) {
-                    setTools([]);
-                    setErrorMessage('');
-                    setActiveTab('define-assistant');
-                    return;
-                  }
-                  if (validateTool()) setActiveTab('define-assistant');
-                }}
-              >
-                {tools.length === 0 ? 'Skip for now' : 'Continue'}
-              </IBlueBGArrowButton>,
+              <ButtonSet className="!w-full [&>button]:!flex-1 [&>button]:!max-w-none">
+                <SecondaryButton size="lg"
+                  onClick={() => showDialog(goBack)}
+                >
+                  Cancel
+                </SecondaryButton>
+                <PrimaryButton size="lg"
+                  isLoading={loading}
+                  onClick={() => {
+                    if (tools.length === 0) {
+                      setTools([]);
+                      setErrorMessage('');
+                      setActiveTab('define-assistant');
+                      return;
+                    }
+                    if (validateTool()) setActiveTab('define-assistant');
+                  }}
+                >
+                  {tools.length === 0 ? 'Skip for now' : 'Continue'}
+                </PrimaryButton>
+              </ButtonSet>,
             ],
             body: (
               <div className="relative flex flex-col flex-1">
@@ -544,7 +549,7 @@ export function CreateAssistantPage() {
                 </DocNoticeBlock>
                 <div className="overflow-auto flex flex-col flex-1">
                   {tools.length > 0 ? (
-                    <section className="grid content-start grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 grow shrink-0 m-4">
+                    <section className="grid content-start grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 grow shrink-0 m-4">
                       {tools.map((itm, idx) => {
                         const isMCP = itm.buildinToolConfig.code === 'mcp';
                         const toolMeta = BUILDIN_TOOLS.find(
@@ -657,83 +662,49 @@ export function CreateAssistantPage() {
             description:
               'Provide the name, a brief description, and relevant tags for your assistant to help identify and categorize it.',
             actions: [
-              <ICancelButton
-                className="w-full h-full"
-                onClick={() => showDialog(goBack)}
-              >
-                Cancel
-              </ICancelButton>,
-              <IBlueBGArrowButton
-                isLoading={loading}
-                type="button"
-                onClick={createAssistant}
-                className="w-full h-full"
-              >
-                Create assistant
-              </IBlueBGArrowButton>,
+              <ButtonSet className="!w-full [&>button]:!flex-1 [&>button]:!max-w-none">
+                <SecondaryButton size="lg"
+                  onClick={() => showDialog(goBack)}
+                >
+                  Cancel
+                </SecondaryButton>
+                <PrimaryButton size="lg"
+                  isLoading={loading}
+                  onClick={createAssistant}
+                >
+                  Create assistant
+                </PrimaryButton>
+              </ButtonSet>,
             ],
             body: (
-              <div className="px-8 pt-8 pb-8 max-w-2xl flex flex-col gap-10">
-                {/* Identity section */}
-                <div className="flex flex-col gap-6">
-                  <SectionDivider label="Identity" />
-
-                  <FieldSet>
-                    <FormLabel
-                      htmlFor="agent_name"
-                      className="text-xs tracking-wide uppercase"
-                    >
-                      Name{' '}
-                      <span className="text-red-500 ml-0.5 normal-case">*</span>
-                    </FormLabel>
-                    <Input
-                      name="agent_name"
-                      onChange={e => {
-                        setName(e.target.value);
-                      }}
-                      value={name}
-                      placeholder="e.g. customer-support-assistant"
-                    />
-                    <InputHelper>
-                      Provide a name that will appear in the assistant list and
-                      help identify it.
-                    </InputHelper>
-                  </FieldSet>
-
-                  <FieldSet>
-                    <FormLabel
-                      htmlFor="description"
-                      className="text-xs tracking-wide uppercase"
-                    >
-                      Description (Optional)
-                    </FormLabel>
-                    <Textarea
-                      row={4}
-                      value={description}
-                      placeholder="What's the purpose of the assistant?"
-                      onChange={t => setDescription(t.target.value)}
-                    />
-                    <InputHelper>
-                      Provide a description to explain what this assistant is
-                      about.
-                    </InputHelper>
-                  </FieldSet>
-                </div>
-
-                {/* Labels section */}
-                <div className="flex flex-col gap-6">
-                  <SectionDivider label="Labels" />
+              <div className="px-8 pt-8 pb-8 max-w-2xl">
+                <Stack gap={7}>
+                  <p className="text-[10px] font-semibold tracking-[0.12em] uppercase text-gray-500 dark:text-gray-400">Identity</p>
+                  <TextInput
+                    id="agent-name"
+                    labelText="Name *"
+                    value={name}
+                    onChange={e => setName(e.target.value)}
+                    placeholder="e.g. customer-support-assistant"
+                    helperText="Provide a name that will appear in the assistant list and help identify it."
+                  />
+                  <TextArea
+                    id="agent-description"
+                    labelText="Description (Optional)"
+                    value={description}
+                    onChange={e => setDescription(e.target.value)}
+                    placeholder="What's the purpose of the assistant?"
+                    rows={4}
+                    helperText="Provide a description to explain what this assistant is about."
+                  />
+                  <p className="text-[10px] font-semibold tracking-[0.12em] uppercase text-gray-500 dark:text-gray-400">Labels</p>
                   <TagInput
                     tags={tags}
                     addTag={onAddTag}
                     removeTag={onRemoveTag}
                     allTags={AssistantTag}
                   />
-                  <InputHelper>
-                    Tags help you organize and filter assistants across your
-                    workspace.
-                  </InputHelper>
-                </div>
+                </Stack>
               </div>
             ),
           },

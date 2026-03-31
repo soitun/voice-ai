@@ -213,7 +213,7 @@ func TestHandleResponse(t *testing.T) {
 			},
 			wantFunc: func(t *testing.T, pkts []internal_type.Packet) {
 				require.Len(t, pkts, 2)
-				ip, ok := pkts[0].(internal_type.InterruptionPacket)
+				ip, ok := pkts[0].(internal_type.InterruptionDetectedPacket)
 				require.True(t, ok)
 				assert.Equal(t, "ctx-1", ip.ContextID)
 				assert.Equal(t, internal_type.InterruptionSourceWord, ip.Source)
@@ -412,13 +412,13 @@ func TestStreamErrorReason(t *testing.T) {
 // Tests: Execute — 3 cases
 // =============================================================================
 
-func TestExecute_UserTextPacket(t *testing.T) {
+func TestExecute_UserTextReceivedPacket(t *testing.T) {
 	e := newTestExecutor()
 	talker := newMockTalker()
 	e.talker = talker
 	comm, collector := newTestComm()
 
-	err := e.Execute(context.Background(), comm, internal_type.UserTextPacket{
+	err := e.Execute(context.Background(), comm, internal_type.NormalizedUserTextPacket{
 		ContextID: "ctx-1",
 		Text:      "hello world",
 	})
@@ -441,24 +441,24 @@ func TestExecute_UserTextPacket(t *testing.T) {
 	assert.Equal(t, "hello world", msg.GetText())
 }
 
-func TestExecute_StaticPacket(t *testing.T) {
+func TestExecute_InjectMessagePacket(t *testing.T) {
 	e := newTestExecutor()
 	comm, collector := newTestComm()
 
-	err := e.Execute(context.Background(), comm, internal_type.StaticPacket{
+	err := e.Execute(context.Background(), comm, internal_type.InjectMessagePacket{
 		ContextID: "ctx-1",
 		Text:      "static text",
 	})
 
 	require.NoError(t, err)
-	assert.Empty(t, collector.all(), "StaticPacket should emit no packets")
+	assert.Empty(t, collector.all(), "InjectMessagePacket should emit no packets")
 }
 
 func TestExecute_UnsupportedPacket(t *testing.T) {
 	e := newTestExecutor()
 	comm, _ := newTestComm()
 
-	err := e.Execute(context.Background(), comm, internal_type.InterruptionPacket{ContextID: "x"})
+	err := e.Execute(context.Background(), comm, internal_type.EndOfSpeechPacket{ContextID: "x"})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "unsupported packet")
 }
@@ -704,14 +704,14 @@ func TestName(t *testing.T) {
 // Tests: Execute with send error
 // =============================================================================
 
-func TestExecute_UserTextPacket_SendError(t *testing.T) {
+func TestExecute_UserTextReceivedPacket_SendError(t *testing.T) {
 	e := newTestExecutor()
 	talker := newMockTalker()
 	talker.sendErr = fmt.Errorf("connection lost")
 	e.talker = talker
 	comm, _ := newTestComm()
 
-	err := e.Execute(context.Background(), comm, internal_type.UserTextPacket{
+	err := e.Execute(context.Background(), comm, internal_type.NormalizedUserTextPacket{
 		ContextID: "ctx-1",
 		Text:      "hello",
 	})
@@ -862,7 +862,7 @@ func TestExecute_AfterClose(t *testing.T) {
 	_ = e.Close(context.Background())
 
 	comm, _ := newTestComm()
-	err := e.Execute(context.Background(), comm, internal_type.UserTextPacket{
+	err := e.Execute(context.Background(), comm, internal_type.NormalizedUserTextPacket{
 		ContextID: "ctx-1",
 		Text:      "after close",
 	})
@@ -918,6 +918,34 @@ func TestHandleResponse_ErrorMessageFormat(t *testing.T) {
 	assert.Contains(t, errPkts[0].Error.Error(), "agentkit error 403: forbidden")
 }
 
+func TestHandleResponse_StaleContext_Dropped(t *testing.T) {
+	e := newTestExecutor()
+	e.currentID = "ctx-active"
+	comm, collector := newTestComm()
+
+	resp := &protos.TalkOutput{
+		Data: &protos.TalkOutput_Assistant{
+			Assistant: &protos.ConversationAssistantMessage{
+				Id:        "ctx-stale",
+				Completed: true,
+				Message:   &protos.ConversationAssistantMessage_Text{Text: "ignore"},
+			},
+		},
+	}
+	e.handleResponse(context.Background(), resp, comm)
+	assert.Empty(t, collector.all())
+}
+
+func TestExecute_InterruptionDetectedPacket_ClearsCurrentContext(t *testing.T) {
+	e := newTestExecutor()
+	e.currentID = "ctx-1"
+	comm, _ := newTestComm()
+
+	err := e.Execute(context.Background(), comm, internal_type.InterruptionDetectedPacket{ContextID: "ctx-1"})
+	require.NoError(t, err)
+	assert.Equal(t, "", e.currentID)
+}
+
 // =============================================================================
 // Tests: send error propagation from talker
 // =============================================================================
@@ -970,4 +998,458 @@ func TestConcurrency_ListenReadSendWrite(t *testing.T) {
 	wg.Wait()
 	cancel()
 	assert.Equal(t, int32(50), sendCount.Load())
+}
+
+// =============================================================================
+// End-to-End: full conversation flow
+// =============================================================================
+
+func TestE2E_FullConversationTurn(t *testing.T) {
+	e := newTestExecutor()
+	talker := newMockTalker()
+	e.talker = talker
+	comm, collector := newTestComm()
+
+	// 1. User sends a message
+	err := e.Execute(context.Background(), comm, internal_type.NormalizedUserTextPacket{
+		ContextID: "turn-1",
+		Text:      "What is Go?",
+	})
+	require.NoError(t, err)
+
+	// Verify: talker received the message, event was emitted
+	talker.mu.Lock()
+	require.Len(t, talker.sendCalls, 1)
+	assert.Equal(t, "What is Go?", talker.sendCalls[0].GetMessage().GetText())
+	talker.mu.Unlock()
+
+	evs := findPackets[internal_type.ConversationEventPacket](collector.all())
+	require.Len(t, evs, 1)
+	assert.Equal(t, "executing", evs[0].Data["type"])
+
+	// 2. Simulate streaming deltas from agent
+	e.handleResponse(context.Background(), &protos.TalkOutput{
+		Data: &protos.TalkOutput_Assistant{Assistant: &protos.ConversationAssistantMessage{
+			Id: "turn-1", Message: &protos.ConversationAssistantMessage_Text{Text: "Go is"},
+		}},
+	}, comm)
+	e.handleResponse(context.Background(), &protos.TalkOutput{
+		Data: &protos.TalkOutput_Assistant{Assistant: &protos.ConversationAssistantMessage{
+			Id: "turn-1", Message: &protos.ConversationAssistantMessage_Text{Text: " a language"},
+		}},
+	}, comm)
+
+	// 3. Final response
+	e.handleResponse(context.Background(), &protos.TalkOutput{
+		Data: &protos.TalkOutput_Assistant{Assistant: &protos.ConversationAssistantMessage{
+			Id: "turn-1", Completed: true,
+			Message: &protos.ConversationAssistantMessage_Text{Text: "Go is a language"},
+		}},
+	}, comm)
+
+	pkts := collector.all()
+	deltas := findPackets[internal_type.LLMResponseDeltaPacket](pkts)
+	dones := findPackets[internal_type.LLMResponseDonePacket](pkts)
+	assert.Len(t, deltas, 2)
+	assert.Equal(t, "Go is", deltas[0].Text)
+	assert.Equal(t, " a language", deltas[1].Text)
+	require.Len(t, dones, 1)
+	assert.Equal(t, "Go is a language", dones[0].Text)
+}
+
+func TestE2E_MultiTurnConversation(t *testing.T) {
+	e := newTestExecutor()
+	talker := newMockTalker()
+	e.talker = talker
+	comm, collector := newTestComm()
+
+	for turn := 1; turn <= 5; turn++ {
+		ctxID := fmt.Sprintf("turn-%d", turn)
+		_ = e.Execute(context.Background(), comm, internal_type.NormalizedUserTextPacket{
+			ContextID: ctxID, Text: fmt.Sprintf("msg-%d", turn),
+		})
+		e.handleResponse(context.Background(), &protos.TalkOutput{
+			Data: &protos.TalkOutput_Assistant{Assistant: &protos.ConversationAssistantMessage{
+				Id: ctxID, Completed: true,
+				Message: &protos.ConversationAssistantMessage_Text{Text: fmt.Sprintf("reply-%d", turn)},
+			}},
+		}, comm)
+	}
+
+	dones := findPackets[internal_type.LLMResponseDonePacket](collector.all())
+	assert.Len(t, dones, 5)
+	for i, d := range dones {
+		assert.Equal(t, fmt.Sprintf("reply-%d", i+1), d.Text)
+	}
+
+	talker.mu.Lock()
+	assert.Len(t, talker.sendCalls, 5)
+	talker.mu.Unlock()
+}
+
+func TestE2E_InterruptDuringStreaming(t *testing.T) {
+	e := newTestExecutor()
+	talker := newMockTalker()
+	e.talker = talker
+	comm, collector := newTestComm()
+
+	// User sends
+	_ = e.Execute(context.Background(), comm, internal_type.NormalizedUserTextPacket{
+		ContextID: "ctx-1", Text: "tell me a story",
+	})
+
+	// Delta arrives
+	e.handleResponse(context.Background(), &protos.TalkOutput{
+		Data: &protos.TalkOutput_Assistant{Assistant: &protos.ConversationAssistantMessage{
+			Id: "ctx-1", Message: &protos.ConversationAssistantMessage_Text{Text: "Once upon"},
+		}},
+	}, comm)
+
+	// Interrupt
+	_ = e.Execute(context.Background(), comm, internal_type.InterruptionDetectedPacket{ContextID: "ctx-1"})
+	assert.Equal(t, "", e.currentID)
+
+	// New context
+	_ = e.Execute(context.Background(), comm, internal_type.NormalizedUserTextPacket{
+		ContextID: "ctx-2", Text: "new topic",
+	})
+
+	// Stale delta from ctx-1 — rejected (currentID="ctx-2")
+	e.handleResponse(context.Background(), &protos.TalkOutput{
+		Data: &protos.TalkOutput_Assistant{Assistant: &protos.ConversationAssistantMessage{
+			Id: "ctx-1", Completed: true,
+			Message: &protos.ConversationAssistantMessage_Text{Text: "stale"},
+		}},
+	}, comm)
+
+	dones := findPackets[internal_type.LLMResponseDonePacket](collector.all())
+	assert.Empty(t, dones, "stale completed response should be dropped")
+}
+
+func TestE2E_ToolCallAndResult(t *testing.T) {
+	e := newTestExecutor()
+	comm, collector := newTestComm()
+	e.currentID = "ctx-1"
+
+	// Tool call
+	e.handleResponse(context.Background(), &protos.TalkOutput{
+		Data: &protos.TalkOutput_Tool{Tool: &protos.ConversationToolCall{
+			Id: "ctx-1", ToolId: "tool-1", Name: "get_weather",
+		}},
+	}, comm)
+
+	// Tool result
+	e.handleResponse(context.Background(), &protos.TalkOutput{
+		Data: &protos.TalkOutput_ToolResult{ToolResult: &protos.ConversationToolResult{
+			Id: "ctx-1", ToolId: "tool-1", Name: "get_weather", Success: true,
+		}},
+	}, comm)
+
+	// Final response after tool
+	e.handleResponse(context.Background(), &protos.TalkOutput{
+		Data: &protos.TalkOutput_Assistant{Assistant: &protos.ConversationAssistantMessage{
+			Id: "ctx-1", Completed: true,
+			Message: &protos.ConversationAssistantMessage_Text{Text: "It's 20C"},
+		}},
+	}, comm)
+
+	pkts := collector.all()
+	events := findPackets[internal_type.ConversationEventPacket](pkts)
+	toolEvents := make([]string, 0)
+	for _, ev := range events {
+		if ev.Name == "tool" {
+			toolEvents = append(toolEvents, ev.Data["type"])
+		}
+	}
+	assert.Equal(t, []string{"tool_call", "tool_result"}, toolEvents)
+
+	dones := findPackets[internal_type.LLMResponseDonePacket](pkts)
+	require.Len(t, dones, 1)
+	assert.Equal(t, "It's 20C", dones[0].Text)
+}
+
+func TestE2E_ErrorEndsConversation(t *testing.T) {
+	e := newTestExecutor()
+	comm, collector := newTestComm()
+
+	e.handleResponse(context.Background(), &protos.TalkOutput{
+		Data: &protos.TalkOutput_Error{Error: &protos.Error{
+			ErrorCode: 500, ErrorMessage: "agent crashed",
+		}},
+	}, comm)
+
+	pkts := collector.all()
+	errPkts := findPackets[internal_type.LLMErrorPacket](pkts)
+	dirs := findPackets[internal_type.DirectivePacket](pkts)
+	require.Len(t, errPkts, 1)
+	assert.Contains(t, errPkts[0].Error.Error(), "agent crashed")
+	require.Len(t, dirs, 1)
+	assert.Equal(t, protos.ConversationDirective_END_CONVERSATION, dirs[0].Directive)
+}
+
+func TestE2E_ListenProcessesAndExitsOnEOF(t *testing.T) {
+	e := newTestExecutor()
+	talker := newMockTalker()
+	e.talker = talker
+	comm, collector := newTestComm()
+
+	// Queue: delta, completed, EOF
+	talker.recvCh <- recvResult{out: &protos.TalkOutput{
+		Data: &protos.TalkOutput_Assistant{Assistant: &protos.ConversationAssistantMessage{
+			Id: "r1", Message: &protos.ConversationAssistantMessage_Text{Text: "chunk"},
+		}},
+	}}
+	talker.recvCh <- recvResult{out: &protos.TalkOutput{
+		Data: &protos.TalkOutput_Assistant{Assistant: &protos.ConversationAssistantMessage{
+			Id: "r1", Completed: true,
+			Message: &protos.ConversationAssistantMessage_Text{Text: "done"},
+		}},
+	}}
+	talker.recvCh <- recvResult{err: io.EOF}
+
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		e.listen(context.Background(), comm)
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(3 * time.Second):
+		t.Fatal("listen did not exit")
+	}
+
+	pkts := collector.all()
+	deltas := findPackets[internal_type.LLMResponseDeltaPacket](pkts)
+	dones := findPackets[internal_type.LLMResponseDonePacket](pkts)
+	dirs := findPackets[internal_type.DirectivePacket](pkts)
+	assert.Len(t, deltas, 1)
+	assert.Len(t, dones, 1)
+	assert.Len(t, dirs, 1)
+}
+
+// =============================================================================
+// Deadlock Detection (run with -timeout 10s and -race)
+// =============================================================================
+
+func TestDeadlock_ExecuteAndResponseConcurrent(t *testing.T) {
+	e := newTestExecutor()
+	talker := newMockTalker()
+	e.talker = talker
+	comm, _ := newTestComm()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	var wg sync.WaitGroup
+	wg.Add(2)
+
+	go func() {
+		defer wg.Done()
+		for i := 0; i < 50; i++ {
+			_ = e.Execute(ctx, comm, internal_type.NormalizedUserTextPacket{
+				ContextID: fmt.Sprintf("ctx-%d", i),
+				Text:      fmt.Sprintf("msg-%d", i),
+			})
+		}
+	}()
+
+	go func() {
+		defer wg.Done()
+		for i := 0; i < 50; i++ {
+			e.handleResponse(ctx, &protos.TalkOutput{
+				Data: &protos.TalkOutput_Assistant{Assistant: &protos.ConversationAssistantMessage{
+					Id: fmt.Sprintf("ctx-%d", i), Completed: true,
+					Message: &protos.ConversationAssistantMessage_Text{Text: "resp"},
+				}},
+			}, comm)
+		}
+	}()
+
+	done := make(chan struct{})
+	go func() { wg.Wait(); close(done) }()
+
+	select {
+	case <-done:
+	case <-ctx.Done():
+		t.Fatal("DEADLOCK: Execute + handleResponse timed out")
+	}
+}
+
+func TestDeadlock_ListenAndExecuteAndClose(t *testing.T) {
+	e := newTestExecutor()
+	talker := newMockTalker()
+	e.talker = talker
+	e.done = make(chan struct{})
+	comm, _ := newTestComm()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	var wg sync.WaitGroup
+	wg.Add(3)
+
+	// Listener
+	go func() {
+		defer close(e.done)
+		defer wg.Done()
+		e.listen(ctx, comm)
+	}()
+
+	// Execute
+	go func() {
+		defer wg.Done()
+		for i := 0; i < 20; i++ {
+			_ = e.Execute(ctx, comm, internal_type.NormalizedUserTextPacket{
+				ContextID: fmt.Sprintf("ctx-%d", i),
+				Text:      fmt.Sprintf("msg-%d", i),
+			})
+		}
+	}()
+
+	// Close (after brief delay, unblock listener)
+	go func() {
+		defer wg.Done()
+		time.Sleep(5 * time.Millisecond)
+		cancel() // cancel context to unblock listener
+		close(talker.recvCh)
+		time.Sleep(time.Millisecond)
+		// Reset done so Close doesn't wait on already-closed channel
+		e.mu.Lock()
+		e.done = nil
+		e.mu.Unlock()
+		_ = e.Close(context.Background())
+	}()
+
+	done := make(chan struct{})
+	go func() { wg.Wait(); close(done) }()
+
+	select {
+	case <-done:
+	case <-time.After(6 * time.Second):
+		t.Fatal("DEADLOCK: listen + Execute + Close timed out")
+	}
+}
+
+// =============================================================================
+// Concurrency: race detector stress tests (run with -race)
+// =============================================================================
+
+func TestConcurrency_ExecuteAndInterruptRace(t *testing.T) {
+	e := newTestExecutor()
+	talker := newMockTalker()
+	e.talker = talker
+	comm, _ := newTestComm()
+
+	var wg sync.WaitGroup
+	wg.Add(2)
+
+	go func() {
+		defer wg.Done()
+		for i := 0; i < 100; i++ {
+			_ = e.Execute(context.Background(), comm, internal_type.NormalizedUserTextPacket{
+				ContextID: fmt.Sprintf("ctx-%d", i),
+				Text:      fmt.Sprintf("msg-%d", i),
+			})
+		}
+	}()
+
+	go func() {
+		defer wg.Done()
+		for i := 0; i < 100; i++ {
+			_ = e.Execute(context.Background(), comm, internal_type.InterruptionDetectedPacket{
+				ContextID: fmt.Sprintf("ctx-%d", i),
+			})
+		}
+	}()
+
+	wg.Wait()
+}
+
+func TestConcurrency_ResponseAndInterruptRace(t *testing.T) {
+	e := newTestExecutor()
+	talker := newMockTalker()
+	e.talker = talker
+	comm, _ := newTestComm()
+
+	var wg sync.WaitGroup
+	wg.Add(3)
+
+	go func() {
+		defer wg.Done()
+		for i := 0; i < 100; i++ {
+			_ = e.Execute(context.Background(), comm, internal_type.NormalizedUserTextPacket{
+				ContextID: fmt.Sprintf("ctx-%d", i),
+				Text:      fmt.Sprintf("msg-%d", i),
+			})
+		}
+	}()
+
+	go func() {
+		defer wg.Done()
+		for i := 0; i < 100; i++ {
+			e.handleResponse(context.Background(), &protos.TalkOutput{
+				Data: &protos.TalkOutput_Assistant{Assistant: &protos.ConversationAssistantMessage{
+					Id:      fmt.Sprintf("ctx-%d", i),
+					Message: &protos.ConversationAssistantMessage_Text{Text: "resp"},
+				}},
+			}, comm)
+		}
+	}()
+
+	go func() {
+		defer wg.Done()
+		for i := 0; i < 100; i++ {
+			_ = e.Execute(context.Background(), comm, internal_type.InterruptionDetectedPacket{
+				ContextID: fmt.Sprintf("ctx-%d", i),
+			})
+		}
+	}()
+
+	wg.Wait()
+}
+
+// =============================================================================
+// Consistency
+// =============================================================================
+
+func TestConsistency_StaleContextDoesNotEmitPackets(t *testing.T) {
+	e := newTestExecutor()
+	comm, collector := newTestComm()
+
+	e.setCurrentContextID("ctx-active")
+
+	// Stale responses should not emit
+	staleTypes := []*protos.TalkOutput{
+		{Data: &protos.TalkOutput_Assistant{Assistant: &protos.ConversationAssistantMessage{
+			Id: "ctx-stale", Completed: true,
+			Message: &protos.ConversationAssistantMessage_Text{Text: "ignore"},
+		}}},
+		{Data: &protos.TalkOutput_Interruption{Interruption: &protos.ConversationInterruption{Id: "ctx-stale"}}},
+		{Data: &protos.TalkOutput_Tool{Tool: &protos.ConversationToolCall{Id: "ctx-stale"}}},
+		{Data: &protos.TalkOutput_ToolResult{ToolResult: &protos.ConversationToolResult{Id: "ctx-stale"}}},
+		{Data: &protos.TalkOutput_Directive{Directive: &protos.ConversationDirective{Id: "ctx-stale", Type: protos.ConversationDirective_END_CONVERSATION}}},
+	}
+
+	for _, resp := range staleTypes {
+		e.handleResponse(context.Background(), resp, comm)
+	}
+
+	assert.Empty(t, collector.all(), "all stale context responses should be dropped")
+}
+
+func TestConsistency_CloseResetsCurrentID(t *testing.T) {
+	e := newTestExecutor()
+	talker := newMockTalker()
+	e.talker = talker
+	e.done = make(chan struct{})
+	close(e.done)
+	e.currentID = "active"
+
+	_ = e.Close(context.Background())
+
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	assert.Equal(t, "", e.currentID)
+	assert.Nil(t, e.talker)
 }

@@ -1,66 +1,44 @@
 import React, { useCallback, useState } from 'react';
 import { Helmet } from '@/app/components/helmet';
-import { Input } from '@/app/components/form/input';
 import { ForgotPassword } from '@rapidaai/react';
 import { ForgotPasswordResponse } from '@rapidaai/react';
 import { useForm } from 'react-hook-form';
 import { useRapidaStore } from '@/hooks';
-import { ErrorMessage } from '@/app/components/form/error-message';
-import { IBlueBGArrowButton } from '@/app/components/form/button';
 import { ServiceError } from '@rapidaai/react';
-import { FieldSet } from '@/app/components/form/fieldset';
-import { FormLabel } from '@/app/components/form-label';
-import { FormActionHeading } from '@/app/components/heading/action-heading/form-action-heading';
 import { connectionConfig } from '@/configs';
-import { SuccessMessage } from '@/app/components/form/success-message';
+import { Stack, TextInput } from '@/app/components/carbon/form';
+import { PrimaryButton } from '@/app/components/carbon/button';
+import { Notification } from '@/app/components/carbon/notification';
+import { ArrowRight } from '@carbon/icons-react';
+import { Link } from '@carbon/react';
 
 export function ForgotPasswordPage() {
-  /**
-   * handling the form submission
-   */
   const { register, handleSubmit } = useForm();
-
-  /**
-   * loading
-   */
   const { loading, showLoader, hideLoader } = useRapidaStore();
-
-  /**
-   * error and success message
-   */
   const [error, setError] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
-
-  /**
-   * after sending email for forgot password
-   */
 
   const afterForgotPassword = useCallback(
     (err: ServiceError | null, fpr: ForgotPasswordResponse | null) => {
       hideLoader();
       if (err) {
-        setError('unable to process your request. please try again later');
+        setError('Unable to process your request. Please try again later.');
       }
       if (fpr?.getSuccess()) {
         setError('');
         setSuccessMessage(
           "Thanks! An email was sent that will ask you to click on a link to verify that you own this account. If you don't get the email, please contact support@rapida.ai.",
         );
-        //   return redirectToOnboarding();
       } else {
         let errorMessage = fpr?.getError();
         if (errorMessage) setError(errorMessage.getHumanmessage());
-        else
-          setError('Unable to process your request. please try again later.');
+        else setError('Unable to process your request. Please try again later.');
         return;
       }
     },
     [],
   );
-  /**
-   *
-   * @param data
-   */
+
   const onForgotPassword = data => {
     showLoader('overlay');
     ForgotPassword(connectionConfig, data.email, afterForgotPassword);
@@ -68,41 +46,43 @@ export function ForgotPasswordPage() {
 
   return (
     <>
-      <Helmet title="Forgot your password"></Helmet>
-      <FormActionHeading heading="Forgot Password"></FormActionHeading>
-      <form
-        className="flex flex-col gap-4 mt-6"
-        onSubmit={handleSubmit(onForgotPassword)}
-      >
-        <FieldSet>
-          <FormLabel>Email Address</FormLabel>
-          <Input
-            autoComplete="email"
+      <Helmet title="Forgot your password" />
+      <h2 className="text-2xl font-light tracking-tight">Forgot Password</h2>
+
+      <form className="mt-6" onSubmit={handleSubmit(onForgotPassword)}>
+        <Stack gap={5}>
+          <TextInput
+            id="forgot-email"
+            labelText="Email Address"
             type="email"
             required
+            autoComplete="email"
             disabled={loading}
-            className="bg-light-background"
             placeholder="eg: john@rapida.ai"
             {...register('email')}
-          ></Input>
-        </FieldSet>
-        <ErrorMessage message={error} />
-        <SuccessMessage message={successMessage} />
-        <IBlueBGArrowButton
-          type="submit"
-          className="w-full justify-between h-11"
-          isLoading={loading}
-        >
-          Send Email
-        </IBlueBGArrowButton>
+          />
+          {error && (
+            <Notification kind="error" title="Error" subtitle={error} />
+          )}
+          {successMessage && (
+            <Notification kind="success" title="Email sent" subtitle={successMessage} />
+          )}
+          <PrimaryButton
+            size="lg"
+            renderIcon={ArrowRight}
+            type="submit"
+            isLoading={loading}
+            className="!w-full !max-w-none !justify-between"
+          >
+            Send Email
+          </PrimaryButton>
+        </Stack>
       </form>
+
       <p className="mt-6 text-center">
-        <a
-          className="text-sm text-primary underline hover:text-primary/80"
-          href="/auth/signin"
-        >
+        <Link href="/auth/signin" className="text-sm">
           Back to sign in?
-        </a>
+        </Link>
       </p>
     </>
   );

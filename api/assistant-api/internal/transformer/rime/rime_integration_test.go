@@ -166,7 +166,7 @@ func TestRimeTTSInterruption(t *testing.T) {
 
 	collector.WaitForAudio(t, 15*time.Second)
 
-	require.NoError(t, tts.Transform(ctx, internal_type.InterruptionPacket{
+	require.NoError(t, tts.Transform(ctx, internal_type.InterruptionDetectedPacket{
 		ContextID: "rime-tts-interrupt", Source: internal_type.InterruptionSourceVad}))
 	time.Sleep(2 * time.Second)
 
@@ -245,7 +245,7 @@ func TestRimeTTSFlow_DeltaInterruptDeltaDone(t *testing.T) {
 	collector.WaitForAudio(t, 15*time.Second)
 
 	// Phase 2: interrupt
-	require.NoError(t, tts.Transform(ctx, internal_type.InterruptionPacket{
+	require.NoError(t, tts.Transform(ctx, internal_type.InterruptionDetectedPacket{
 		ContextID: "ctx-1", Source: internal_type.InterruptionSourceVad}))
 	time.Sleep(500 * time.Millisecond)
 	assert.Contains(t, ttsEventTypes(collector.EventPackets()), "interrupted")
@@ -290,7 +290,7 @@ func TestRimeTTSFlow_DeltaDoneInterrupt(t *testing.T) {
 	collector.WaitForTTSEnd(t, 15*time.Second)
 	assert.NotEmpty(t, collector.EndPackets())
 
-	err = tts.Transform(ctx, internal_type.InterruptionPacket{
+	err = tts.Transform(ctx, internal_type.InterruptionDetectedPacket{
 		ContextID: "ctx-late", Source: internal_type.InterruptionSourceVad})
 	require.NoError(t, err, "late interrupt should not error")
 	time.Sleep(1 * time.Second)
@@ -331,7 +331,7 @@ func TestRimeTTSFlow_MultipleInterrupts(t *testing.T) {
 		require.NoError(t, tts.Transform(ctx, internal_type.LLMResponseDonePacket{
 			ContextID: fmt.Sprintf("round-%d", round)}))
 		collector.WaitForAudio(t, 15*time.Second)
-		require.NoError(t, tts.Transform(ctx, internal_type.InterruptionPacket{
+		require.NoError(t, tts.Transform(ctx, internal_type.InterruptionDetectedPacket{
 			ContextID: fmt.Sprintf("round-%d", round),
 			Source:    internal_type.InterruptionSourceVad}))
 		time.Sleep(500 * time.Millisecond)
@@ -376,7 +376,7 @@ func TestRimeTTSFlow_DeltaInterruptNoComplete(t *testing.T) {
 		ContextID: "ctx-no-complete"}))
 	collector.WaitForAudio(t, 15*time.Second)
 
-	require.NoError(t, tts.Transform(ctx, internal_type.InterruptionPacket{
+	require.NoError(t, tts.Transform(ctx, internal_type.InterruptionDetectedPacket{
 		ContextID: "ctx-no-complete", Source: internal_type.InterruptionSourceVad}))
 	time.Sleep(1 * time.Second)
 	assert.Contains(t, ttsEventTypes(collector.EventPackets()), "interrupted")

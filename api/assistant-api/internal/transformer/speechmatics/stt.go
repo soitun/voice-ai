@@ -20,6 +20,7 @@ import (
 	speechmatics_internal "github.com/rapidaai/api/assistant-api/internal/transformer/speechmatics/internal"
 	internal_type "github.com/rapidaai/api/assistant-api/internal/type"
 	"github.com/rapidaai/pkg/commons"
+	type_enums "github.com/rapidaai/pkg/types/enums"
 	"github.com/rapidaai/pkg/utils"
 	"github.com/rapidaai/protos"
 )
@@ -29,10 +30,11 @@ type speechmaticsSTT struct {
 	ctx       context.Context
 	ctxCancel context.CancelFunc
 
-	mu            sync.Mutex
-	writeMu       sync.Mutex // serializes all WebSocket writes
-	contextId     string
-	startedAtNano atomic.Int64
+	mu             sync.Mutex
+	writeMu        sync.Mutex // serializes all WebSocket writes
+	contextId      string
+	sttConnectedAt time.Time
+	startedAtNano  atomic.Int64
 
 	logger     commons.Logger
 	connection *websocket.Conn
@@ -73,6 +75,7 @@ func (st *speechmaticsSTT) Initialize() error {
 
 	st.mu.Lock()
 	st.connection = conn
+	st.sttConnectedAt = time.Now()
 	st.mu.Unlock()
 
 	transcriptionConfig := map[string]interface{}{
@@ -110,8 +113,12 @@ func (st *speechmaticsSTT) Initialize() error {
 	}
 
 	go st.readLoop(conn)
+	st.mu.Lock()
+	ctxID := st.contextId
+	st.mu.Unlock()
 	st.onPacket(internal_type.ConversationEventPacket{
-		Name: "stt",
+		ContextID: ctxID,
+		Name:      "stt",
 		Data: map[string]string{
 			"type":     "initialized",
 			"provider": st.Name(),
@@ -188,53 +195,55 @@ func (st *speechmaticsSTT) readLoop(conn *websocket.Conn) {
 			transcript := response.Metadata.Transcript
 			if transcript != "" && ctxId != "" {
 				st.onPacket(
-					internal_type.InterruptionPacket{ContextID: ctxId, Source: "word"},
+					internal_type.InterruptionDetectedPacket{ContextID: ctxId, Source: "word"},
 					internal_type.SpeechToTextPacket{
 						ContextID: ctxId,
 						Script:    transcript,
 						Interim:   true,
 					},
 					internal_type.ConversationEventPacket{
-						Name: "stt",
-						Data: map[string]string{"type": "interim"},
-						Time: time.Now(),
+						ContextID: ctxId,
+						Name:      "stt",
+						Data:      map[string]string{"type": "interim"},
+						Time:      time.Now(),
 					},
 				)
 			}
 		case "AddTranscript":
 			transcript := response.Metadata.Transcript
 			if transcript != "" && ctxId != "" {
-				startedNano := st.startedAtNano.Load()
+				startedNano := st.startedAtNano.Swap(0)
 				if startedNano > 0 {
-					st.onPacket(internal_type.MessageMetricPacket{
+					st.onPacket(internal_type.UserMessageMetricPacket{
 						ContextID: ctxId,
 						Metrics: []*protos.Metric{{
 							Name:  "stt_latency_ms",
 							Value: fmt.Sprintf("%d", (time.Now().UnixNano()-startedNano)/int64(time.Millisecond)),
 						}},
 					})
-					st.startedAtNano.Store(0)
 				}
 				st.onPacket(
-					internal_type.InterruptionPacket{ContextID: ctxId, Source: "word"},
+					internal_type.InterruptionDetectedPacket{ContextID: ctxId, Source: "word"},
 					internal_type.SpeechToTextPacket{
 						ContextID: ctxId,
 						Script:    transcript,
 						Interim:   false,
 					},
 					internal_type.ConversationEventPacket{
-						Name: "stt",
-						Data: map[string]string{"type": "completed"},
-						Time: time.Now(),
+						ContextID: ctxId,
+						Name:      "stt",
+						Data:      map[string]string{"type": "completed"},
+						Time:      time.Now(),
 					},
 				)
 			}
 		case "Error":
 			st.logger.Errorf("speechmatics-stt: server error: %s", string(msg))
 			st.onPacket(internal_type.ConversationEventPacket{
-				Name: "stt",
-				Data: map[string]string{"type": "error"},
-				Time: time.Now(),
+				ContextID: ctxId,
+				Name:      "stt",
+				Data:      map[string]string{"type": "error"},
+				Time:      time.Now(),
 			})
 		case "AudioAdded", "EndOfTranscript", "Info":
 			// Acknowledged — no action needed.
@@ -244,32 +253,46 @@ func (st *speechmaticsSTT) readLoop(conn *websocket.Conn) {
 	}
 }
 
-func (st *speechmaticsSTT) Transform(ctx context.Context, in internal_type.UserAudioPacket) error {
-	st.startedAtNano.CompareAndSwap(0, time.Now().UnixNano())
+func (st *speechmaticsSTT) Transform(ctx context.Context, in internal_type.Packet) error {
+	switch pkt := in.(type) {
+	case internal_type.TurnChangePacket:
+		st.mu.Lock()
+		st.contextId = pkt.ContextID
+		st.mu.Unlock()
+		return nil
+	case internal_type.InterruptionDetectedPacket:
+		if pkt.Source == internal_type.InterruptionSourceVad {
+			st.startedAtNano.Store(time.Now().UnixNano())
+		}
+		return nil
+	case internal_type.UserAudioReceivedPacket:
+		st.mu.Lock()
+		conn := st.connection
+		st.mu.Unlock()
 
-	st.mu.Lock()
-	st.contextId = in.ContextID
-	conn := st.connection
-	st.mu.Unlock()
+		if conn == nil {
+			return fmt.Errorf("speechmatics-stt: websocket connection is not initialized")
+		}
 
-	if conn == nil {
-		return fmt.Errorf("speechmatics-stt: websocket connection is not initialized")
+		st.writeMu.Lock()
+		err := conn.WriteMessage(websocket.BinaryMessage, pkt.Audio)
+		st.writeMu.Unlock()
+		if err != nil {
+			st.logger.Errorf("speechmatics-stt: error sending audio: %v", err)
+			return err
+		}
+		return nil
+	default:
+		return nil
 	}
-
-	st.writeMu.Lock()
-	err := conn.WriteMessage(websocket.BinaryMessage, in.Audio)
-	st.writeMu.Unlock()
-	if err != nil {
-		st.logger.Errorf("speechmatics-stt: error sending audio: %v", err)
-		return err
-	}
-	return nil
 }
 
 func (st *speechmaticsSTT) Close(ctx context.Context) error {
 	st.ctxCancel()
 	st.mu.Lock()
-	defer st.mu.Unlock()
+	ctxID := st.contextId
+	connectedAt := st.sttConnectedAt
+	st.sttConnectedAt = time.Time{}
 
 	if st.connection != nil {
 		conn := st.connection
@@ -284,6 +307,29 @@ func (st *speechmaticsSTT) Close(ctx context.Context) error {
 		st.writeMu.Unlock()
 
 		conn.Close()
+	}
+	st.mu.Unlock()
+
+	if !connectedAt.IsZero() {
+		st.onPacket(
+			internal_type.ConversationEventPacket{
+				ContextID: ctxID,
+				Name:      "stt",
+				Data: map[string]string{
+					"type":     "closed",
+					"provider": st.Name(),
+				},
+				Time: time.Now(),
+			},
+			internal_type.ConversationMetricPacket{
+				ContextID: 0,
+				Metrics: []*protos.Metric{{
+					Name:        type_enums.CONVERSATION_STT_DURATION.String(),
+					Value:       fmt.Sprintf("%d", time.Since(connectedAt).Nanoseconds()),
+					Description: "Total STT connection duration in nanoseconds",
+				}},
+			},
+		)
 	}
 	return nil
 }

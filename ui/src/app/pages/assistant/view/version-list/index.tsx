@@ -1,32 +1,81 @@
 import { useAssistantProviderPageStore } from '@/hooks';
-import { useRapidaStore } from '@/hooks';
 import { useCredential } from '@/hooks/use-credential';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import toast from 'react-hot-toast/headless';
 import { Assistant, GetAllAssistantProviderResponse } from '@rapidaai/react';
-import { RevisionIndicator } from '@/app/components/indicators/revision';
 import { SectionLoader } from '@/app/components/loader/section-loader';
 import { TableSection } from '@/app/components/sections/table-section';
-import { ScrollableResizableTable } from '@/app/components/data-table';
-import { TableRow } from '@/app/components/base/tables/table-row';
-import { TableCell } from '@/app/components/base/tables/table-cell';
-import { AssistantProviderIndicator } from '@/app/components/indicators/assistant-provider';
-import { VersionIndicator } from '@/app/components/indicators/version';
-import { DateCell } from '@/app/components/base/tables/date-cell';
-import { NameCell } from '@/app/components/base/tables/name-cell';
+import { Pagination } from '@/app/components/carbon/pagination';
+import { toHumanReadableDateTime } from '@/utils/date';
+import {
+  Tag,
+  Button,
+  Table,
+  TableHead,
+  TableRow,
+  TableHeader,
+  TableBody,
+  TableCell,
+  TableToolbar,
+  TableToolbarContent,
+  TableToolbarSearch,
+  TableSelectRow,
+  TableSelectAll,
+  TableBatchActions,
+  TableBatchAction,
+  RadioButton,
+} from '@carbon/react';
+import { Copy, Checkmark, Rocket, Renew } from '@carbon/icons-react';
+import IconIndicator from '@carbon/react/es/components/IconIndicator';
 
 interface VersionProps {
   assistant: Assistant;
   onReload: () => void;
 }
 
+const headers = [
+  { key: 'version', header: 'Version' },
+  { key: 'type', header: 'Type' },
+  { key: 'description', header: 'Description' },
+  { key: 'status', header: 'Status' },
+  { key: 'createdBy', header: 'Created By' },
+  { key: 'createdDate', header: 'Created' },
+];
+
+function VersionId({ id }: { id: string }) {
+  const [copied, setCopied] = useState(false);
+  const version = `vrsn_${id}`;
+  const copy = () => {
+    navigator.clipboard.writeText(version);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+  return (
+    <span className="inline-flex items-center gap-1 font-mono text-xs text-gray-600 dark:text-gray-400">
+      {version}
+      <Button
+        hasIconOnly
+        renderIcon={copied ? Checkmark : Copy}
+        iconDescription="Copy"
+        kind="ghost"
+        size="sm"
+        onClick={copy}
+        className="!min-h-0 !p-1"
+      />
+    </span>
+  );
+}
+
 export function Version(props: VersionProps) {
   const [userId, token, projectId] = useCredential();
-  const rapidaContext = useRapidaStore();
   const assistantProviderAction = useAssistantProviderPageStore();
+  const [isFetching, setIsFetching] = useState(true);
+  const [deployingProviderId, setDeployingProviderId] = useState<string | null>(null);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [selectedVersionId, setSelectedVersionId] = useState<string | null>(null);
 
   useEffect(() => {
-    rapidaContext.showLoader();
+    setIsFetching(true);
     assistantProviderAction.onChangeAssistant(props.assistant);
     assistantProviderAction.getAssistantProviders(
       props.assistant.getId(),
@@ -34,11 +83,11 @@ export function Version(props: VersionProps) {
       token,
       userId,
       (err: string) => {
-        rapidaContext.hideLoader();
+        setIsFetching(false);
         toast.error(err);
       },
       data => {
-        rapidaContext.hideLoader();
+        setIsFetching(false);
       },
     );
   }, [
@@ -53,7 +102,7 @@ export function Version(props: VersionProps) {
     assistantProvider: string,
     assistantProviderId: string,
   ) => {
-    rapidaContext.showLoader('overlay');
+    setDeployingProviderId(assistantProviderId);
     assistantProviderAction.onReleaseVersion(
       assistantProvider,
       assistantProviderId,
@@ -61,20 +110,19 @@ export function Version(props: VersionProps) {
       token,
       userId,
       error => {
-        rapidaContext.hideLoader();
+        setDeployingProviderId(null);
         toast.error(error);
       },
       e => {
-        toast.success(
-          'New version of assistant has been deployed successfully.',
-        );
+        toast.success('New version of assistant has been deployed successfully.');
         assistantProviderAction.onChangeAssistant(e);
         props.onReload();
-        rapidaContext.hideLoader();
+        setDeployingProviderId(null);
       },
     );
   };
-  if (rapidaContext.loading) {
+
+  if (isFetching) {
     return (
       <div className="h-full flex flex-col items-center justify-center">
         <SectionLoader />
@@ -82,161 +130,187 @@ export function Version(props: VersionProps) {
     );
   }
 
+  const getProviderData = (apm: any) => {
+    const caseType = apm.getAssistantproviderCase();
+    const Cases = GetAllAssistantProviderResponse.AssistantProvider.AssistantproviderCase;
+
+    switch (caseType) {
+      case Cases.ASSISTANTPROVIDERMODEL: {
+        const m = apm.getAssistantprovidermodel();
+        return {
+          id: m?.getId()!,
+          type: 'LLM',
+          typeColor: 'blue' as const,
+          description: m?.getDescription() || 'Initial assistant version',
+          createdBy: m?.getCreateduser()?.getName() || '',
+          createdDate: m?.getCreateddate(),
+          deployType: 'MODEL',
+        };
+      }
+      case Cases.ASSISTANTPROVIDERAGENTKIT: {
+        const a = apm.getAssistantprovideragentkit();
+        return {
+          id: a?.getId()!,
+          type: 'AgentKit',
+          typeColor: 'purple' as const,
+          description: a?.getDescription() || 'Initial assistant version',
+          createdBy: a?.getCreateduser()?.getName() || '',
+          createdDate: a?.getCreateddate(),
+          deployType: 'AGENTKIT',
+        };
+      }
+      case Cases.ASSISTANTPROVIDERWEBSOCKET: {
+        const w = apm.getAssistantproviderwebsocket();
+        return {
+          id: w?.getId()!,
+          type: 'WebSocket',
+          typeColor: 'teal' as const,
+          description: w?.getDescription() || 'Initial assistant version',
+          createdBy: w?.getCreateduser()?.getName() || '',
+          createdDate: w?.getCreateddate(),
+          deployType: 'WEBSOCKET',
+        };
+      }
+      default:
+        return null;
+    }
+  };
+
+  const refresh = () => {
+    setIsFetching(true);
+    assistantProviderAction.getAssistantProviders(
+      props.assistant.getId(),
+      projectId,
+      token,
+      userId,
+      (err: string) => { setIsFetching(false); toast.error(err); },
+      () => { setIsFetching(false); },
+    );
+  };
+
+  const allRows = assistantProviderAction.assistantProviders
+    .map(apm => ({ apm, data: getProviderData(apm) }))
+    .filter(({ data }) => data !== null) as { apm: any; data: NonNullable<ReturnType<typeof getProviderData>> }[];
+
+  const filteredRows = searchTerm
+    ? allRows.filter(({ data }) =>
+        `vrsn_${data.id}`.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        data.type.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        data.description.toLowerCase().includes(searchTerm.toLowerCase()),
+      )
+    : allRows;
+
   return (
     <TableSection>
-      <ScrollableResizableTable
-        isActionable={false}
-        clms={assistantProviderAction.columns.filter(x => x.visible)}
-      >
-        {assistantProviderAction.assistantProviders.map((apm, idx) => {
-          switch (apm.getAssistantproviderCase()) {
-            case GetAllAssistantProviderResponse.AssistantProvider
-              .AssistantproviderCase.ASSISTANTPROVIDERMODEL:
-              return (
-                <TableRow key={idx} data-id={idx}>
-                  <TableCell>
-                    <VersionIndicator id={apm.getAssistantprovidermodel()?.getId()!} />
-                  </TableCell>
-                  <TableCell>
-                    <AssistantProviderIndicator provider="provider-model" />
-                  </TableCell>
-                  <TableCell>
-                    {apm.getAssistantprovidermodel()?.getDescription()
-                      ? apm.getAssistantprovidermodel()?.getDescription()
-                      : 'Initial assistant version'}
-                  </TableCell>
-                  <TableCell>
-                    <RevisionIndicator
-                      status={
-                        assistantProviderAction.assistant?.getAssistantproviderid() ===
-                        apm.getAssistantprovidermodel()?.getId()
-                          ? 'DEPLOYED'
-                          : 'NOT_DEPLOYED'
-                      }
-                      onClick={
-                        assistantProviderAction.assistant?.getAssistantproviderid() !==
-                        apm.getAssistantprovidermodel()?.getId()
-                          ? () =>
-                              deployRevision(
-                                'MODEL',
-                                apm.getAssistantprovidermodel()?.getId()!,
-                              )
-                          : undefined
-                      }
-                    />
-                  </TableCell>
-                  <NameCell data-id={apm.getAssistantprovidermodel()?.getId()}>
-                    {apm.getAssistantprovidermodel()?.getCreateduser() &&
-                      apm
-                        .getAssistantprovidermodel()
-                        ?.getCreateduser()
-                        ?.getName()!}
-                  </NameCell>
-                  <DateCell
-                    date={apm.getAssistantprovidermodel()?.getCreateddate()}
-                  />
-                </TableRow>
-              );
-            case GetAllAssistantProviderResponse.AssistantProvider
-              .AssistantproviderCase.ASSISTANTPROVIDERAGENTKIT:
-              return (
-                <TableRow key={idx} className="cursor-pointer" data-id={idx}>
-                  <TableCell>
-                    <VersionIndicator id={apm.getAssistantprovideragentkit()?.getId()!} />
-                  </TableCell>
-                  <TableCell>
-                    <AssistantProviderIndicator provider="agentkit" />
-                  </TableCell>
-                  <TableCell>
-                    {apm.getAssistantprovideragentkit()?.getDescription()
-                      ? apm.getAssistantprovideragentkit()?.getDescription()
-                      : 'Initial assistant version'}
-                  </TableCell>
-                  <TableCell>
-                    <RevisionIndicator
-                      status={
-                        assistantProviderAction.assistant?.getAssistantproviderid() ===
-                        apm.getAssistantprovideragentkit()?.getId()
-                          ? 'DEPLOYED'
-                          : 'NOT_DEPLOYED'
-                      }
-                      onClick={
-                        assistantProviderAction.assistant?.getAssistantproviderid() !==
-                        apm.getAssistantprovideragentkit()?.getId()
-                          ? () =>
-                              deployRevision(
-                                'AGENTKIT',
-                                apm.getAssistantprovideragentkit()?.getId()!,
-                              )
-                          : undefined
-                      }
-                    />
-                  </TableCell>
-                  <NameCell>
-                    {
-                      apm
-                        .getAssistantprovideragentkit()
-                        ?.getCreateduser()
-                        ?.getName()!
+      <TableToolbar>
+        <TableBatchActions
+          shouldShowBatchActions={!!selectedVersionId}
+          totalSelected={selectedVersionId ? 1 : 0}
+          onCancel={() => setSelectedVersionId(null)}
+          totalCount={filteredRows.length}
+        >
+          <TableBatchAction
+            renderIcon={Rocket}
+            kind="ghost"
+            onClick={() => {
+              const row = filteredRows.find(r => r.data.id === selectedVersionId);
+              if (row) {
+                deployRevision(row.data.deployType, row.data.id);
+                setSelectedVersionId(null);
+              }
+            }}
+          >
+            Deploy version
+          </TableBatchAction>
+        </TableBatchActions>
+        <TableToolbarContent>
+          <TableToolbarSearch
+            placeholder="Search versions..."
+            onChange={(e: any) => setSearchTerm(e.target?.value || '')}
+          />
+          <Button
+            hasIconOnly
+            renderIcon={Renew}
+            iconDescription="Refresh"
+            kind="ghost"
+            onClick={refresh}
+            tooltipPosition="bottom"
+          />
+        </TableToolbarContent>
+      </TableToolbar>
+      <Table>
+        <TableHead>
+          <TableRow>
+            <TableHeader className="!w-12" />
+            {headers.map(h => (
+              <TableHeader key={h.key}>{h.header}</TableHeader>
+            ))}
+          </TableRow>
+        </TableHead>
+        <TableBody>
+          {filteredRows.map(({ data }, idx) => {
+            const isCurrent =
+              assistantProviderAction.assistant?.getAssistantproviderid() === data.id;
+            const isDeploying = deployingProviderId === data.id;
+
+            return (
+              <TableRow
+                key={idx}
+                isSelected={selectedVersionId === data.id}
+                onClick={() => !isCurrent && setSelectedVersionId(selectedVersionId === data.id ? null : data.id)}
+                className={!isCurrent ? 'cursor-pointer' : ''}
+              >
+                <TableCell className="!w-12 !pr-0">
+                  <RadioButton
+                    id={`version-select-${data.id}`}
+                    name="version-select"
+                    labelText=""
+                    hideLabel
+                    checked={selectedVersionId === data.id}
+                    onClick={() =>
+                      setSelectedVersionId(
+                        selectedVersionId === data.id ? null : data.id,
+                      )
                     }
-                  </NameCell>
-                  <DateCell
-                    date={apm.getAssistantprovideragentkit()?.getCreateddate()}
-                  ></DateCell>
-                </TableRow>
-              );
-            case GetAllAssistantProviderResponse.AssistantProvider
-              .AssistantproviderCase.ASSISTANTPROVIDERWEBSOCKET:
-              return (
-                <TableRow key={idx}>
-                  <TableCell>
-                    <VersionIndicator id={apm.getAssistantproviderwebsocket()?.getId()!} />
-                  </TableCell>
-                  <TableCell>
-                    <AssistantProviderIndicator provider="websocket" />
-                  </TableCell>
-                  <TableCell>
-                    {apm.getAssistantproviderwebsocket()?.getDescription()
-                      ? apm.getAssistantproviderwebsocket()?.getDescription()
-                      : 'Initial assistant version'}
-                  </TableCell>
-                  <TableCell>
-                    <RevisionIndicator
-                      status={
-                        assistantProviderAction.assistant?.getAssistantproviderid() ===
-                        apm.getAssistantproviderwebsocket()?.getId()
-                          ? 'DEPLOYED'
-                          : 'NOT_DEPLOYED'
-                      }
-                      onClick={
-                        assistantProviderAction.assistant?.getAssistantproviderid() !==
-                        apm.getAssistantproviderwebsocket()?.getId()
-                          ? () =>
-                              deployRevision(
-                                'WEBSOCKET',
-                                apm.getAssistantproviderwebsocket()?.getId()!,
-                              )
-                          : undefined
-                      }
-                    />
-                  </TableCell>
-                  <NameCell>
-                    {apm.getAssistantproviderwebsocket()?.getCreateduser() &&
-                      apm
-                        .getAssistantproviderwebsocket()
-                        ?.getCreateduser()
-                        ?.getName()!}
-                  </NameCell>
-                  <DateCell
-                    date={apm.getAssistantproviderwebsocket()?.getCreateddate()}
-                  ></DateCell>
-                </TableRow>
-              );
-            default:
-              return null;
-          }
-        })}
-      </ScrollableResizableTable>
+                    disabled={isCurrent}
+                  />
+                </TableCell>
+                <TableCell>
+                  <VersionId id={data.id} />
+                </TableCell>
+                <TableCell>
+                  <Tag type={data.typeColor} size="sm">{data.type}</Tag>
+                </TableCell>
+                <TableCell>{data.description}</TableCell>
+                <TableCell>
+                  {isCurrent ? (
+                    <IconIndicator kind="succeeded" label="In use" size={16} />
+                  ) : isDeploying ? (
+                    <IconIndicator kind="in-progress" label="Deploying" size={16} />
+                  ) : (
+                    <IconIndicator kind="incomplete" label="Available" size={16} />
+                  )}
+                </TableCell>
+                <TableCell>{data.createdBy}</TableCell>
+                <TableCell>
+                  {data.createdDate && toHumanReadableDateTime(data.createdDate)}
+                </TableCell>
+              </TableRow>
+            );
+          })}
+        </TableBody>
+      </Table>
+      <Pagination
+        totalItems={assistantProviderAction.totalCount}
+        page={assistantProviderAction.page}
+        pageSize={assistantProviderAction.pageSize}
+        pageSizes={[10, 20, 50]}
+        onChange={({ page, pageSize }) => {
+          assistantProviderAction.setPage(page);
+          if (pageSize !== assistantProviderAction.pageSize)
+            assistantProviderAction.setPageSize(pageSize);
+        }}
+      />
     </TableSection>
   );
 }

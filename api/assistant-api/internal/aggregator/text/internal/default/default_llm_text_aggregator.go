@@ -69,7 +69,8 @@ const (
 // Thread safety: all mutable state is guarded by mu. The onPacket callback is
 // invoked outside the lock to prevent deadlocks with slow consumers.
 type textAggregator struct {
-	logger   commons.Logger
+	logger commons.Logger
+
 	onPacket func(context.Context, ...internal_type.Packet) error
 
 	closed bool

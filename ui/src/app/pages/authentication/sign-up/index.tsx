@@ -1,76 +1,49 @@
 import { useCallback, useContext, useEffect, useState } from 'react';
-import { FormActionHeading } from '@/app/components/heading/action-heading/form-action-heading';
 import { Helmet } from '@/app/components/helmet';
 import { SocialButtonGroup } from '@/app/components/form/button-group/SocialButtonGroup';
-import { IBlueBGArrowButton } from '@/app/components/form/button';
-import { Input } from '@/app/components/form/input';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { RegisterUser } from '@rapidaai/react';
 import { AuthenticateResponse } from '@rapidaai/react';
 import { useForm } from 'react-hook-form';
 import { useParams } from 'react-router-dom';
 import { useRapidaStore } from '@/hooks';
-import { ErrorMessage } from '@/app/components/form/error-message';
 import { ServiceError } from '@rapidaai/react';
 import { AuthContext } from '@/context/auth-context';
-import { FieldSet } from '@/app/components/form/fieldset';
-import { FormLabel } from '@/app/components/form-label';
 import { useWorkspace } from '@/workspace';
 import { connectionConfig } from '@/configs';
 import { useGlobalNavigation } from '@/hooks/use-global-navigator';
+import { Stack, TextInput } from '@/app/components/carbon/form';
+import { PrimaryButton } from '@/app/components/carbon/button';
+import { Notification } from '@/app/components/carbon/notification';
+import { ArrowRight } from '@carbon/icons-react';
+import { Link, PasswordInput } from '@carbon/react';
 
-/**
- * External state get passed
- */
 interface CustomizedState {
   email: string;
 }
 
 export function SignUpPage() {
-  /**
-   * setting up authentication after creation of user
-   */
   const workspace = useWorkspace();
   const { setAuthentication } = useContext(AuthContext);
   const location = useLocation();
   const locationState = location?.state as CustomizedState;
   const navigator = useGlobalNavigation();
-  /**
-   * loading context
-   */
   const { loading, showLoader, hideLoader } = useRapidaStore();
-
-  /**
-   * To naviagate to dashboard
-   */
   let navigate = useNavigate();
-
-  /**
-   * form controlling
-   */
   const { register, handleSubmit, setValue } = useForm();
 
-  /**
-   * what if email get passed from home page
-   */
   useEffect(() => {
     if (locationState?.email) setValue('email', locationState.email);
   }, [locationState]);
 
   const [error, setError] = useState('');
-
-  //   redirectinng when needed
   let { next } = useParams();
 
-  /**
-   * callback after registering user
-   */
   const afterRegisterUser = useCallback(
     (err: ServiceError | null, auth: AuthenticateResponse | null) => {
       hideLoader();
       if (auth?.getSuccess()) {
         let at = auth.getData();
-
         if (setAuthentication)
           setAuthentication(at, () => {
             if (next) return navigate(next);
@@ -79,8 +52,7 @@ export function SignUpPage() {
       } else {
         let errorMessage = auth?.getError();
         if (errorMessage) setError(errorMessage.getHumanmessage());
-        else
-          setError('Unable to process your request. please try again later.');
+        else setError('Unable to process your request. please try again later.');
         return;
       }
     },
@@ -98,31 +70,26 @@ export function SignUpPage() {
     );
   };
 
-  /**
-   * element
-   */
-
   if (!workspace.authentication.signUp.enable) {
     return (
       <div className="flex flex-1">
         <div className="max-w-md">
-          <div className="text-[32px] leading-10 text-gray-900 dark:text-gray-100">403</div>
-          <p className="text-[28px] leading-9 text-gray-900 dark:text-gray-100 mt-4">
+          <h1 className="text-3xl font-light tracking-tight">403</h1>
+          <p className="text-2xl font-light tracking-tight mt-4">
             Sign-up not enabled
           </p>
-          <p className="mb-8 mt-2 text-sm text-gray-500 dark:text-gray-500">
+          <p className="mb-8 mt-2 text-sm text-gray-500 dark:text-gray-400">
             Sign-up is currently disabled for this workspace. Please contact
             your administrator for assistance.
           </p>
-
-          <IBlueBGArrowButton
-            className="w-full justify-between h-11"
-            onClick={() => {
-              navigator.goTo('/');
-            }}
+          <PrimaryButton
+            size="lg"
+            renderIcon={ArrowRight}
+            onClick={() => navigator.goTo('/')}
+            className="!w-full !max-w-none !justify-between"
           >
             Go to signin
-          </IBlueBGArrowButton>
+          </PrimaryButton>
         </div>
       </div>
     );
@@ -130,93 +97,72 @@ export function SignUpPage() {
 
   return (
     <>
-      <Helmet title="Signing up to your account"></Helmet>
-      <FormActionHeading
-        heading="Sign up"
-        action={
-          <a
-            className="text-sm text-primary underline hover:text-primary/80"
-            href="/auth/signin"
-          >
-            I already have an account
-          </a>
-        }
-      ></FormActionHeading>
-      <form className="flex flex-col gap-4 mt-6" onSubmit={handleSubmit(onRegisterUser)}>
-        <FieldSet>
-          <FormLabel>Name</FormLabel>
-          <Input
-            autoComplete="name"
+      <Helmet title="Sign up to your account" />
+      <div className="flex justify-between items-baseline">
+        <h2 className="text-2xl font-light tracking-tight">Sign up</h2>
+        <Link href="/auth/signin" className="text-sm">
+          I already have an account
+        </Link>
+      </div>
+
+      <form className="mt-6" onSubmit={handleSubmit(onRegisterUser)}>
+        <Stack gap={5}>
+          <TextInput
+            id="signup-name"
+            labelText="Name"
             type="text"
             required
-            className="bg-light-background"
-            placeholder="eg: John deo"
-            {...register('name', {
-              required: 'Please enter your name',
-            })}
-          ></Input>
-        </FieldSet>
-        <FieldSet>
-          <FormLabel>Email Address</FormLabel>
-          <Input
-            autoComplete="email"
+            autoComplete="name"
+            placeholder="eg: John Doe"
+            {...register('name', { required: 'Please enter your name' })}
+          />
+          <TextInput
+            id="signup-email"
+            labelText="Email Address"
             type="email"
             required
-            className="bg-light-background"
+            autoComplete="email"
             placeholder="eg: john@rapida.ai"
-            {...register('email', {
-              required: 'Please enter email',
-            })}
-          ></Input>
-        </FieldSet>
-        <FieldSet>
-          <FormLabel>Password</FormLabel>
-          <Input
-            autoComplete="password"
-            type="password"
+            {...register('email', { required: 'Please enter email' })}
+          />
+          <PasswordInput
+            id="signup-password"
+            labelText="Password"
             required
-            className="bg-light-background"
+            autoComplete="new-password"
             placeholder="********"
-            {...register('password', {
-              required: 'Please enter password',
-            })}
-          ></Input>
-        </FieldSet>
-
-        <ErrorMessage message={error} />
-        <IBlueBGArrowButton
-          className="w-full justify-between h-11"
-          type="submit"
-          isLoading={loading}
-        >
-          Continue
-        </IBlueBGArrowButton>
+            {...register('password', { required: 'Please enter password' })}
+          />
+          {error && (
+            <Notification kind="error" title="Error" subtitle={error} />
+          )}
+          <PrimaryButton
+            size="lg"
+            renderIcon={ArrowRight}
+            isLoading={loading}
+            type="submit"
+            className="!w-full !max-w-none !justify-between"
+          >
+            Continue
+          </PrimaryButton>
+        </Stack>
       </form>
+
       <div className="mt-6 flex flex-col gap-3">
-        <FieldSet className="text-sm">
-          <p className="text-gray-600 dark:text-gray-400">
-            By signing up, you agree to the &nbsp;
-            <a
-              className="underline font-semibold"
-              target="_blank"
-              href="/static/terms-conditions"
-            >
-              Terms and Conditions
-            </a>
-            &nbsp; and &nbsp;
-            <a
-              href="/static/privacy-policy"
-              target="_blank"
-              className="underline font-semibold"
-            >
-              Privacy Policy
-            </a>
-            .
-          </p>
-        </FieldSet>
+        <p className="text-sm text-gray-600 dark:text-gray-400">
+          By signing up, you agree to the{' '}
+          <Link href="/static/terms-conditions" target="_blank" inline>
+            Terms and Conditions
+          </Link>{' '}
+          and{' '}
+          <Link href="/static/privacy-policy" target="_blank" inline>
+            Privacy Policy
+          </Link>
+          .
+        </p>
         <SocialButtonGroup
           {...workspace.authentication.signIn.providers}
-        ></SocialButtonGroup>
+        />
       </div>
     </>
   );

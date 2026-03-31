@@ -1,11 +1,10 @@
 import { Disclosure } from '@/app/components/disclosure';
-import { RapidaIcon } from '@/app/components/Icon/Rapida';
 import { SidebarIconWrapper } from '@/app/components/navigation/sidebar/sidebar-icon-wrapper';
 import { SidebarLabel } from '@/app/components/navigation/sidebar/sidebar-label';
 import { SidebarSimpleListItem } from '@/app/components/navigation/sidebar/sidebar-simple-list-item';
 import { useSidebar } from '@/context/sidebar-context';
 import { cn } from '@/utils';
-import { ChevronDown, FolderKey, Key } from 'lucide-react';
+import { Locked, Key, ChevronDown } from '@carbon/icons-react';
 import { useState } from 'react';
 import { useLocation } from 'react-router-dom';
 
@@ -31,14 +30,15 @@ export function Vault() {
       >
         <div className="flex items-center">
           <SidebarIconWrapper>
-            <RapidaIcon />
+            <Locked size={20} />
           </SidebarIconWrapper>
           <SidebarLabel>Credentials</SidebarLabel>
         </div>
         <SidebarIconWrapper className="transition-all duration-100">
           <ChevronDown
+            size={16}
             className={cn(
-              'w-5 h-5 opacity-70 transition-all duration-200',
+              'transition-all duration-200',
               opt && 'rotate-180',
             )}
           />
@@ -57,10 +57,7 @@ export function Vault() {
             navigate="/integration/project-credential"
           >
             <SidebarIconWrapper>
-              <FolderKey
-                className={cn('w-5 h-5 opacity-75')}
-                strokeWidth={1.5}
-              />
+              <Locked size={20} />
             </SidebarIconWrapper>
             <SidebarLabel>Project Credential</SidebarLabel>
           </SidebarSimpleListItem>
@@ -70,7 +67,7 @@ export function Vault() {
             navigate="/integration/personal-credential"
           >
             <SidebarIconWrapper>
-              <Key className={cn('w-5 h-5 opacity-75')} strokeWidth={1.5} />
+              <Key size={20} />
             </SidebarIconWrapper>
             <SidebarLabel>Personal Token</SidebarLabel>
           </SidebarSimpleListItem>

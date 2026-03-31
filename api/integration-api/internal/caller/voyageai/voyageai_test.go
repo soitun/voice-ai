@@ -27,7 +27,7 @@ func TestUsageMetrics_WithUsage(t *testing.T) {
 	usage := &VoyageaiUsage{TotalTokens: 150}
 	metrics := vg.UsageMetrics(usage)
 	require.Len(t, metrics, 1)
-	assert.Equal(t, "TOTAL_TOKEN", metrics[0].Name)
+	assert.Equal(t, "total_token", metrics[0].Name)
 	assert.Equal(t, "150", metrics[0].Value)
 }
 

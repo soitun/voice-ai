@@ -117,7 +117,7 @@ export function KnowledgePage() {
 
       {knowledgeActions.knowledgeBases &&
       knowledgeActions.knowledgeBases.length > 0 ? (
-        <section className="grid content-start grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 grow shrink-0 m-4">
+        <section className="grid content-start grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-4 grow shrink-0 m-4">
           {knowledgeActions.knowledgeBases.map((kf, idx) => (
             <ClickableKnowledgeCard key={idx} knowledge={kf} />
           ))}

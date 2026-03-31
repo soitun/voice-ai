@@ -1,8 +1,5 @@
 import { Metadata } from '@rapidaai/react';
-import { FormLabel } from '@/app/components/form-label';
-import { FieldSet } from '@/app/components/form/fieldset';
-import { Input } from '@/app/components/form/input';
-import { InputHelper } from '@/app/components/input-helper';
+import { TextInput } from '@/app/components/carbon/form';
 
 export const ValidateExotelTelephonyOptions = (
   options: Metadata[],
@@ -10,20 +7,9 @@ export const ValidateExotelTelephonyOptions = (
   const credentialID = options.find(
     opt => opt.getKey() === 'rapida.credential_id',
   );
-  if (
-    !credentialID ||
-    !credentialID.getValue() ||
-    credentialID.getValue().length === 0
-  ) {
-    return false;
-  }
-  // Validate language
+  if (!credentialID?.getValue()) return false;
   const phone = options.find(opt => opt.getKey() === 'phone');
-  if (phone) {
-    if (!phone.getValue() || phone.getValue().length === 0) {
-      return false;
-    }
-  }
+  if (phone && !phone.getValue()) return false;
   return true;
 };
 
@@ -31,7 +17,6 @@ export const ConfigureExotelTelephony: React.FC<{
   onParameterChange: (parameters: Metadata[]) => void;
   parameters: Metadata[] | null;
 }> = ({ onParameterChange, parameters }) => {
-  //
   const getParamValue = (key: string) =>
     parameters?.find(p => p.getKey() === key)?.getValue() ?? '';
 
@@ -51,35 +36,26 @@ export const ConfigureExotelTelephony: React.FC<{
 
   return (
     <>
-      <FieldSet className="col-span-1">
-        <FormLabel>Phone</FormLabel>
-        <Input
-          className="bg-light-background"
+      <div className="col-span-1">
+        <TextInput
+          id="exotel-phone"
+          labelText="Phone"
           value={getParamValue('phone')}
+          onChange={e => updateParameter('phone', e.target.value)}
           placeholder="Enter exotel phone number"
-          onChange={v => {
-            updateParameter('phone', v.target.value);
-          }}
+          helperText="Phone to receive inbound or make outbound call."
         />
-        <InputHelper>
-          Phone to recieve inbound or make outbound call.
-        </InputHelper>
-      </FieldSet>
-      <FieldSet className="col-span-1">
-        <FormLabel>App ID</FormLabel>
-        <Input
-          className="bg-light-background"
+      </div>
+      <div className="col-span-1">
+        <TextInput
+          id="exotel-app-id"
+          labelText="App ID"
           value={getParamValue('app_id')}
+          onChange={e => updateParameter('app_id', e.target.value)}
           placeholder="Enter exotel applet app_id"
-          onChange={v => {
-            updateParameter('app_id', v.target.value);
-          }}
+          helperText="Exotel app_id is the identifier of the flow (or applet) that you want to connect to."
         />
-        <InputHelper>
-          Exotel app_id is the identiﬁer of the flow (or applet) that you want
-          to connect to once the From number picks up the call.
-        </InputHelper>
-      </FieldSet>
+      </div>
     </>
   );
 };

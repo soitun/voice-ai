@@ -9,408 +9,75 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/rapidaai/pkg/types"
 	"github.com/rapidaai/protos"
 )
 
+// =============================================================================
+// Packet Interfaces
+// =============================================================================
+
 // Packet represents a generic request packet handled by the adapter layer.
-// Concrete packet types (e.g., FlushPacket, InterruptionPacket) are used to
-// signal specific control actions within a given context.
+// Concrete packet types signal specific actions or events within a given context.
+//
+// Naming convention:
+//   - Commands (trigger an action): verb-first — ExecuteLLM, DenoiseAudio, InterruptTTS, RecordUserAudio, SaveMessage, SpeakText
+//   - Events  (something happened): past-tense/noun — LLMResponseDelta, DenoisedAudio, SpeechToText, EndOfSpeech, TextToSpeechAudio
 type Packet interface {
 	ContextId() string
 }
 
-// Wrapper for message packet
+// MessagePacket wraps a Packet with role and text content.
 type MessagePacket interface {
 	Packet
 	Role() string
 	Content() string
 }
 
+// AudioPacket wraps a Packet with raw audio bytes.
 type AudioPacket interface {
 	Packet
 	Content() []byte
 }
 
-// InterruptionPacket represents a request to interrupt ongoing processing
-// within a specific context.
-
-// =============================================================================
-// LLM Packets
-// =============================================================================
-
-type InterruptionSource string
-
-const (
-	InterruptionSourceWord InterruptionSource = "word"
-	InterruptionSourceVad  InterruptionSource = "vad"
-)
-
-type InterruptionPacket struct {
-	// ContextID identifies the context to be interrupted.
-	ContextID string
-
-	// Source indicates the origin of the interruption.
-	Source InterruptionSource
-
-	// start of interruption
-	StartAt float64
-
-	// end of interruption
-	EndAt float64
-}
-
-// ContextId returns the identifier of the context associated with this interruption request.
-func (f InterruptionPacket) ContextId() string {
-	return f.ContextID
-}
-
-// =============================================================================
-// LLM Packets
-// =============================================================================
-
-// ConversationMetricPacket represents a request to send metrics within a specific context.
-type ConversationMetricPacket struct {
-
-	// ContextID identifies the context to be flushed.
-	ContextID uint64
-
-	// Metrics holds the list of metrics to be sent within the specified context.
-	Metrics []*protos.Metric
-}
-
-func (f ConversationMetricPacket) ContextId() string {
-	return fmt.Sprintf("%d", f.ContextID)
-}
-
-func (f ConversationMetricPacket) ConversationID() uint64 {
-	return f.ContextID
-}
-
-type ConversationMetadataPacket struct {
-
-	// ContextID identifies the context to be flushed.
-	ContextID uint64
-
-	// Metadata holds the list of metadata to be sent within the specified context.
-	Metadata []*protos.Metadata
-}
-
-func (f ConversationMetadataPacket) ContextId() string {
-	return fmt.Sprintf("%d", f.ContextID)
-}
-
-func (f ConversationMetadataPacket) ConversationID() uint64 {
-	return f.ContextID
-}
-
-// ConversationMetricPacket represents a request to send metrics within a specific context.
-type MessageMetricPacket struct {
-
-	// ContextID identifies the context to be flushed.
-	ContextID string
-
-	// Metrics holds the list of metrics to be sent within the specified context.
-	Metrics []*protos.Metric
-}
-
-func (f MessageMetricPacket) ContextId() string {
-	return f.ContextID
-}
-
-type MessageMetadataPacket struct {
-
-	// ContextID identifies the context to be flushed.
-	ContextID string
-
-	// Metadata holds the list of metadata to be sent within the specified context.
-	Metadata []*protos.Metadata
-}
-
-func (f MessageMetadataPacket) ContextId() string {
-	return f.ContextID
-}
-
-// =============================================================================
-// Directive Packets
-// =============================================================================
-
-type DirectivePacket struct {
-	// ContextID identifies the context to be flushed.
-	ContextID string
-
-	// Directive
-	Directive protos.ConversationDirective_DirectiveType
-
-	// arguments for directive
-	Arguments map[string]interface{}
-}
-
-func (f DirectivePacket) ContextId() string {
-	return f.ContextID
-}
-
-// =============================================================================
-// LLM Packets
-// =============================================================================
-
+// LLMPacket is a marker interface for LLM pipeline packets.
 type LLMPacket interface {
 	Packet
 	ContextId() string
 }
 
-type LLMErrorPacket struct {
-	// contextID identifies the context to be flushed.
-	ContextID string
-
-	// error
-	Error error
-
-	//
-
-}
-
-func (f LLMErrorPacket) ContextId() string {
-	return f.ContextID
-}
-
-// LLMResponseDeltaPacket represents a streaming text delta from the LLM.
-// This packet is emitted during streaming responses, containing partial text chunks.
-type LLMResponseDeltaPacket struct {
-	// ContextID identifies the context for this response.
-	ContextID string
-
-	// Text contains the partial text content of this delta.
-	Text string
-}
-
-func (f LLMResponseDeltaPacket) ContextId() string {
-	return f.ContextID
-}
-
-// LLMResponseDonePacket signals the completion of an LLM response stream.
-// This packet is emitted when the LLM has finished generating its response.
-type LLMResponseDonePacket struct {
-	// ContextID identifies the context for this response.
-	ContextID string
-
-	// Text contains the final aggregated text (optional, may be empty for streaming).
-	Text string
-}
-
-func (f LLMResponseDonePacket) Content() string {
-	return f.Text
-}
-
-func (f LLMResponseDonePacket) Role() string {
-	return "assistant"
-}
-
-func (f LLMResponseDonePacket) ContextId() string {
-	return f.ContextID
-}
-
-// =============================================================================
-// LLM Tool Call Packets
-// =============================================================================
-
+// LLMToolPacket is a marker interface for LLM tool-related packets.
 type LLMToolPacket interface {
 	ToolId() string
 }
 
-type LLMToolCallPacket struct {
-	// id of tool which user has configured
-	ToolID string
-
-	// name of tool which user has configured
-	Name string
-
-	// contextID identifies the context to be flushed.
-	ContextID string
-
-	// arguments for tool call
-	Arguments map[string]interface{}
-}
-
-func (f LLMToolCallPacket) ContextId() string {
-	return f.ContextID
-}
-
-func (f LLMToolCallPacket) ToolId() string {
-	return f.ToolID
-}
-
-type LLMToolResultPacket struct {
-	// id of tool which user has configured
-	ToolID string
-
-	// name of tool which user has configured
-	Name string
-
-	// contextID identifies the context to be flushed.
-	ContextID string
-
-	// time taken for tool execution in nanoseconds
-	TimeTaken int64
-
-	// result for tool call
-	Result map[string]interface{}
-}
-
-func (f LLMToolResultPacket) ToolId() string {
-	return f.ToolID
-}
-
-func (f LLMToolResultPacket) ContextId() string {
-	return f.ContextID
-}
-
 // =============================================================================
-// LLM Packets end
+// Input Pipeline — user -> denoise -> VAD -> STT -> EOS -> normalize
 // =============================================================================
 
-type StaticPacket struct {
-	// contextID identifies the context to be flushed.
+// UserTextReceivedPacket carries text input from the user (e.g. via WebSocket/HTTP).
+type UserTextReceivedPacket struct {
 	ContextID string
+	Text      string
 
-	// message
-	Text string
+	// Language detected by STT for this turn (may be empty for text-mode input).
+	Language string
 }
 
-func (f StaticPacket) ContextId() string {
-	return f.ContextID
-}
+func (f UserTextReceivedPacket) ContextId() string { return f.ContextID }
+func (f UserTextReceivedPacket) Content() string   { return f.Text }
+func (f UserTextReceivedPacket) Role() string      { return "user" }
 
-func (f StaticPacket) Content() string {
-	return f.Text
-}
-
-func (f StaticPacket) Role() string {
-	return "rapida"
-}
-
-// =============================================================================
-// LLM Packets end
-// =============================================================================
-
-type TextToSpeechAudioPacket struct {
-
-	// contextID identifies the context to be flushed.
-	ContextID string
-
-	// audio chunk
-	AudioChunk []byte
-}
-
-func (f TextToSpeechAudioPacket) ContextId() string {
-	return f.ContextID
-}
-
-type TextToSpeechEndPacket struct {
-	// contextID identifies the context to be flushed.
-	ContextID string
-}
-
-func (f TextToSpeechEndPacket) ContextId() string {
-	return f.ContextID
-}
-
-// =============================================================================
-// User Packet
-// =============================================================================
-
-type UserTextPacket struct {
-	// contextID identifies the context to be flushed.
-	ContextID string
-
-	// text
-	Text string
-}
-
-func (f UserTextPacket) ContextId() string {
-	return f.ContextID
-}
-
-func (f UserTextPacket) Content() string {
-	return f.Text
-}
-
-func (f UserTextPacket) Role() string {
-	return "user"
-}
-
-type UserAudioPacket struct {
-	// contextID identifies the context to be flushed.
-	ContextID string
-
-	Audio []byte
-
+// UserAudioReceivedPacket carries raw audio input from the user (e.g. via WebRTC).
+type UserAudioReceivedPacket struct {
+	ContextID    string
+	Audio        []byte
 	NoiseReduced bool
 }
 
-func (f UserAudioPacket) ContextId() string {
-	return f.ContextID
-}
-
-func (f UserAudioPacket) Content() []byte {
-	return f.Audio
-}
-
-func (f UserAudioPacket) Role() string {
-	return "user"
-}
-
-// =============================================================================
-// End of speech Packet
-// =============================================================================
-
-type EndOfSpeechPacket struct {
-	// contextID identifies the context to be flushed.
-	ContextID string
-
-	Speech string
-
-	// Language detected by the STT provider for this turn.
-	Language string
-}
-
-func (f EndOfSpeechPacket) ContextId() string {
-	return f.ContextID
-}
-
-type InterimEndOfSpeechPacket struct {
-	// contextID identifies the context being updated.
-	ContextID string
-
-	Speech string
-}
-
-func (p InterimEndOfSpeechPacket) ContextId() string {
-	return p.ContextID
-}
-
-type SpeechToTextPacket struct {
-	ContextID string
-
-	// script
-	Script string
-
-	// confidence
-	Confidence float64
-
-	// language
-	Language string
-
-	// interim
-	Interim bool
-}
-
-func (f SpeechToTextPacket) ContextId() string {
-	return f.ContextID
-}
-
-// =============================================================================
-// Pre-processing Packets
-// =============================================================================
+func (f UserAudioReceivedPacket) ContextId() string { return f.ContextID }
+func (f UserAudioReceivedPacket) Content() []byte   { return f.Audio }
+func (f UserAudioReceivedPacket) Role() string      { return "user" }
 
 // DenoiseAudioPacket carries raw user audio to be denoised before entering the pipeline.
 type DenoiseAudioPacket struct {
@@ -447,38 +114,75 @@ type VadSpeechActivityPacket struct{}
 
 func (f VadSpeechActivityPacket) ContextId() string { return "" }
 
-// =============================================================================
-// LLM Execution Packet
-// =============================================================================
-
-// ExecuteLLMPacket triggers the LLM pipeline with the user's final transcript.
-type ExecuteLLMPacket struct {
-	ContextID string
-	Input     string
-
-	// Language detected by the STT provider for this turn.
-	Language string
+// SpeechToTextPacket carries a transcript result from the STT provider.
+type SpeechToTextPacket struct {
+	ContextID  string
+	Script     string
+	Confidence float64
+	Language   string
+	Interim    bool
 }
 
-func (f ExecuteLLMPacket) ContextId() string { return f.ContextID }
+func (f SpeechToTextPacket) ContextId() string { return f.ContextID }
 
-// =============================================================================
-// TTS Packet
-// =============================================================================
+// EndOfSpeechPacket signals that the EOS detector determined the user's turn is complete.
+type EndOfSpeechPacket struct {
+	ContextID string
+	Speech    string
+	Speechs   []SpeechToTextPacket // accumulated transcript chunks
+}
 
-// SpeakTextPacket routes text into the TTS pipeline or directly to the client.
-// IsFinal=true signals a flush (end of generation); IsFinal=false is a streaming delta.
-type SpeakTextPacket struct {
+func (f EndOfSpeechPacket) ContextId() string { return f.ContextID }
+
+// InterimEndOfSpeechPacket carries a partial EOS result (in-progress transcript).
+type InterimEndOfSpeechPacket struct {
+	ContextID string
+	Speech    string
+}
+
+func (p InterimEndOfSpeechPacket) ContextId() string { return p.ContextID }
+
+// NormalizedUserTextPacket carries the final normalized user text after language detection.
+type NormalizedUserTextPacket struct {
 	ContextID string
 	Text      string
-	IsFinal   bool
+	Language  types.Language
 }
 
-func (f SpeakTextPacket) ContextId() string { return f.ContextID }
+func (f NormalizedUserTextPacket) ContextId() string { return f.ContextID }
+
+// NormalizeInputPacket triggers the input normalizer with the finalized speech.
+// Isolates the normalization step so it can be swapped or skipped without
+// modifying the EndOfSpeech handler.
+type NormalizeInputPacket struct {
+	ContextID string
+	Speech    string
+	Speechs   []SpeechToTextPacket
+}
+
+func (f NormalizeInputPacket) ContextId() string { return f.ContextID }
 
 // =============================================================================
-// Interrupt Packets
+// Control — interrupts, directives, injected messages
 // =============================================================================
+
+type InterruptionSource string
+
+const (
+	InterruptionSourceWord InterruptionSource = "word"
+	InterruptionSourceVad  InterruptionSource = "vad"
+)
+
+// InterruptionDetectedPacket signals that an interruption was detected (by VAD or word-level STT).
+// Dispatch handles this event by emitting InterruptTTSPacket and InterruptLLMPacket commands.
+type InterruptionDetectedPacket struct {
+	ContextID string
+	Source    InterruptionSource
+	StartAt   float64
+	EndAt     float64
+}
+
+func (f InterruptionDetectedPacket) ContextId() string { return f.ContextID }
 
 // InterruptTTSPacket signals the TTS transformer to stop current playback.
 type InterruptTTSPacket struct {
@@ -496,8 +200,140 @@ type InterruptLLMPacket struct {
 
 func (f InterruptLLMPacket) ContextId() string { return f.ContextID }
 
+// TurnChangePacket notifies components that active context changed to a new turn.
+type TurnChangePacket struct {
+	ContextID         string
+	PreviousContextID string
+	Reason            string
+	Source            string
+	Time              time.Time
+}
+
+func (f TurnChangePacket) ContextId() string { return f.ContextID }
+
+// DirectivePacket carries a typed control action (e.g. end conversation).
+type DirectivePacket struct {
+	ContextID string
+	Directive protos.ConversationDirective_DirectiveType
+	Arguments map[string]interface{}
+}
+
+func (f DirectivePacket) ContextId() string { return f.ContextID }
+
+// InjectMessagePacket injects a pre-written message (greeting, error, idle timeout) into the pipeline.
+type InjectMessagePacket struct {
+	ContextID string
+	Text      string
+}
+
+func (f InjectMessagePacket) ContextId() string { return f.ContextID }
+func (f InjectMessagePacket) Content() string   { return f.Text }
+func (f InjectMessagePacket) Role() string      { return "rapida" }
+
 // =============================================================================
-// Recording Packets
+// LLM Pipeline — execute -> delta -> done -> error -> tools
+// =============================================================================
+
+// ExecuteLLMPacket triggers the LLM pipeline with the user's final transcript.
+type ExecuteLLMPacket struct {
+	ContextID  string
+	Input      string
+	Normalized NormalizedUserTextPacket
+}
+
+func (f ExecuteLLMPacket) ContextId() string { return f.ContextID }
+
+// LLMResponseDeltaPacket represents a streaming text delta from the LLM.
+type LLMResponseDeltaPacket struct {
+	ContextID string
+	Text      string
+}
+
+func (f LLMResponseDeltaPacket) ContextId() string { return f.ContextID }
+
+// LLMResponseDonePacket signals the completion of an LLM response stream.
+type LLMResponseDonePacket struct {
+	ContextID string
+	Text      string
+}
+
+func (f LLMResponseDonePacket) Content() string   { return f.Text }
+func (f LLMResponseDonePacket) Role() string      { return "assistant" }
+func (f LLMResponseDonePacket) ContextId() string { return f.ContextID }
+
+// LLMErrorPacket signals that the LLM encountered an error during generation.
+type LLMErrorPacket struct {
+	ContextID string
+	Error     error
+}
+
+func (f LLMErrorPacket) ContextId() string { return f.ContextID }
+
+// LLMToolCallPacket signals that the LLM invoked a tool.
+type LLMToolCallPacket struct {
+	ToolID    string
+	Name      string
+	ContextID string
+	Arguments map[string]interface{}
+}
+
+func (f LLMToolCallPacket) ContextId() string { return f.ContextID }
+func (f LLMToolCallPacket) ToolId() string    { return f.ToolID }
+
+// LLMToolResultPacket carries the result of a tool execution.
+type LLMToolResultPacket struct {
+	ToolID    string
+	Name      string
+	ContextID string
+	TimeTaken int64 // nanoseconds
+	Result    map[string]interface{}
+}
+
+func (f LLMToolResultPacket) ToolId() string    { return f.ToolID }
+func (f LLMToolResultPacket) ContextId() string { return f.ContextID }
+
+// =============================================================================
+// Output Pipeline — aggregate -> speak -> TTS audio -> TTS end
+// =============================================================================
+
+// AggregateTextPacket triggers the text aggregator with validated LLM output.
+// The aggregator batches deltas into sentence-sized chunks before emitting
+// SpeakTextPacket. IsFinal=true signals end of generation.
+type AggregateTextPacket struct {
+	ContextID string
+	Text      string
+	IsFinal   bool
+}
+
+func (f AggregateTextPacket) ContextId() string { return f.ContextID }
+
+// SpeakTextPacket routes text into the TTS pipeline or directly to the client.
+// IsFinal=true signals a flush (end of generation); IsFinal=false is a streaming delta.
+type SpeakTextPacket struct {
+	ContextID string
+	Text      string
+	IsFinal   bool
+}
+
+func (f SpeakTextPacket) ContextId() string { return f.ContextID }
+
+// TextToSpeechAudioPacket carries a TTS audio chunk produced by the TTS provider.
+type TextToSpeechAudioPacket struct {
+	ContextID  string
+	AudioChunk []byte
+}
+
+func (f TextToSpeechAudioPacket) ContextId() string { return f.ContextID }
+
+// TextToSpeechEndPacket signals that TTS has finished producing audio.
+type TextToSpeechEndPacket struct {
+	ContextID string
+}
+
+func (f TextToSpeechEndPacket) ContextId() string { return f.ContextID }
+
+// =============================================================================
+// Recording
 // =============================================================================
 
 // RecordUserAudioPacket carries a user audio chunk to be written to the recorder.
@@ -520,7 +356,7 @@ type RecordAssistantAudioPacket struct {
 func (f RecordAssistantAudioPacket) ContextId() string { return f.ContextID }
 
 // =============================================================================
-// Persistence Packet
+// Persistence
 // =============================================================================
 
 // SaveMessagePacket persists a conversation message to the database and appends
@@ -530,35 +366,68 @@ type SaveMessagePacket struct {
 	ContextID   string
 	MessageRole string
 	Text        string
-
-	// Language detected by the STT provider for this turn (user messages only).
-	Language string
 }
 
 func (f SaveMessagePacket) ContextId() string { return f.ContextID }
 func (f SaveMessagePacket) Role() string      { return f.MessageRole }
 func (f SaveMessagePacket) Content() string   { return f.Text }
 
-//
+// =============================================================================
+// Metrics & Metadata
+// =============================================================================
 
-// KnowledgeRetrieveOption contains options for knowledge retrieval operations
-type KnowledgeRetrieveOption struct {
-	EmbeddingProviderCredential *protos.VaultCredential
-	RetrievalMethod             string
-	TopK                        uint32
-	ScoreThreshold              float32
+// ConversationMetricPacket carries conversation-level metrics.
+type ConversationMetricPacket struct {
+	ContextID uint64
+	Metrics   []*protos.Metric
 }
 
-type KnowledgeContextResult struct {
-	ID         string                 `json:"id"`
-	DocumentID string                 `json:"document_id"`
-	Metadata   map[string]interface{} `json:"metadata"`
-	Content    string                 `json:"content"`
-	Score      float64                `json:"score"`
+func (f ConversationMetricPacket) ContextId() string      { return fmt.Sprintf("%d", f.ContextID) }
+func (f ConversationMetricPacket) ConversationID() uint64 { return f.ContextID }
+
+// ConversationMetadataPacket carries conversation-level metadata.
+type ConversationMetadataPacket struct {
+	ContextID uint64
+	Metadata  []*protos.Metadata
 }
+
+func (f ConversationMetadataPacket) ContextId() string      { return fmt.Sprintf("%d", f.ContextID) }
+func (f ConversationMetadataPacket) ConversationID() uint64 { return f.ContextID }
+
+// UserMessageMetricPacket carries metrics for a user message turn.
+type UserMessageMetricPacket struct {
+	ContextID string
+	Metrics   []*protos.Metric
+}
+
+func (f UserMessageMetricPacket) ContextId() string { return f.ContextID }
+
+// AssistantMessageMetricPacket carries metrics for an assistant message turn.
+type AssistantMessageMetricPacket struct {
+	ContextID string
+	Metrics   []*protos.Metric
+}
+
+func (f AssistantMessageMetricPacket) ContextId() string { return f.ContextID }
+
+// AssistantMessageMetadataPacket carries metadata for an assistant message turn.
+type AssistantMessageMetadataPacket struct {
+	ContextID string
+	Metadata  []*protos.Metadata
+}
+
+func (f AssistantMessageMetadataPacket) ContextId() string { return f.ContextID }
+
+// UserMessageMetadataPacket carries metadata for a user message turn.
+type UserMessageMetadataPacket struct {
+	ContextID string
+	Metadata  []*protos.Metadata
+}
+
+func (f UserMessageMetadataPacket) ContextId() string { return f.ContextID }
 
 // =============================================================================
-// Observability Packets
+// Observability
 // =============================================================================
 
 // ConversationEventPacket carries a named pipeline event for the debugger.
@@ -570,15 +439,36 @@ type ConversationEventPacket struct {
 	// handleConversationEvent fills it from r.GetID() in that case.
 	ContextID string
 
-	// EventName is the component name: "stt", "tts", "llm", "vad", "eos",
+	// Name is the component name: "stt", "tts", "llm", "vad", "eos",
 	// "knowledge", "session", "behavior", "denoise", "audio", "tool", etc.
 	Name string
 
 	// Data carries event-specific key/value pairs. Always includes "type".
 	Data map[string]string
 
-	// OccurredAt is the wall-clock time the event was raised.
+	// Time is the wall-clock time the event was raised.
 	Time time.Time
 }
 
 func (f ConversationEventPacket) ContextId() string { return f.ContextID }
+
+// =============================================================================
+// Non-packet Support Types
+// =============================================================================
+
+// KnowledgeRetrieveOption contains options for knowledge retrieval operations.
+type KnowledgeRetrieveOption struct {
+	EmbeddingProviderCredential *protos.VaultCredential
+	RetrievalMethod             string
+	TopK                        uint32
+	ScoreThreshold              float32
+}
+
+// KnowledgeContextResult holds a single knowledge retrieval result.
+type KnowledgeContextResult struct {
+	ID         string                 `json:"id"`
+	DocumentID string                 `json:"document_id"`
+	Metadata   map[string]interface{} `json:"metadata"`
+	Content    string                 `json:"content"`
+	Score      float64                `json:"score"`
+}

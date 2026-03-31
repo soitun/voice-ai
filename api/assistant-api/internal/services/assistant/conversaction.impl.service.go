@@ -424,6 +424,7 @@ func (conversationService *assistantConversationService) ApplyConversationMetric
 				Description: mtr.GetDescription(),
 			},
 			AssistantConversationId: assistantConversationId,
+			AssistantId:             assistantId,
 		}
 
 		if auth.GetUserId() != nil {

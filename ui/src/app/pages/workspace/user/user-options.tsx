@@ -1,25 +1,22 @@
 import React from 'react';
-import { CardOptionMenu } from '@/app/components/menu';
-import { OptionMenuItem } from '@/app/components/menu/index';
+import {
+  OverflowMenu,
+  OverflowMenuItem,
+} from '@/app/components/carbon/overflow-menu';
 
-/**
- *
- * @param props
- * @returns
- */
 export function UserOption(props: { id: string }) {
   return (
-    <CardOptionMenu
-      options={[
-        {
-          option: 'Edit user',
-          onActionClick: () => {},
-        },
-        {
-          option: <OptionMenuItem type="danger">Delete</OptionMenuItem>,
-          onActionClick: () => {},
-        },
-      ]}
-    />
+    <OverflowMenu size="md" flipped iconDescription="User actions">
+      <OverflowMenuItem
+        itemText="Edit user"
+        onClick={() => {}}
+      />
+      <OverflowMenuItem
+        itemText="Delete"
+        isDelete
+        hasDivider
+        onClick={() => {}}
+      />
+    </OverflowMenu>
   );
 }

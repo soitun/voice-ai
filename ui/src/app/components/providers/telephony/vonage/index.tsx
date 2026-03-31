@@ -1,8 +1,5 @@
 import { Metadata } from '@rapidaai/react';
-import { FormLabel } from '@/app/components/form-label';
-import { FieldSet } from '@/app/components/form/fieldset';
-import { Input } from '@/app/components/form/input';
-import { InputHelper } from '@/app/components/input-helper';
+import { TextInput } from '@/app/components/carbon/form';
 
 export const ValidateVonageTelephonyOptions = (
   options: Metadata[],
@@ -10,23 +7,12 @@ export const ValidateVonageTelephonyOptions = (
   const credentialID = options.find(
     opt => opt.getKey() === 'rapida.credential_id',
   );
-  if (
-    !credentialID ||
-    !credentialID.getValue() ||
-    credentialID.getValue().length === 0
-  ) {
-    return false;
-  }
-  // Validate language
+  if (!credentialID?.getValue()) return false;
   const phone = options.find(opt => opt.getKey() === 'phone');
   if (phone) {
-    if (!phone.getValue() || phone.getValue().length === 0) {
-      return false;
-    }
+    if (!phone.getValue()) return false;
     const phoneRegex = /^\+?[1-9]\d{1,14}$/;
-    if (!phoneRegex.test(phone.getValue())) {
-      return false;
-    }
+    if (!phoneRegex.test(phone.getValue())) return false;
   }
   return true;
 };
@@ -35,7 +21,6 @@ export const ConfigureVonageTelephony: React.FC<{
   onParameterChange: (parameters: Metadata[]) => void;
   parameters: Metadata[] | null;
 }> = ({ onParameterChange, parameters }) => {
-  //
   const getParamValue = (key: string) =>
     parameters?.find(p => p.getKey() === key)?.getValue() ?? '';
 
@@ -54,21 +39,15 @@ export const ConfigureVonageTelephony: React.FC<{
   };
 
   return (
-    <>
-      <FieldSet className="col-span-2">
-        <FormLabel>Phone</FormLabel>
-        <Input
-          className="bg-light-background"
-          value={getParamValue('phone')}
-          placeholder="Enter your Vonage phone number"
-          onChange={v => {
-            updateParameter('phone', v.target.value);
-          }}
-        />
-        <InputHelper>
-          Phone to recieve inbound or make outbound call.
-        </InputHelper>
-      </FieldSet>
-    </>
+    <div className="col-span-2">
+      <TextInput
+        id="vonage-phone"
+        labelText="Phone"
+        value={getParamValue('phone')}
+        onChange={e => updateParameter('phone', e.target.value)}
+        placeholder="Enter your Vonage phone number"
+        helperText="Phone to receive inbound or make outbound call."
+      />
+    </div>
   );
 };

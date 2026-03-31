@@ -11,6 +11,6 @@ import (
 
 type Vad interface {
 	Name() string
-	Process(ctx context.Context, frame UserAudioPacket) error
+	Process(ctx context.Context, frame UserAudioReceivedPacket) error
 	Close() error
 }

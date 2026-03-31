@@ -19,15 +19,12 @@ import {
   ConfigureAsteriskTelephony,
   ValidateAsteriskTelephonyOptions,
 } from '@/app/components/providers/telephony/asterisk';
-import { Dropdown } from '@/app/components/dropdown';
-import { FormLabel } from '@/app/components/form-label';
-import { FieldSet } from '@/app/components/form/fieldset';
-import { InputGroup } from '@/app/components/input-group';
-import { InputHelper } from '@/app/components/input-helper';
 import { CredentialDropdown } from '@/app/components/dropdown/credential-dropdown';
 import { useCallback } from 'react';
 import { ProviderComponentProps } from '@/app/components/providers';
 import { TELEPHONY_PROVIDER } from '@/providers';
+import { Dropdown } from '@carbon/react';
+import { Stack } from '@/app/components/carbon/form';
 
 export const ValidateTelephonyOptions = (
   provider: string,
@@ -48,12 +45,6 @@ export const ValidateTelephonyOptions = (
       return false;
   }
 };
-
-/**
- *
- * @param param0
- * @returns
- */
 
 export const ConfigureTelephonyComponent: React.FC<ProviderComponentProps> = ({
   provider,
@@ -101,19 +92,12 @@ export const ConfigureTelephonyComponent: React.FC<ProviderComponentProps> = ({
   }
 };
 
-/**
- *
- * @param param0
- * @returns
- */
-
 export const TelephonyProvider: React.FC<ProviderComponentProps> = props => {
   const { provider, onChangeParameter, onChangeProvider, parameters } = props;
   const getParamValue = useCallback(
-    (key: string) => {
-      return parameters?.find(p => p.getKey() === key)?.getValue() ?? '';
-    },
-    [JSON.stringify(parameters)],
+    (key: string) =>
+      parameters?.find(p => p.getKey() === key)?.getValue() ?? '',
+    [parameters],
   );
 
   const updateParameter = (key: string, value: string) => {
@@ -130,70 +114,36 @@ export const TelephonyProvider: React.FC<ProviderComponentProps> = props => {
     onChangeParameter(updatedParams);
   };
 
+  const selectedProvider = TELEPHONY_PROVIDER.find(x => x.code === provider) || null;
+
   return (
-    <InputGroup title="Telephony" className="bg-white dark:bg-gray-900 ">
-      <div className="flex flex-col gap-6">
-        <FieldSet>
-          <FormLabel>Telephony provider</FormLabel>
-          <Dropdown
-            className="bg-light-background max-w-full dark:bg-gray-950"
-            currentValue={TELEPHONY_PROVIDER.find(x => x.code === provider)}
-            setValue={v => {
-              onChangeProvider(v.code);
-            }}
-            allValue={TELEPHONY_PROVIDER}
-            placeholder="Select telephony provider"
-            option={c => {
-              return (
-                <span className="inline-flex items-center gap-2 sm:gap-2.5 max-w-full text-sm font-medium">
-                  <img
-                    alt=""
-                    loading="lazy"
-                    width={16}
-                    height={16}
-                    className="sm:h-4 sm:w-4 w-4 h-4 align-middle block shrink-0"
-                    src={c.image}
-                  />
-                  <span className="truncate capitalize">{c.name}</span>
-                </span>
-              );
-            }}
-            label={c => {
-              return (
-                <span className="inline-flex items-center gap-2 sm:gap-2.5 max-w-full text-sm font-medium">
-                  <img
-                    alt=""
-                    loading="lazy"
-                    width={16}
-                    height={16}
-                    className="sm:h-4 sm:w-4 w-4 h-4 align-middle block shrink-0"
-                    src={c.image}
-                  />
-                  <span className="truncate capitalize">{c.name}</span>
-                </span>
-              );
-            }}
-          />
-          <InputHelper>
-            Choose a telephony provider to handle voice communication for your
-            applications. Each provider offers different capabilities, pricing
-            structures, and global coverage.
-          </InputHelper>
-        </FieldSet>
-        {provider && (
-          <CredentialDropdown
-            className="bg-light-background max-w-full dark:bg-gray-950"
-            onChangeCredential={(c: VaultCredential) => {
-              updateParameter('rapida.credential_id', c.getId());
-            }}
-            currentCredential={getParamValue('rapida.credential_id')}
-            provider={provider}
-          />
-        )}
+    <Stack gap={6}>
+      <Dropdown
+        id="telephony-provider"
+        titleText="Telephony provider"
+        label="Select telephony provider"
+        items={TELEPHONY_PROVIDER}
+        selectedItem={selectedProvider}
+        itemToString={(item: any) => item?.name || ''}
+        onChange={({ selectedItem }: any) => {
+          if (selectedItem) onChangeProvider(selectedItem.code);
+        }}
+        helperText="Choose a telephony provider to handle voice communication for your applications."
+      />
+      {provider && (
+        <CredentialDropdown
+          onChangeCredential={(c: VaultCredential) => {
+            updateParameter('rapida.credential_id', c.getId());
+          }}
+          currentCredential={getParamValue('rapida.credential_id')}
+          provider={provider}
+        />
+      )}
+      {provider && (
         <div className="grid grid-cols-3 gap-x-6 gap-y-3">
           <ConfigureTelephonyComponent {...props} />
         </div>
-      </div>
-    </InputGroup>
+      )}
+    </Stack>
   );
 };

@@ -98,7 +98,7 @@ func FeedAudio(ctx context.Context, t *testing.T, stt internal_type.SpeechToText
 			return
 		default:
 		}
-		err := stt.Transform(ctx, internal_type.UserAudioPacket{
+		err := stt.Transform(ctx, internal_type.UserAudioReceivedPacket{
 			ContextID: "test-stt",
 			Audio:     chunk,
 		})

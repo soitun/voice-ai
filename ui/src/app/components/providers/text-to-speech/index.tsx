@@ -1,26 +1,21 @@
-import { Dropdown } from '@/app/components/dropdown';
 import { CredentialDropdown } from '@/app/components/dropdown/credential-dropdown';
-import { FormLabel } from '@/app/components/form-label';
-import { FieldSet } from '@/app/components/form/fieldset';
 import { ProviderComponentProps } from '@/app/components/providers';
 import { TextToSpeechConfigComponent } from '@/app/components/providers/text-to-speech/provider';
 import { TEXT_TO_SPEECH_PROVIDER } from '@/providers';
 import { Metadata, VaultCredential } from '@rapidaai/react';
 import { useCallback } from 'react';
+import { Dropdown } from '@carbon/react';
+import { Stack } from '@/app/components/carbon/form';
 
-/**
- *
- * @param param0
- * @returns
- */
 export const TextToSpeechProvider: React.FC<ProviderComponentProps> = props => {
   const { provider, parameters, onChangeProvider, onChangeParameter } = props;
+
   const getParamValue = useCallback(
-    (key: string) => {
-      return parameters?.find(p => p.getKey() === key)?.getValue() ?? '';
-    },
+    (key: string) =>
+      parameters?.find(p => p.getKey() === key)?.getValue() ?? '',
     [parameters],
   );
+
   const updateParameter = (key: string, value: string) => {
     const updatedParams = [...(parameters || [])];
     const existingIndex = updatedParams.findIndex(p => p.getKey() === key);
@@ -34,53 +29,24 @@ export const TextToSpeechProvider: React.FC<ProviderComponentProps> = props => {
     }
     onChangeParameter(updatedParams);
   };
+
+  const selectedProvider = TEXT_TO_SPEECH_PROVIDER.find(x => x.code === provider) || null;
+
   return (
-    <div className="flex flex-col gap-6 w-full max-w-6xl">
-      <FieldSet className="relative">
-        <FormLabel>Provider</FormLabel>
-        <Dropdown
-          className="bg-light-background max-w-full dark:bg-gray-950"
-          currentValue={TEXT_TO_SPEECH_PROVIDER.find(x => x.code === provider)}
-          setValue={v => {
-            onChangeProvider(v.code);
-          }}
-          allValue={TEXT_TO_SPEECH_PROVIDER}
-          placeholder="Select voice ouput provider"
-          option={c => {
-            return (
-              <span className="inline-flex items-center gap-2 sm:gap-2.5 max-w-full text-sm font-medium">
-                <img
-                  alt=""
-                  loading="lazy"
-                  width={16}
-                  height={16}
-                  className="sm:h-4 sm:w-4 w-4 h-4 align-middle block shrink-0"
-                  src={c.image}
-                />
-                <span className="truncate capitalize">{c.name}</span>
-              </span>
-            );
-          }}
-          label={c => {
-            return (
-              <span className="inline-flex items-center gap-2 sm:gap-2.5 max-w-full text-sm font-medium">
-                <img
-                  alt=""
-                  loading="lazy"
-                  width={16}
-                  height={16}
-                  className="sm:h-4 sm:w-4 w-4 h-4 align-middle block shrink-0"
-                  src={c.image}
-                />
-                <span className="truncate capitalize">{c.name}</span>
-              </span>
-            );
-          }}
-        />
-      </FieldSet>
+    <Stack gap={6}>
+      <Dropdown
+        id="tts-provider"
+        titleText="Provider"
+        label="Select voice output provider"
+        items={TEXT_TO_SPEECH_PROVIDER}
+        selectedItem={selectedProvider}
+        itemToString={(item: any) => item?.name || ''}
+        onChange={({ selectedItem }: any) => {
+          if (selectedItem) onChangeProvider(selectedItem.code);
+        }}
+      />
       {provider && (
         <CredentialDropdown
-          className="bg-light-background max-w-full dark:bg-gray-950"
           onChangeCredential={(c: VaultCredential) => {
             updateParameter('rapida.credential_id', c.getId());
           }}
@@ -93,6 +59,6 @@ export const TextToSpeechProvider: React.FC<ProviderComponentProps> = props => {
           <TextToSpeechConfigComponent {...props} />
         </div>
       )}
-    </div>
+    </Stack>
   );
 };

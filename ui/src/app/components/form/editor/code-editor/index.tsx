@@ -1,18 +1,19 @@
-import type { FC } from 'react';
+import type { FC, ReactNode } from 'react';
 import { useRef } from 'react';
 import { useBoolean } from 'ahooks';
-import { IButton } from '@/app/components/form/button';
 import { cn } from '@/utils';
 import { useToggleExpend } from '@/hooks/use-toggle-expend';
 import { JsonEditor } from '@/app/components/json-editor';
-import { Check, Copy, Maximize2, Minimize2 } from 'lucide-react';
+import { Copy, Checkmark, Maximize, Minimize } from '@carbon/icons-react';
+import { Button } from '@carbon/react';
 
-// Prommpt editor //
 type CodeEditorProps = {
   placeholder: string;
   value: string;
   onChange: (value: string) => void;
   className?: string;
+  labelText?: ReactNode;
+  helperText?: ReactNode;
 };
 
 export const CodeEditor: FC<CodeEditorProps> = ({
@@ -20,13 +21,15 @@ export const CodeEditor: FC<CodeEditorProps> = ({
   value,
   onChange,
   className,
+  labelText,
+  helperText,
 }) => {
-  // expand feature
   const ref = useRef<HTMLDivElement>(null);
   const { isExpand, setIsExpand } = useToggleExpend(ref);
   const [isFocus, { setTrue: setFocus, setFalse: setBlur }] = useBoolean(false);
   const [isChecked, { setTrue: setChecked, setFalse: setUnCheck }] =
     useBoolean(false);
+
   const handlePromptChange = (newValue: string) => {
     if (value === newValue) return;
     onChange(newValue);
@@ -35,74 +38,67 @@ export const CodeEditor: FC<CodeEditorProps> = ({
   const copyItem = (item: string) => {
     setChecked();
     navigator.clipboard.writeText(item);
-    setTimeout(() => {
-      setUnCheck();
-    }, 4000); // Reset back after 2 seconds
+    setTimeout(() => setUnCheck(), 4000);
   };
 
   return (
     <div
       ref={ref}
       className={cn(
-        'group',
-        'outline-solid outline-[1.5px] outline-transparent',
-        'focus-within:outline-blue-600 focus:outline-blue-600 outline-offset-[-1.5px]',
-        'border-b border-gray-300 dark:border-gray-700',
-        'dark:focus:border-blue-600 focus:border-blue-600',
-        'transition-all duration-200 ease-in-out',
-        'relative',
-        'bg-light-background dark:bg-gray-950',
-        isFocus && 'border-blue-600! outline-blue-600! ',
-        isExpand
-          ? 'fixed top-0 bottom-0 right-0 left-0 h-full z-50 m-0! p-0!'
-          : '',
+        'cds--form-item w-full',
+        isExpand && 'fixed inset-0 z-50 bg-[var(--cds-background)] flex flex-col',
       )}
     >
+      {labelText && !isExpand && (
+        <label className="cds--label">{labelText}</label>
+      )}
       <div
         className={cn(
-          'flex items-center absolute right-1 top-1 z-20 invisible group-hover:visible bg-light-background dark:bg-gray-900',
+          'relative group w-full',
+          'bg-[var(--cds-field)] border-b-2',
+          isFocus
+            ? 'border-b-[var(--cds-focus)]'
+            : 'border-b-[var(--cds-border-strong)]',
+          isExpand ? 'flex-1 min-h-0' : 'min-h-[200px]',
         )}
       >
-        <IButton
-          className="h-8"
-          tabIndex={-1}
-          onClick={() => {
-            copyItem(value);
-          }}
-        >
-          {isChecked ? (
-            <Check className="h-3.5 w-3.5 text-green-600" strokeWidth={1.5} />
-          ) : (
-            <Copy className="h-3.5 w-3.5" />
-          )}
-        </IButton>
-        <IButton
-          className="h-8"
-          tabIndex={-1}
-          onClick={() => {
-            setIsExpand(!isExpand);
-          }}
-        >
-          {isExpand ? (
-            <Minimize2 className="h-3.5 w-3.5" strokeWidth={1.5} />
-          ) : (
-            <Maximize2 className="h-3.5 w-3.5" strokeWidth={1.5} />
-          )}
-        </IButton>
-      </div>
+        <div className="flex items-center absolute right-0 top-0 z-20 opacity-0 group-hover:opacity-100 transition-opacity">
+          <Button
+            hasIconOnly
+            renderIcon={isChecked ? Checkmark : Copy}
+            iconDescription="Copy"
+            kind="ghost"
+            size="sm"
+            onClick={() => copyItem(value)}
+            tabIndex={-1}
+          />
+          <Button
+            hasIconOnly
+            renderIcon={isExpand ? Minimize : Maximize}
+            iconDescription={isExpand ? 'Minimize' : 'Maximize'}
+            kind="ghost"
+            size="sm"
+            onClick={() => setIsExpand(!isExpand)}
+            tabIndex={-1}
+          />
+        </div>
 
-      <JsonEditor
-        className={cn(
-          'min-h-52 overflow-auto p-2',
-          className,
-          isExpand && 'h-screen p-4',
-        )}
-        placeholder={placeholder}
-        value={value}
-        onFocus={setFocus}
-        onChange={handlePromptChange}
-        onBlur={setBlur}
-      />
+        <JsonEditor
+          className={cn(
+            'w-full h-full',
+            className,
+          )}
+          height="100%"
+          placeholder={placeholder}
+          value={value}
+          onFocus={setFocus}
+          onChange={handlePromptChange}
+          onBlur={setBlur}
+        />
+      </div>
+      {helperText && (
+        <div className="cds--form__helper-text">{helperText}</div>
+      )}
     </div>
   );
 };

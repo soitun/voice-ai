@@ -1,8 +1,8 @@
 // Copyright (c) 2023-2025 RapidaAI
-// Author: Prashant Srivastav <prashant@rapida.ai>
-//
-// Licensed under GPL-2.0 with Rapida Additional Terms.
-// See LICENSE.md or contact sales@rapida.ai for commercial usage.
+// // Author: Prashant Srivastav <prashant@rapida.ai>
+// //
+// // Licensed under GPL-2.0 with Rapida Additional Terms.
+// // See LICENSE.md or contact sales@rapida.ai for commercial usage.
 package parsers
 
 import (
@@ -11,86 +11,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/rapidaai/pkg/commons"
-	"github.com/rapidaai/pkg/types"
 )
-
-func TestPongo2MessageTemplateParser_Parse(t *testing.T) {
-	logger, _ := commons.NewApplicationLogger()
-	parser := NewPongo2MessageTemplateParser(logger)
-	tests := []struct {
-		name     string
-		template *types.Message
-		argument map[string]interface{}
-		expected *types.Message
-	}{
-		{
-			name: "Simple template parsing",
-			template: &types.Message{
-				Contents: []*types.Content{
-					{
-						Content:       []byte("Hello, {{ name }}!"),
-						ContentType:   commons.TEXT_CONTENT.String(),
-						ContentFormat: commons.TEXT_CONTENT_FORMAT_RAW.String(),
-					},
-				},
-			},
-			argument: map[string]interface{}{
-				"name": "John",
-			},
-			expected: &types.Message{
-				Contents: []*types.Content{
-					{
-						Content:       []byte("Hello, John!"),
-						ContentType:   commons.TEXT_CONTENT.String(),
-						ContentFormat: commons.TEXT_CONTENT_FORMAT_RAW.String(),
-					},
-				},
-			},
-		},
-		{
-			name: "Multiple contents with mixed types",
-			template: &types.Message{
-				Contents: []*types.Content{
-					{
-						Content:       []byte("Hello, {{ name }}!"),
-						ContentType:   commons.TEXT_CONTENT.String(),
-						ContentFormat: commons.TEXT_CONTENT_FORMAT_RAW.String(),
-					},
-					{
-						Content:       []byte("Age: {{ age }} {% if age > 20 %}You are 20 year old{% endif %}"),
-						ContentType:   commons.TEXT_CONTENT.String(),
-						ContentFormat: commons.TEXT_CONTENT_FORMAT_RAW.String(),
-					},
-				},
-			},
-			argument: map[string]interface{}{
-				"name": "Alice",
-				"age":  30,
-			},
-			expected: &types.Message{
-				Contents: []*types.Content{
-					{
-						Content:       []byte("Hello, Alice!"),
-						ContentType:   commons.TEXT_CONTENT.String(),
-						ContentFormat: commons.TEXT_CONTENT_FORMAT_RAW.String(),
-					},
-					{
-						Content:       []byte("Age: 30 You are 20 year old"),
-						ContentType:   commons.TEXT_CONTENT.String(),
-						ContentFormat: commons.TEXT_CONTENT_FORMAT_RAW.String(),
-					},
-				},
-			},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := parser.Parse(tt.template, tt.argument)
-			assert.Equal(t, tt.expected, result)
-		})
-	}
-}
 
 func TestPongo2StringTemplateParser_Parse(t *testing.T) {
 	tests := []struct {
@@ -118,6 +39,57 @@ func TestPongo2StringTemplateParser_Parse(t *testing.T) {
 	}
 	logger, _ := commons.NewApplicationLogger()
 	parser := NewPongo2StringTemplateParser(logger)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := parser.Parse(tt.template, tt.argument)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestPongo2StringTemplateParser_Parse_DottedKeys(t *testing.T) {
+	logger, _ := commons.NewApplicationLogger()
+	parser := NewPongo2StringTemplateParser(logger)
+
+	tests := []struct {
+		name     string
+		template string
+		argument map[string]interface{}
+		expected string
+	}{
+		{
+			name:     "supports dotted keys as nested variables",
+			template: "lang={{ message.language }} text={{ message.text }}",
+			argument: map[string]interface{}{
+				"message.language": "en",
+				"message.text":     "hello",
+			},
+			expected: "lang=en text=hello",
+		},
+		{
+			name:     "dotted keys deterministically override scalar parent",
+			template: "lang={{ message.language }} text={{ message.text }}",
+			argument: map[string]interface{}{
+				"message":          "scalar",
+				"message.language": "en",
+				"message.text":     "hello",
+			},
+			expected: "lang=en text=hello",
+		},
+		{
+			name:     "existing nested value is preserved over dotted fallback",
+			template: "lang={{ message.language }} text={{ message.text }}",
+			argument: map[string]interface{}{
+				"message": map[string]interface{}{
+					"language": "fr",
+					"text":     "bonjour",
+				},
+				"message.language": "en",
+			},
+			expected: "lang=fr text=bonjour",
+		},
+	}
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := parser.Parse(tt.template, tt.argument)

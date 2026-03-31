@@ -1,0 +1,323 @@
+@use '@carbon/react/scss/themes' as themes;
+@use '@carbon/react/scss/theme' as carbon-theme with (
+  $theme: themes.$white
+);
+@use '@carbon/react/scss/components/button';
+@use '@carbon/react/scss/components/tooltip';
+@use '@carbon/react/scss/components/toggletip';
+@use '@carbon/react/scss/components/toggle';
+@use '@carbon/react/scss/components/overflow-menu';
+@use '@carbon/react/scss/components/modal';
+@use '@carbon/react/scss/components/form';
+@use '@carbon/react/scss/components/stack';
+@use '@carbon/react/scss/components/checkbox';
+@use '@carbon/react/scss/components/text-input';
+@use '@carbon/react/scss/components/text-area';
+@use '@carbon/react/scss/components/list-box';
+@use '@carbon/react/scss/components/dropdown';
+@use '@carbon/react/scss/components/multiselect';
+@use '@carbon/react/scss/components/search';
+@use '@carbon/react/scss/components/combo-box';
+@use '@carbon/react/scss/components/select';
+@use '@carbon/react/scss/components/pagination';
+@use '@carbon/react/scss/components/radio-button';
+@use '@carbon/react/scss/components/number-input';
+@use '@carbon/react/scss/components/slider';
+@use '@carbon/react/scss/components/skeleton-styles';
+@use '@carbon/react/scss/components/data-table';
+@use '@carbon/react/scss/components/data-table/action';
+@use '@carbon/react/scss/components/icon-indicator';
+@use '@carbon/styles/scss/components/shape-indicator';
+@use '@carbon/react/scss/components/breadcrumb';
+@use '@carbon/react/scss/components/notification';
+@use '@carbon/react/scss/components/link';
+@use '@carbon/react/scss/components/tile';
+@use '@carbon/react/scss/components/tag';
+@use '@carbon/react/scss/components/loading';
+@use '@carbon/react/scss/components/code-snippet';
+@use '@carbon/react/scss/components/content-switcher';
+@use '@carbon/react/scss/components/progress-indicator';
+@use '@carbon/react/scss/components/copy-button';
+@use '@carbon/react/scss/components/menu';
+@use '@carbon/styles/scss/components/combo-button';
+@use '@carbon/styles/scss/components/menu-button';
+@use '@carbon/react/scss/components/ui-shell';
+@use '@carbon/react/scss/components/popover';
+@use '@carbon/react/scss/components/date-picker';
+
+// ─── DatePicker calendar background ─────────────────────────────────────────
+.flatpickr-calendar,
+.flatpickr-months,
+.flatpickr-month,
+.flatpickr-weekdays,
+.flatpickr-weekday {
+  background: var(--cds-field, var(--cds-layer, #ffffff));
+}
+
+.dark .flatpickr-calendar,
+.dark .flatpickr-months,
+.dark .flatpickr-month,
+.dark .flatpickr-weekdays,
+.dark .flatpickr-weekday {
+  background: #393939;
+}
+
+.flatpickr-day {
+  color: var(--cds-text-primary);
+}
+
+.flatpickr-day.prevMonthDay,
+.flatpickr-day.nextMonthDay {
+  color: var(--cds-text-disabled);
+}
+
+.flatpickr-current-month .flatpickr-monthDropdown-months,
+.flatpickr-current-month input.cur-year {
+  color: var(--cds-text-primary);
+}
+
+.flatpickr-months .flatpickr-prev-month svg,
+.flatpickr-months .flatpickr-next-month svg {
+  fill: var(--cds-icon-primary);
+}
+
+// ─── Popover width override ─────────────────────────────────────────────────
+.cds--popover-content {
+  max-inline-size: none;
+}
+
+// ─── Batch action buttons ───────────────────────────────────────────────────
+.cds--batch-actions .cds--batch-summary__cancel {
+  background-color: var(--cds-button-secondary, #393939);
+  color: var(--cds-text-on-color, #ffffff);
+}
+.cds--batch-actions .cds--action-list .cds--btn,
+.cds--batch-actions .cds--action-list .cds--btn::before,
+.cds--batch-actions .cds--batch-summary__cancel::before {
+  border: none;
+  border-left: none;
+  box-shadow: none;
+}
+
+// ─── Light theme (default) — Carbon white ───────────────────────────────────
+:root {
+  @include carbon-theme.theme(themes.$white);
+
+  // Custom primary overrides
+  --cds-interactive: var(--color-primary);
+  --cds-button-primary: var(--color-primary);
+  --cds-button-primary-hover: color-mix(in oklab, var(--color-primary) 85%, black);
+  --cds-button-primary-active: color-mix(in oklab, var(--color-primary) 70%, black);
+  --cds-button-tertiary: var(--color-primary);
+  --cds-button-tertiary-hover: var(--color-primary);
+  --cds-button-tertiary-active: color-mix(in oklab, var(--color-primary) 70%, black);
+  --cds-focus: var(--color-primary);
+  --cds-border-interactive: var(--color-primary);
+  --cds-link-primary: var(--color-primary);
+  --cds-link-primary-hover: color-mix(in oklab, var(--color-primary) 80%, black);
+}
+
+// ─── Dark theme — Carbon g100 ───────────────────────────────────────────────
+:is(.dark *),
+:root:is(.dark) {
+  @include carbon-theme.theme(themes.$g100);
+
+  // Background — use page bg color, not transparent
+  --cds-background: #0a0a0a;
+  --cds-layer-01: #161616;
+
+  // Focus / interactive — use primary instead of g100 default white
+  --cds-focus: #4589ff;
+  --cds-border-interactive: #4589ff;
+  --cds-interactive: #4589ff;
+  --cds-link-primary: #4589ff;
+  --cds-link-primary-hover: color-mix(in oklab, #4589ff 80%, white);
+  --cds-button-primary: #0f62fe;
+  --cds-button-primary-hover: #0353e9;
+  --cds-button-tertiary: #4589ff;
+  --cds-button-tertiary-hover: #4589ff;
+}
+
+// ─── System preference dark (when no .dark class) ────────────────────────────
+@media (prefers-color-scheme: dark) {
+  :root:not(.light) {
+    @include carbon-theme.theme(themes.$g100);
+
+    --cds-background: #0a0a0a;
+    --cds-layer-01: #161616;
+    --cds-focus: #4589ff;
+    --cds-border-interactive: #4589ff;
+    --cds-interactive: #4589ff;
+    --cds-link-primary: #4589ff;
+    --cds-link-primary-hover: color-mix(in oklab, #4589ff 80%, white);
+    --cds-button-primary: #0f62fe;
+    --cds-button-primary-hover: #0353e9;
+    --cds-button-tertiary: #4589ff;
+    --cds-button-tertiary-hover: #4589ff;
+  }
+}
+
+// ─── Toolbar styling ─────────────────────────────────────────────────────────
+.cds--table-toolbar {
+  background-color: transparent;
+  border: none;
+  border-bottom: 1px solid var(--cds-border-subtle);
+}
+
+// ─── Table header overrides ──────────────────────────────────────────────────
+.cds--table-header-label {
+  text-transform: uppercase;
+  font-weight: 500;
+  font-size: 0.75rem;
+  letter-spacing: 0.04em;
+}
+
+// ─── Switcher labeled divider (IBM pattern) ──────────────────────────────────
+.cds--switcher__item--divider:has(> span) {
+  display: flex;
+  align-items: center;
+  height: auto;
+  padding: 1rem 1rem 0.5rem;
+  margin: 0;
+  background: none;
+  border-top: none;
+  border-bottom: 1px solid var(--cds-border-subtle);
+  block-size: auto;
+  inline-size: 100%;
+
+  span {
+    font-size: 0.625rem;
+    font-weight: 500;
+    color: var(--cds-text-secondary);
+    letter-spacing: 0.1em;
+    text-transform: capitalize;
+    text-align: left;
+    width: 100%;
+  }
+}
+
+// ─── Project selector dropdown in header ─────────────────────────────────────
+.project-selector-dropdown {
+  display: flex;
+  align-items: center;
+  align-self: center;
+  min-width: 180px;
+  border-inline-start: none;
+
+  position: relative;
+
+  .cds--dropdown,
+  .cds--list-box__wrapper {
+    position: static;
+  }
+
+  .cds--list-box {
+    border: none;
+    height: 3rem;
+    max-height: 3rem;
+    background-color: transparent;
+  }
+
+  .cds--list-box__menu {
+    position: absolute;
+    top: 3rem;
+    left: 0;
+    z-index: 9000;
+  }
+
+  .cds--list-box__field {
+    height: 3rem;
+    padding-inline-start: 1rem;
+    padding-inline-end: 2.5rem;
+  }
+
+  .cds--list-box__label {
+    font-size: 0.875rem;
+    font-weight: 500;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .cds--list-box__menu-icon {
+    right: 0.75rem;
+  }
+
+  .cds--list-box__menu-item {
+    height: 2.5rem;
+  }
+
+  .cds--list-box__menu-item__option {
+    padding-block: 0.625rem;
+  }
+
+  .cds--list-box:hover {
+    background-color: var(--cds-background-hover);
+  }
+
+  .cds--list-box--expanded .cds--list-box__field {
+    border-bottom: 2px solid var(--cds-border-interactive);
+  }
+}
+
+// ─── Notice link style — action button as inline link ────────────────────────
+.notice-link-style .cds--actionable-notification__action-button {
+  background: none !important;
+  border: none !important;
+  padding: 0 !important;
+  min-height: auto !important;
+  color: var(--cds-link-primary) !important;
+  font-weight: 600;
+  font-size: 0.875rem;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+
+  &:hover {
+    background: none !important;
+    text-decoration: none;
+  }
+}
+
+// ─── Tag tokens (light/dark) ─────────────────────────────────────────────────
+// ─── Remove dotted underline from DefinitionTooltip wrapping tags ────────────
+// ─── Remove dotted underline from DefinitionTooltip wrapping tags ────────────
+.cds--definition-term {
+  border-bottom: none !important;
+}
+
+// ─── SideNav background ─────────────────────────────────────────────────────
+.cds--side-nav {
+  background-color: #ffffff;
+}
+
+:is(.dark *) .cds--side-nav,
+:root:is(.dark) .cds--side-nav {
+  background-color: #1a1a1a;
+}
+
+// ─── SideNav submenu items font weight ───────────────────────────────────────
+.cds--side-nav__menu-item .cds--side-nav__link-text {
+  font-weight: 500;
+}
+
+
+:root {
+  --cds-tag-background-cool-gray: #dde1e6;
+  --cds-tag-color-cool-gray: #121619;
+  --cds-tag-hover-cool-gray: #cdd3da;
+  --cds-tag-background-gray: #e0e0e0;
+  --cds-tag-color-gray: #161616;
+  --cds-tag-hover-gray: #cacaca;
+}
+
+:is(.dark *),
+:root:is(.dark) {
+  --cds-tag-background-cool-gray: #343a3f;
+  --cds-tag-color-cool-gray: #dde1e6;
+  --cds-tag-hover-cool-gray: #4d5358;
+  --cds-tag-background-gray: #393939;
+  --cds-tag-color-gray: #e0e0e0;
+  --cds-tag-hover-gray: #474747;
+}
+
+

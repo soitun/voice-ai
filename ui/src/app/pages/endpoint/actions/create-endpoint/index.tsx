@@ -6,9 +6,10 @@ import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast/headless';
 import { Helmet } from '@/app/components/helmet';
 import {
-  IBlueBGArrowButton,
-  ICancelButton,
-} from '@/app/components/form/button';
+  PrimaryButton,
+  SecondaryButton,
+} from '@/app/components/carbon/button';
+import { ButtonSet } from '@carbon/react';
 import { TabForm } from '@/app/components/form/tab-form';
 import {
   ConnectionConfig,
@@ -364,20 +365,19 @@ export function CreateEndpointPage() {
                 </div>
             ),
             actions: [
-              <ICancelButton
-                className="w-full h-full"
-                onClick={() => setIsShow(true)}
-              >
-                Cancel
-              </ICancelButton>,
-              <IBlueBGArrowButton
-                type="button"
-                isLoading={loading}
-                className="w-full h-full"
-                onClick={onvalidateEndpointInstruction}
-              >
-                Configure instruction
-              </IBlueBGArrowButton>,
+              <ButtonSet className="!w-full [&>button]:!flex-1 [&>button]:!max-w-none">
+                <SecondaryButton size="lg"
+                  onClick={() => setIsShow(true)}
+                >
+                  Cancel
+                </SecondaryButton>
+                <PrimaryButton size="lg"
+                  isLoading={loading}
+                  onClick={onvalidateEndpointInstruction}
+                >
+                  Configure instruction
+                </PrimaryButton>
+              </ButtonSet>,
             ],
           },
           {
@@ -386,20 +386,19 @@ export function CreateEndpointPage() {
             description:
               'Give your endpoint a name, description, and labels to make it easy to find and manage.',
             actions: [
-              <ICancelButton
-                className="w-full h-full"
-                onClick={() => setIsShow(true)}
-              >
-                Cancel
-              </ICancelButton>,
-              <IBlueBGArrowButton
-                className="w-full h-full"
-                type="button"
-                isLoading={loading}
-                onClick={createEndpoint}
-              >
-                Create endpoint
-              </IBlueBGArrowButton>,
+              <ButtonSet className="!w-full [&>button]:!flex-1 [&>button]:!max-w-none">
+                <SecondaryButton size="lg"
+                  onClick={() => setIsShow(true)}
+                >
+                  Cancel
+                </SecondaryButton>
+                <PrimaryButton size="lg"
+                  isLoading={loading}
+                  onClick={createEndpoint}
+                >
+                  Create endpoint
+                </PrimaryButton>
+              </ButtonSet>,
             ],
             body: (
               <div className="px-8 pt-8 pb-8 max-w-2xl flex flex-col gap-10">

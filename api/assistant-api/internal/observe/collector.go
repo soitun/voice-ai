@@ -6,122 +6,21 @@
 package observe
 
 import (
-	"context"
-	"sync"
-
 	"github.com/rapidaai/pkg/commons"
+	"github.com/rapidaai/pkg/telemetry"
 )
 
-// EventCollector fans out EventRecord to all registered EventExporters.
-type EventCollector interface {
-	Collect(ctx context.Context, rec EventRecord)
-	Shutdown(ctx context.Context)
-}
-
-// MetricCollector fans out MetricRecord to all registered MetricExporters.
-type MetricCollector interface {
-	Collect(ctx context.Context, rec MetricRecord)
-	Shutdown(ctx context.Context)
-}
-
-// =============================================================================
-// Fan-out EventCollector
-// =============================================================================
-
-type fanoutEventCollector struct {
-	logger    commons.Logger
-	meta      SessionMeta
-	exporters []EventExporter
-	wg        sync.WaitGroup
-}
+type EventCollector = telemetry.EventCollector
+type MetricCollector = telemetry.MetricCollector
 
 // NewEventCollector returns a fan-out EventCollector. When no exporters are
 // provided, a no-op implementation is returned to avoid any allocations.
 func NewEventCollector(logger commons.Logger, meta SessionMeta, exporters ...EventExporter) EventCollector {
-	if len(exporters) == 0 {
-		return noopEventCollector{}
-	}
-	return &fanoutEventCollector{logger: logger, meta: meta, exporters: exporters}
-}
-
-func (c *fanoutEventCollector) Collect(ctx context.Context, rec EventRecord) {
-	for _, exp := range c.exporters {
-		exp := exp
-		c.wg.Add(1)
-		go func() {
-			defer c.wg.Done()
-			if err := exp.ExportEvent(ctx, c.meta, rec); err != nil {
-				c.logger.Errorf("observe: event export error: %v", err)
-			}
-		}()
-	}
-}
-
-// Shutdown waits for all in-flight export goroutines to finish, then shuts down
-// each exporter in order.
-func (c *fanoutEventCollector) Shutdown(ctx context.Context) {
-	c.wg.Wait()
-	for _, exp := range c.exporters {
-		if err := exp.Shutdown(ctx); err != nil {
-			c.logger.Errorf("observe: event exporter shutdown error: %v", err)
-		}
-	}
-}
-
-// =============================================================================
-// Fan-out MetricCollector
-// =============================================================================
-
-type fanoutMetricCollector struct {
-	logger    commons.Logger
-	meta      SessionMeta
-	exporters []MetricExporter
-	wg        sync.WaitGroup
+	return telemetry.NewEventCollector(logger, meta, exporters...)
 }
 
 // NewMetricCollector returns a fan-out MetricCollector. When no exporters are
 // provided, a no-op implementation is returned to avoid any allocations.
 func NewMetricCollector(logger commons.Logger, meta SessionMeta, exporters ...MetricExporter) MetricCollector {
-	if len(exporters) == 0 {
-		return noopMetricCollector{}
-	}
-	return &fanoutMetricCollector{logger: logger, meta: meta, exporters: exporters}
+	return telemetry.NewMetricCollector(logger, meta, exporters...)
 }
-
-func (c *fanoutMetricCollector) Collect(ctx context.Context, rec MetricRecord) {
-	for _, exp := range c.exporters {
-		exp := exp
-		c.wg.Add(1)
-		go func() {
-			defer c.wg.Done()
-			if err := exp.ExportMetric(ctx, c.meta, rec); err != nil {
-				c.logger.Errorf("observe: metric export error: %v", err)
-			}
-		}()
-	}
-}
-
-// Shutdown waits for all in-flight export goroutines to finish, then shuts down
-// each exporter in order.
-func (c *fanoutMetricCollector) Shutdown(ctx context.Context) {
-	c.wg.Wait()
-	for _, exp := range c.exporters {
-		if err := exp.Shutdown(ctx); err != nil {
-			c.logger.Errorf("observe: metric exporter shutdown error: %v", err)
-		}
-	}
-}
-
-// =============================================================================
-// Noop implementations
-// =============================================================================
-
-type noopEventCollector struct{}
-
-func (noopEventCollector) Collect(_ context.Context, _ EventRecord) {}
-func (noopEventCollector) Shutdown(_ context.Context)               {}
-
-type noopMetricCollector struct{}
-
-func (noopMetricCollector) Collect(_ context.Context, _ MetricRecord) {}
-func (noopMetricCollector) Shutdown(_ context.Context)                {}

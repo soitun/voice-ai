@@ -7,28 +7,29 @@ import {
 } from '@rapidaai/react';
 import { GetAssistantResponse } from '@rapidaai/react';
 import { ServiceError } from '@rapidaai/react';
-import { PageHeaderBlock } from '@/app/components/blocks/page-header-block';
-import { PageTitleBlock } from '@/app/components/blocks/page-title-block';
 import { ErrorContainer } from '@/app/components/error-container';
-import { FormLabel } from '@/app/components/form-label';
-import { IBlueBGButton, IRedBGButton } from '@/app/components/form/button';
-import { FieldSet } from '@/app/components/form/fieldset';
-import { Input } from '@/app/components/form/input';
-import { CopyInput } from '@/app/components/form/input/copy-input';
-import { Textarea } from '@/app/components/form/textarea';
-import { InputHelper } from '@/app/components/input-helper';
 import { useDeleteConfirmDialog } from '@/app/pages/assistant/actions/hooks/use-delete-confirmation';
 import { useRapidaStore } from '@/hooks';
 import { useCurrentCredential } from '@/hooks/use-credential';
 import { useGlobalNavigation } from '@/hooks/use-global-navigator';
-import { AlertTriangle } from 'lucide-react';
 import { FC, useEffect, useState } from 'react';
 import toast from 'react-hot-toast/headless';
 import { useParams } from 'react-router-dom';
 import { UpdateAssistantDetail } from '@rapidaai/react';
 import { connectionConfig } from '@/configs';
-import { ErrorMessage } from '@/app/components/form/error-message';
-import { SectionDivider } from '@/app/components/blocks/section-divider';
+import { Notification } from '@/app/components/carbon/notification';
+import {
+  Form,
+  Stack,
+  TextInput,
+  TextArea,
+} from '@/app/components/carbon/form';
+import {
+  PrimaryButton,
+  DangerButton,
+} from '@/app/components/carbon/button';
+import { Breadcrumb, BreadcrumbItem } from '@carbon/react';
+import { WarningAlt } from '@carbon/icons-react';
 
 export function EditAssistantPage() {
   const { assistantId } = useParams();
@@ -42,7 +43,7 @@ export function EditAssistantPage() {
           code="403"
           actionLabel="Go to listing"
           title="Assistant not available"
-          description="This assistant may be archived or you don't have access to it. Please check with your administrator or try another assistant."
+          description="This assistant may be archived or you don't have access to it."
         />
       </div>
     );
@@ -60,7 +61,6 @@ export const EditAssistant: FC<{ assistantId: string }> = ({ assistantId }) => {
 
   useEffect(() => {
     showLoader('block');
-
     const request = new GetAssistantRequest();
     const assistantDef = new AssistantDefinition();
     assistantDef.setAssistantid(assistantId);
@@ -154,7 +154,6 @@ export const EditAssistant: FC<{ assistantId: string }> = ({ assistantId }) => {
           toast.error('Unable to delete assistant. Please try again later.');
         }
       };
-
       DeleteAssistant(connectionConfig, assistantId, afterDeleteAssistant, {
         authorization: token,
         'x-auth-id': authId,
@@ -165,105 +164,99 @@ export const EditAssistant: FC<{ assistantId: string }> = ({ assistantId }) => {
   });
 
   return (
-    <div className="w-full flex flex-col flex-1">
+    <div className="w-full flex flex-col flex-1 overflow-auto">
       <Deletion.ConfirmDeleteDialogComponent />
-      <PageHeaderBlock>
-        <PageTitleBlock>General Settings</PageTitleBlock>
-      </PageHeaderBlock>
 
-      <div className="overflow-auto flex flex-col flex-1">
-        <div className="px-8 pt-8 pb-12 flex flex-col gap-10 max-w-2xl">
+      {/* Page header */}
+      <div className="px-4 pt-4 pb-6 border-b border-gray-200 dark:border-gray-800">
+        <Breadcrumb noTrailingSlash className="mb-2">
+          <BreadcrumbItem href={`/deployment/assistant/${assistantId}/overview`}>
+            Assistant
+          </BreadcrumbItem>
+        </Breadcrumb>
+        <h1 className="text-2xl font-light tracking-tight">General Settings</h1>
+      </div>
 
-          {/* ── Identity ───────────────────────────────────────────── */}
-          <div className="flex flex-col gap-6">
-            <SectionDivider label="Identity" />
-            <FieldSet>
-              <FormLabel>Assistant ID</FormLabel>
-              <CopyInput
-                name="id"
-                disabled
-                value={assistantId}
-                className="border-dashed"
-                placeholder="eg: your-assistant-id"
-              />
-              <InputHelper>
-                Your assistant's unique identifier. This cannot be changed.
-              </InputHelper>
-            </FieldSet>
+      <div className="px-4 pt-6 pb-12 flex flex-col gap-8 max-w-2xl">
+        {/* ── Identity ── */}
+        <div>
+          <h2 className="text-sm font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-4">Identity</h2>
+          <div>
+            <TextInput
+              id="assistant-id"
+              labelText="Assistant ID"
+              value={assistantId}
+              readOnly
+              helperText="Your assistant's unique identifier. This cannot be changed."
+            />
           </div>
+        </div>
 
-          {/* ── General Information ────────────────────────────────── */}
-          <div className="flex flex-col gap-6">
-            <SectionDivider label="General Information" />
-            <FieldSet>
-              <FormLabel>Name</FormLabel>
-              <Input
-                name="usecase"
-                onChange={e => setName(e.target.value)}
-                value={name}
-                placeholder="e.g. Customer support bot"
-              />
-              <InputHelper>
-                The display name shown across the platform for this assistant.
-              </InputHelper>
-            </FieldSet>
-            <FieldSet>
-              <FormLabel>Description</FormLabel>
-              <Textarea
-                row={4}
-                value={description}
-                placeholder="What's the purpose of this assistant?"
-                onChange={t => setDescription(t.target.value)}
-              />
-              <InputHelper>
-                Describe what this assistant does and its intended use case.
-              </InputHelper>
-            </FieldSet>
-            {errorMessage && <ErrorMessage message={errorMessage} />}
-            <div>
-              <IBlueBGButton
-                type="button"
-                isLoading={loading}
-                onClick={onUpdateAssistantDetail}
-              >
-                Save changes
-              </IBlueBGButton>
-            </div>
-          </div>
-
-          {/* ── Danger Zone ────────────────────────────────────────── */}
-          <div className="flex flex-col gap-6">
-            <SectionDivider label="Danger Zone" />
-            <div className="flex rounded-none border-0">
-              {/* Left accent bar — 3px red */}
-              <div className="w-[3px] flex-shrink-0 bg-red-600" />
-              {/* Notification body */}
-              <div className="flex-1 flex items-start justify-between gap-6 px-4 py-4 bg-red-50 dark:bg-red-950/20">
-                <div className="flex flex-col gap-1.5">
-                  <p className="text-sm font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2">
-                    <AlertTriangle
-                      className="w-4 h-4 text-red-600 flex-shrink-0"
-                      strokeWidth={1.5}
-                    />
-                    Delete this assistant
-                  </p>
-                  <p className="text-xs text-gray-500 dark:text-gray-400 leading-relaxed">
-                    Once deleted, all active connections will be terminated
-                    immediately and data will be permanently removed after the
-                    rolling retention period. This action cannot be undone.
-                  </p>
+        {/* ── General Information ── */}
+        <div>
+          <h2 className="text-sm font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-4">General Information</h2>
+          <div>
+            <Form onSubmit={e => { e.preventDefault(); onUpdateAssistantDetail(); }}>
+              <Stack gap={6}>
+                <TextInput
+                  id="assistant-name"
+                  labelText="Name"
+                  value={name}
+                  onChange={e => setName(e.target.value)}
+                  placeholder="e.g. Customer support bot"
+                  helperText="The display name shown across the platform."
+                />
+                <TextArea
+                  id="assistant-description"
+                  labelText="Description"
+                  value={description}
+                  rows={4}
+                  onChange={e => setDescription(e.target.value)}
+                  placeholder="What's the purpose of this assistant?"
+                  helperText="Describe what this assistant does and its intended use case."
+                />
+                {errorMessage && (
+                  <Notification kind="error" title="Error" subtitle={errorMessage} />
+                )}
+                <div>
+                  <PrimaryButton
+                    size="md"
+                    isLoading={loading}
+                    onClick={onUpdateAssistantDetail}
+                  >
+                    Save changes
+                  </PrimaryButton>
                 </div>
-                <IRedBGButton
-                  className="shrink-0"
-                  isLoading={loading}
-                  onClick={Deletion.showDialog}
-                >
-                  Delete assistant
-                </IRedBGButton>
+              </Stack>
+            </Form>
+          </div>
+        </div>
+
+        {/* ── Danger Zone ── */}
+        <div>
+          <h2 className="text-sm font-semibold uppercase tracking-wider text-red-600 mb-4">Danger Zone</h2>
+          <div>
+            <div className="flex items-start justify-between gap-6">
+              <div className="flex flex-col gap-1">
+                <p className="text-sm font-semibold flex items-center gap-2">
+                  <WarningAlt size={16} className="text-red-600" />
+                  Delete this assistant
+                </p>
+                <p className="text-xs text-gray-500 dark:text-gray-400 leading-relaxed">
+                  Once deleted, all active connections will be terminated
+                  immediately and data will be permanently removed. This action
+                  cannot be undone.
+                </p>
               </div>
+              <DangerButton
+                size="md"
+                isLoading={loading}
+                onClick={Deletion.showDialog}
+              >
+                Delete assistant
+              </DangerButton>
             </div>
           </div>
-
         </div>
       </div>
     </div>

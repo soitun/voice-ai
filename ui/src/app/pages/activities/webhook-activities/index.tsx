@@ -1,55 +1,39 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { Helmet } from '@/app/components/helmet';
-import { Datepicker } from '@/app/components/datepicker';
+import { DateFilter } from '@/app/components/carbon/date-filter';
 import { useCredential } from '@/hooks/use-credential';
 import toast from 'react-hot-toast/headless';
 import { useRapidaStore } from '@/hooks';
-import { TablePagination } from '@/app/components/base/tables/table-pagination';
-import { SearchIconInput } from '@/app/components/form/input/IconInput';
-import { LinkCell } from '@/app/components/base/tables/link-cell';
-import { BluredWrapper } from '@/app/components/wrapper/blured-wrapper';
-import { formatNanoToReadableMilli, toDateString } from '@/utils/date';
-import { Spinner } from '@/app/components/loader/spinner';
-import { ScrollableResizableTable } from '@/app/components/data-table';
-import { IButton } from '@/app/components/form/button';
-import { IconActionButton } from '@/app/components/form/button/icon-action-button';
-import { Eye, RotateCw } from 'lucide-react';
-import { TableCell } from '@/app/components/base/tables/table-cell';
-import { TableRow } from '@/app/components/base/tables/table-row';
+import { formatNanoToReadableMilli, toDateString, toHumanReadableDateTime } from '@/utils/date';
 import { HttpStatusSpanIndicator } from '@/app/components/indicators/http-status';
-import { ActionCell } from '@/app/components/base/tables/action-cell';
 import { PageTitleWithCount } from '@/app/components/blocks/page-title-with-count';
-import { YellowNoticeBlock } from '@/app/components/container/message/notice-block';
 import { useWebhookLogPage } from '@/hooks/use-webhook-log-page-store';
 import { WebhookLogDialog } from '@/app/components/base/modal/webhook-log-modal';
-import { PaginationButtonBlock } from '@/app/components/blocks/pagination-button-block';
 import { PageHeaderBlock } from '@/app/components/blocks/page-header-block';
-import { DateCell } from '@/app/components/base/tables/date-cell';
 
-/**
- * Listing all the audit log for the user organization and selected project
- * @returns
- */
+import {
+  Table,
+  TableHead,
+  TableRow,
+  TableHeader,
+  TableBody,
+  TableCell,
+  TableToolbar,
+  TableToolbarContent,
+  TableToolbarSearch,
+  Loading,
+  Tag,
+} from '@carbon/react';
+import { TableLink } from '@/app/components/carbon/table-link';
+import { Pagination } from '@/app/components/carbon/pagination';
+import { IconOnlyButton } from '@/app/components/carbon/button';
+import { Renew, View, EventSchedule } from '@carbon/icons-react';
+import { EmptyState } from '@/app/components/carbon/empty-state';
 
 export function ListingPage() {
-  /**
-   * set loading context
-   */
   const { loading, showLoader, hideLoader } = useRapidaStore();
-
-  /**
-   * user credentials
-   */
   const [userId, token, projectId] = useCredential();
-
-  /**
-   * Current activity Id
-   */
   const [currentActivityId, setCurrentActivityId] = useState('');
-
-  /**
-   *  open modal
-   */
   const [showLogModal, setShowLogModal] = useState(false);
 
   const {
@@ -75,15 +59,12 @@ export function ListingPage() {
     ]);
   };
 
-  /**
-   *
-   */
   useEffect(() => {
     showLoader();
-    onGetAcitvities();
+    onGetActivities();
   }, [projectId, page, pageSize, JSON.stringify(criteria)]);
 
-  const onGetAcitvities = () => {
+  const onGetActivities = () => {
     getActivities(
       projectId,
       token,
@@ -98,6 +79,9 @@ export function ListingPage() {
       },
     );
   };
+
+  const visibleColumns = columns.filter(c => c.visible);
+
   return (
     <>
       {currentActivityId && (
@@ -115,124 +99,121 @@ export function ListingPage() {
         </PageTitleWithCount>
       </PageHeaderBlock>
 
-      <BluredWrapper className="sticky top-0 z-11">
-        <div className="flex">
-          <SearchIconInput className="bg-light-background flex-1" />
-          <Datepicker
-            align="right"
-            className="bg-light-background"
-            onDateSelect={onDateSelect}
+      <TableToolbar>
+        <TableToolbarContent>
+          <TableToolbarSearch placeholder="Search webhook logs" />
+          <DateFilter
+            onApply={(from, to) => onDateSelect(to, from)}
+            onReset={() => addCriterias([])}
           />
+          <IconOnlyButton
+            kind="ghost"
+            size="lg"
+            renderIcon={Renew}
+            iconDescription="Refresh"
+            onClick={() => onGetActivities()}
+          />
+        </TableToolbarContent>
+      </TableToolbar>
+
+      {loading ? (
+        <div className="flex items-center justify-center py-16">
+          <Loading withOverlay={false} small />
         </div>
-
-        <PaginationButtonBlock>
-          <TablePagination
-            columns={columns}
-            currentPage={page}
-            onChangeCurrentPage={setPage}
-            totalItem={totalCount}
-            pageSize={pageSize}
-            onChangePageSize={setPageSize}
-            onChangeColumns={setColumns}
-          />
-          <IButton
-            onClick={() => {
-              onGetAcitvities();
-            }}
-          >
-            <RotateCw strokeWidth={1.5} className="h-4 w-4" />
-          </IButton>
-        </PaginationButtonBlock>
-      </BluredWrapper>
-
-      {webhookLogs && webhookLogs.length > 0 ? (
-        <ScrollableResizableTable
-          isActionable={false}
-          clms={columns.filter(x => {
-            return x.visible;
-          })}
-        >
-          {webhookLogs.map((at, idx) => {
-            return (
-              <TableRow key={idx} data-id={at.getId()}>
-                {visibleColumn('webhookid') && (
-                  <LinkCell
-                    to={`/deployment/assistant/${at.getAssistantid()}/manage/configure-webhook`}
-                  >
-                    {at.getWebhookid()}
-                  </LinkCell>
-                )}
-
-                {visibleColumn('sessionid') && (
-                  <LinkCell
-                    to={`/deployment/assistant/${at.getAssistantid()}/sessions/${at.getAssistantconversationid()}`}
-                  >
-                    {at.getAssistantconversationid()}
-                  </LinkCell>
-                )}
-                {visibleColumn('event') && (
+      ) : webhookLogs.length > 0 ? (
+        <div className="overflow-auto flex-1">
+          <Table>
+            <TableHead>
+              <TableRow>
+                {visibleColumns.map(col => (
+                  <TableHeader key={col.key}>{col.name}</TableHeader>
+                ))}
+                <TableHeader>Actions</TableHeader>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {webhookLogs.map((at, idx) => (
+                <TableRow key={idx}>
+                  {visibleColumn('webhookid') && (
+                    <TableCell>
+                      <TableLink href={`/deployment/assistant/${at.getAssistantid()}/manage/configure-webhook`}>
+                        {at.getWebhookid()}
+                      </TableLink>
+                    </TableCell>
+                  )}
+                  {visibleColumn('sessionid') && (
+                    <TableCell>
+                      <TableLink href={`/deployment/assistant/${at.getAssistantid()}/sessions/${at.getAssistantconversationid()}`}>
+                        {at.getAssistantconversationid()}
+                      </TableLink>
+                    </TableCell>
+                  )}
+                  {visibleColumn('event') && (
+                    <TableCell>
+                      <Tag size="sm" type="blue">
+                        {at.getEvent()}
+                      </Tag>
+                    </TableCell>
+                  )}
+                  {visibleColumn('endpoint') && (
+                    <TableCell className="!text-xs">
+                      {at.getHttpmethod()}:{at.getHttpurl()}
+                    </TableCell>
+                  )}
+                  {visibleColumn('responsestatus') && (
+                    <TableCell>
+                      <HttpStatusSpanIndicator status={Number(at.getResponsestatus())} />
+                    </TableCell>
+                  )}
+                  {visibleColumn('timetaken') && (
+                    <TableCell className="!font-mono !text-xs">
+                      {formatNanoToReadableMilli(at.getTimetaken())}
+                    </TableCell>
+                  )}
+                  {visibleColumn('retrycount') && (
+                    <TableCell className="!text-xs">{at.getRetrycount()}</TableCell>
+                  )}
+                  {visibleColumn('created_date') && (
+                    <TableCell className="!font-mono !text-xs whitespace-nowrap">
+                      {at.getCreateddate() && toHumanReadableDateTime(at.getCreateddate()!)}
+                    </TableCell>
+                  )}
                   <TableCell>
-                    <span className="px-2 py-1 text-sm font-mono bg-blue-600/10 text-blue-600">
-                      {at.getEvent()}
-                    </span>
-                  </TableCell>
-                )}
-                {visibleColumn('created_date') && (
-                  <TableCell>
-                    {at.getHttpmethod()}:{at.getHttpurl()}
-                  </TableCell>
-                )}
-
-                {visibleColumn('responsestatus') && (
-                  <TableCell>
-                    <HttpStatusSpanIndicator
-                      status={Number(at.getResponsestatus())}
+                    <IconOnlyButton
+                      kind="ghost"
+                      size="md"
+                      renderIcon={View}
+                      iconDescription="View detail"
+                      onClick={() => {
+                        setCurrentActivityId(at.getId());
+                        setShowLogModal(true);
+                      }}
                     />
                   </TableCell>
-                )}
-                {visibleColumn('timetaken') && (
-                  <TableCell>
-                    {formatNanoToReadableMilli(at.getTimetaken())}
-                  </TableCell>
-                )}
-
-                {visibleColumn('retrycount') && (
-                  <TableCell>{at.getRetrycount()}</TableCell>
-                )}
-                {visibleColumn('created_date') && (
-                  <DateCell date={at.getCreateddate()} />
-                )}
-                <ActionCell>
-                  <IconActionButton
-                    tooltip="View detail"
-                    icon={<Eye strokeWidth={1.5} className="h-4 w-4" />}
-                    onClick={event => {
-                      event.stopPropagation();
-                      setCurrentActivityId(at.getId());
-                      setShowLogModal(true);
-                    }}
-                  />
-                </ActionCell>
-              </TableRow>
-            );
-          })}
-          {/* </TBody> */}
-        </ScrollableResizableTable>
-      ) : webhookLogs.length > 0 ? (
-        <YellowNoticeBlock>
-          <span className="font-semibold">No webhook log found</span>, There are
-          no activities matching with your criteria..
-        </YellowNoticeBlock>
-      ) : !loading ? (
-        <YellowNoticeBlock>
-          <span className="font-semibold">No webhook log found</span>, There is
-          no activities found for your account and project, Any activity made to
-          webhooks will be listed here.
-        </YellowNoticeBlock>
-      ) : (
-        <div className="h-full flex justify-center items-center grow">
-          <Spinner size="md" />
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
         </div>
+      ) : (
+        <EmptyState
+          icon={EventSchedule}
+          title="No webhook logs found"
+          subtitle="Webhook activities triggered by your assistant conversations will appear here once webhooks are configured and events are fired."
+        />
+      )}
+
+      {webhookLogs.length > 0 && (
+        <Pagination
+          totalItems={totalCount}
+          page={page}
+          pageSize={pageSize}
+          pageSizes={[10, 20, 25, 50, 100]}
+          onChange={({ page: p, pageSize: ps }) => {
+            if (ps !== pageSize) setPageSize(ps);
+            else setPage(p);
+          }}
+        />
       )}
     </>
   );

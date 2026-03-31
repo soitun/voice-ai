@@ -19,7 +19,7 @@ Rapida is written in **Go**, using the highly optimized [gRPC](https://github.co
 
 [![GitHub stars](https://img.shields.io/github/stars/rapidaai/voice-ai?style=social&label=Star&maxAge=2592000)](https://github.com/rapidaai/voice-ai/stargazers/)
 [![Twitter Follow](https://img.shields.io/twitter/follow/rapidaai)](https://twitter.com/rapidaai)
-[![Discord](https://img.shields.io/badge/Discord-Join%20Us-5865F2?logo=discord&logoColor=white)](https://discord.gg/qKNzjBkh)
+[![Discord](https://img.shields.io/badge/Discord-Join%20Us-5865F2?logo=discord&logoColor=white)](https://discord.gg/ZTZPsxD4St)
 [![Book a Meeting](https://img.shields.io/badge/Book%20a%20Meeting-Cal.com-blue)](https://cal.com/prashant-srivastav-u8duzh/30min)
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/rapidaai/voice-ai)
 [![CodeQL](https://github.com/rapidaai/voice-ai/actions/workflows/github-code-scanning/codeql/badge.svg)](https://github.com/rapidaai/voice-ai/actions/workflows/github-code-scanning/codeql)
@@ -85,13 +85,23 @@ make up-all
 docker compose ps
 ```
 
-**Services Ready:**
+**Services Ready (`make up-all`):**
 
 - UI: http://localhost:3000
-- Web API: http://localhost:9001
+- API Gateway (nginx): http://localhost:8080
+- Web API: internal-only by default (container network)
 - Assistant API: http://localhost:9007
 - Endpoint API: http://localhost:9005
 - Integration API: http://localhost:9004
+
+To include knowledge services (OpenSearch + Document API), run:
+
+```bash
+make up-all-with-knowledge
+```
+
+Then:
+
 - Document API: http://localhost:9010
 
 **Stop services:**

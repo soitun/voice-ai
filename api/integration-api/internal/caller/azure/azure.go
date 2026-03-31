@@ -73,13 +73,13 @@ func (az *AzureAi) GetComplitionUsages(usages openai.CompletionUsage) []*integra
 	metrics = append(metrics, &integration_api.Metric{
 		Name:        type_enums.OUTPUT_TOKEN.String(),
 		Value:       fmt.Sprintf("%d", usages.CompletionTokens),
-		Description: "Input token",
+		Description: "LLM Output token",
 	})
 
 	metrics = append(metrics, &integration_api.Metric{
 		Name:        type_enums.INPUT_TOKEN.String(),
 		Value:       fmt.Sprintf("%d", usages.PromptTokens),
-		Description: "Output Token",
+		Description: "LLM Input Token",
 	})
 
 	metrics = append(metrics, &integration_api.Metric{

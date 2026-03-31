@@ -75,7 +75,7 @@ func (kr *genericRequestor) RetrieveToolKnowledge(ctx context.Context, knowledge
 				},
 				Time: time.Now(),
 			},
-			internal_type.MessageMetricPacket{
+			internal_type.AssistantMessageMetricPacket{
 				Metrics: []*protos.Metric{{
 					Name:  "knowledge_latency_ms",
 					Value: fmt.Sprintf("%d", latencyMs),

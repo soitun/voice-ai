@@ -244,7 +244,7 @@ func TestTTSInterruption(t *testing.T) {
 			countBefore := len(collector.AudioPackets())
 
 			// Send interruption
-			err = tts.Transform(ctx, internal_type.InterruptionPacket{
+			err = tts.Transform(ctx, internal_type.InterruptionDetectedPacket{
 				ContextID: "test-tts-interrupt",
 				Source:    internal_type.InterruptionSourceVad,
 			})

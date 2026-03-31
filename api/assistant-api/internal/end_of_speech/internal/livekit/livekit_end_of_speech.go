@@ -20,10 +20,15 @@ import (
 const (
 	eosName = "livekitEndOfSpeech"
 
-	optKeyThreshold      = "microphone.eos.threshold"
-	optKeyQuickTimeout   = "microphone.eos.quick_timeout"
-	optKeySilenceTimeout = "microphone.eos.silence_timeout"
-	optKeyMaxHistory     = "microphone.eos.max_history_turns"
+	optKeyThreshold       = "microphone.eos.threshold"
+	optKeyQuickTimeout    = "microphone.eos.quick_timeout"
+	optKeyExtendedTimeout = "microphone.eos.extended_timeout"
+	optKeyFallbackTimeout = "microphone.eos.fallback_timeout"
+	optKeyMaxHistory      = "microphone.eos.max_history_turns"
+
+	// Backward-compatible aliases.
+	optKeyLegacySilenceTimeout = "microphone.eos.silence_timeout"
+	optKeyLegacyTimeout        = "microphone.eos.timeout"
 
 	// defaultThreshold is the English "unlikely_threshold" from LiveKit's
 	// languages.json. Probabilities below this → user still speaking.
@@ -49,7 +54,7 @@ type SpeechSegment struct {
 	Committed string // accumulated final transcripts
 	Pending   string // latest interim transcript (not yet finalized)
 	Timestamp time.Time
-	Language  string
+	Chunks    []internal_type.SpeechToTextPacket
 }
 
 // FullText returns the complete transcript including any pending interim text.
@@ -153,7 +158,9 @@ func NewLivekitEndOfSpeech(
 	if v, err := opts.GetFloat64(optKeyThreshold); err == nil {
 		eos.threshold = v
 	}
-	if v, err := opts.GetFloat64(optKeySilenceTimeout); err == nil {
+	if v, err := opts.GetFloat64(optKeyExtendedTimeout); err == nil {
+		eos.silenceTimeout = time.Duration(v) * time.Millisecond
+	} else if v, err := opts.GetFloat64(optKeyLegacySilenceTimeout); err == nil {
 		eos.silenceTimeout = time.Duration(v) * time.Millisecond
 	}
 	if v, err := opts.GetFloat64(optKeyQuickTimeout); err == nil {
@@ -162,7 +169,9 @@ func NewLivekitEndOfSpeech(
 	if v, err := opts.GetFloat64(optKeyMaxHistory); err == nil {
 		eos.maxHistory = int(v)
 	}
-	if v, err := opts.GetFloat64("microphone.eos.timeout"); err == nil {
+	if v, err := opts.GetFloat64(optKeyFallbackTimeout); err == nil {
+		eos.fallbackMs = time.Duration(v) * time.Millisecond
+	} else if v, err := opts.GetFloat64(optKeyLegacyTimeout); err == nil {
 		eos.fallbackMs = time.Duration(v) * time.Millisecond
 	}
 
@@ -189,12 +198,12 @@ func (eos *LivekitEOS) Name() string {
 }
 
 // Analyze processes incoming packets using the hybrid turn detection model.
-// In addition to the standard EOS packet types (UserTextPacket, InterruptionPacket,
+// In addition to the standard EOS packet types (UserTextReceivedPacket, InterruptionDetectedPacket,
 // SpeechToTextPacket), it also observes LLMResponseDonePacket to build
 // conversation history for context-aware turn prediction.
 func (eos *LivekitEOS) Analyze(ctx context.Context, pkt internal_type.Packet) error {
 	switch p := pkt.(type) {
-	case internal_type.UserTextPacket:
+	case internal_type.UserTextReceivedPacket:
 		if p.Text == "" {
 			return nil
 		}
@@ -213,7 +222,7 @@ func (eos *LivekitEOS) Analyze(ctx context.Context, pkt internal_type.Packet) er
 			fireNow: true,
 		})
 
-	case internal_type.InterruptionPacket:
+	case internal_type.InterruptionDetectedPacket:
 		eos.mu.RLock()
 		seg := eos.state.segment
 		eos.mu.RUnlock()
@@ -241,16 +250,14 @@ func (eos *LivekitEOS) Analyze(ctx context.Context, pkt internal_type.Packet) er
 			ContextID: p.ContextId(),
 			Timestamp: time.Now(),
 			Committed: eos.state.segment.Committed,
-			Language:  eos.state.segment.Language,
+			Chunks:    append([]internal_type.SpeechToTextPacket(nil), eos.state.segment.Chunks...),
 		}
 		if newSeg.Committed != "" {
 			newSeg.Committed = fmt.Sprintf("%s %s", newSeg.Committed, p.Script)
 		} else {
 			newSeg.Committed = p.Script
 		}
-		if p.Language != "" {
-			newSeg.Language = p.Language
-		}
+		newSeg.Chunks = append(newSeg.Chunks, p)
 		eos.state.segment = newSeg
 		fullText := newSeg.FullText()
 		eos.mu.Unlock()
@@ -317,9 +324,20 @@ func (eos *LivekitEOS) predictEOU(currentText string) float64 {
 // send dispatches a command to the worker.
 func (eos *LivekitEOS) send(cmd command) {
 	select {
+	case <-eos.stopCh:
+		return
+	default:
+	}
+
+	select {
 	case eos.cmdCh <- cmd:
 	default:
-		go func() { eos.cmdCh <- cmd }()
+		go func() {
+			select {
+			case eos.cmdCh <- cmd:
+			case <-eos.stopCh:
+			}
+		}()
 	}
 }
 
@@ -420,7 +438,11 @@ func (eos *LivekitEOS) fire(ctx context.Context, seg SpeechSegment) {
 	wordCount := len(strings.Fields(speech))
 	triggerAt := time.Now()
 	_ = eos.callback(ctx,
-		internal_type.EndOfSpeechPacket{Speech: speech, ContextID: seg.ContextID, Language: seg.Language},
+		internal_type.EndOfSpeechPacket{
+			Speech:    speech,
+			ContextID: seg.ContextID,
+			Speechs:   append([]internal_type.SpeechToTextPacket(nil), seg.Chunks...),
+		},
 		internal_type.ConversationEventPacket{
 			Name: "eos",
 			Data: map[string]string{

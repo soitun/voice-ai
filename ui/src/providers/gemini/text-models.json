@@ -280,6 +280,17 @@
           "errorMessage": "Please check and provide a correct value for max_completion_tokens"
         },
         {
+          "key": "model.thinking_budget",
+          "label": "Thinking Budget",
+          "type": "number",
+          "advanced": true,
+          "required": false,
+          "default": "-1",
+          "min": -1,
+          "max": 2000,
+          "errorMessage": "Please provide a valid thinking budget between -1 and 2000."
+        },
+        {
           "key": "model.stop_sequences",
           "label": "Stop Sequences",
           "type": "input",
@@ -386,6 +397,17 @@
           "default": "2048",
           "min": 1,
           "errorMessage": "Please check and provide a correct value for max_completion_tokens"
+        },
+        {
+          "key": "model.thinking_budget",
+          "label": "Thinking Budget",
+          "type": "number",
+          "advanced": true,
+          "required": false,
+          "default": "-1",
+          "min": -1,
+          "max": 2000,
+          "errorMessage": "Please provide a valid thinking budget between -1 and 2000."
         },
         {
           "key": "model.stop_sequences",

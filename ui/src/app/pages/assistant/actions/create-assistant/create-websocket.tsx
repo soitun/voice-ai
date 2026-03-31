@@ -3,9 +3,10 @@ import { Helmet } from '@/app/components/helmet';
 import { useRapidaStore } from '@/hooks';
 import { TabForm } from '@/app/components/form/tab-form';
 import {
-  IBlueBGArrowButton,
-  ICancelButton,
-} from '@/app/components/form/button';
+  PrimaryButton,
+  SecondaryButton,
+} from '@/app/components/carbon/button';
+import { ButtonSet } from '@carbon/react';
 import {
   Assistant,
   CreateAssistant,
@@ -248,22 +249,21 @@ export function CreateWebsocket() {
               </div>
             ),
             actions: [
-              <ICancelButton
-                className="px-4 rounded-[2px]"
-                onClick={() => showDialog(navigator.goBack)}
-              >
-                Cancel
-              </ICancelButton>,
-              <IBlueBGArrowButton
-                type="button"
-                isLoading={loading}
-                className="px-4 rounded-[2px]"
-                onClick={() => {
-                  if (validateWebsocket()) setActiveTab('define-assistant');
-                }}
-              >
-                Continue
-              </IBlueBGArrowButton>,
+              <ButtonSet className="!w-full [&>button]:!flex-1 [&>button]:!max-w-none">
+                <SecondaryButton size="lg"
+                  onClick={() => showDialog(navigator.goBack)}
+                >
+                  Cancel
+                </SecondaryButton>
+                <PrimaryButton size="lg"
+                  isLoading={loading}
+                  onClick={() => {
+                    if (validateWebsocket()) setActiveTab('define-assistant');
+                  }}
+                >
+                  Continue
+                </PrimaryButton>
+              </ButtonSet>,
             ],
           },
           {
@@ -272,20 +272,19 @@ export function CreateWebsocket() {
             description:
               'Provide the name, a brief description, and relevant tags for your assistant to help identify and categorize it.',
             actions: [
-              <ICancelButton
-                className="px-4 rounded-[2px]"
-                onClick={() => showDialog(navigator.goBack)}
-              >
-                Cancel
-              </ICancelButton>,
-              <IBlueBGArrowButton
-                isLoading={loading}
-                type="button"
-                onClick={createAssistant}
-                className="px-4 rounded-[2px]"
-              >
-                Continue
-              </IBlueBGArrowButton>,
+              <ButtonSet className="!w-full [&>button]:!flex-1 [&>button]:!max-w-none">
+                <SecondaryButton size="lg"
+                  onClick={() => showDialog(navigator.goBack)}
+                >
+                  Cancel
+                </SecondaryButton>
+                <PrimaryButton size="lg"
+                  isLoading={loading}
+                  onClick={createAssistant}
+                >
+                  Continue
+                </PrimaryButton>
+              </ButtonSet>,
             ],
             body: (
               <div className="space-y-6 px-8 py-8 max-w-4xl">
@@ -327,24 +326,23 @@ export function CreateWebsocket() {
             description: 'Enable assistant to start engaging with user',
             code: 'deployment',
             actions: [
-              <ICancelButton
-                className="px-4 rounded-[2px]"
-                onClick={() => {
-                  if (assistant) goToAssistant(assistant.getId());
-                }}
-              >
-                Skip
-              </ICancelButton>,
-              <IBlueBGArrowButton
-                type="button"
-                isLoading={loading}
-                className="px-4 rounded-[2px]"
-                onClick={() => {
-                  if (assistant) goToAssistant(assistant.getId());
-                }}
-              >
-                Complete deployment
-              </IBlueBGArrowButton>,
+              <ButtonSet className="!w-full [&>button]:!flex-1 [&>button]:!max-w-none">
+                <SecondaryButton size="lg"
+                  onClick={() => {
+                    if (assistant) goToAssistant(assistant.getId());
+                  }}
+                >
+                  Skip
+                </SecondaryButton>
+                <PrimaryButton size="lg"
+                  isLoading={loading}
+                  onClick={() => {
+                    if (assistant) goToAssistant(assistant.getId());
+                  }}
+                >
+                  Complete deployment
+                </PrimaryButton>
+              </ButtonSet>,
             ],
             body: (
               <div className="">

@@ -1,12 +1,9 @@
 import { memo } from 'react';
-import { cn } from '@/utils';
 import { SidebarIconWrapper } from '@/app/components/navigation/sidebar/sidebar-icon-wrapper';
 import { SidebarLabel } from '@/app/components/navigation/sidebar/sidebar-label';
 import { SidebarSimpleListItem } from '@/app/components/navigation/sidebar/sidebar-simple-list-item';
 import { useLocation } from 'react-router-dom';
-
-import { Activity, Database, MessageSquareIcon, Webhook } from 'lucide-react';
-import { ToolIcon } from '@/app/components/Icon/tool';
+import { Activity, DataBase, Chat, Webhook, ToolKit } from '@carbon/icons-react';
 import { useWorkspace } from '@/workspace';
 
 export const Observability = memo(() => {
@@ -21,7 +18,7 @@ export const Observability = memo(() => {
         navigate="/logs"
       >
         <SidebarIconWrapper>
-          <Activity className={cn('w-5 h-5 opacity-75')} strokeWidth={1.5} />
+          <Activity size={20} />
         </SidebarIconWrapper>
         <SidebarLabel>LLM logs</SidebarLabel>
       </SidebarSimpleListItem>
@@ -31,7 +28,7 @@ export const Observability = memo(() => {
         navigate="/logs/tool"
       >
         <SidebarIconWrapper>
-          <ToolIcon className={cn('w-5 h-5 opacity-75')} strokeWidth={1.5} />
+          <ToolKit size={20} />
         </SidebarIconWrapper>
         <SidebarLabel>Tool logs</SidebarLabel>
       </SidebarSimpleListItem>
@@ -40,7 +37,7 @@ export const Observability = memo(() => {
         navigate="/logs/webhook"
       >
         <SidebarIconWrapper>
-          <Webhook className={cn('w-5 h-5 opacity-75')} strokeWidth={1.5} />
+          <Webhook size={20} />
         </SidebarIconWrapper>
         <SidebarLabel>Webhook logs</SidebarLabel>
       </SidebarSimpleListItem>
@@ -50,7 +47,7 @@ export const Observability = memo(() => {
           navigate="/logs/knowledge"
         >
           <SidebarIconWrapper>
-            <Database className={cn('w-5 h-5 opacity-75')} strokeWidth={1.5} />
+            <DataBase size={20} />
           </SidebarIconWrapper>
           <SidebarLabel>Knowledge logs</SidebarLabel>
         </SidebarSimpleListItem>
@@ -60,10 +57,7 @@ export const Observability = memo(() => {
         navigate="/logs/conversation"
       >
         <SidebarIconWrapper>
-          <MessageSquareIcon
-            className={cn('w-5 h-5 opacity-75')}
-            strokeWidth={1.5}
-          />
+          <Chat size={20} />
         </SidebarIconWrapper>
         <SidebarLabel>Conversation logs</SidebarLabel>
       </SidebarSimpleListItem>

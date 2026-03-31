@@ -157,7 +157,7 @@ export function ProjectCredentialPage() {
         interact with the Rapida service for this particular project.
       </DocNoticeBlock>
       {ourKeys && ourKeys.length > 0 ? (
-        <section className="grid content-start grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 grow shrink-0 m-4">
+        <section className="grid content-start grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 grow shrink-0 m-4">
           {ourKeys.map((pc, idx) => (
             <CredentialCard key={idx} credential={pc} />
           ))}
@@ -285,7 +285,7 @@ export function PersonalCredentialPage() {
         These are your personal access tokens. They are used to authenticate
         and interact with the Rapida service across all your projects.
       </DocNoticeBlock>
-      <section className="grid content-start grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 grow shrink-0 m-4">
+      <section className="grid content-start grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 grow shrink-0 m-4">
         <BaseCard>
           {/* Card header */}
           <div className="px-4 pt-4 pb-3">

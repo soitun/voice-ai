@@ -1,10 +1,9 @@
-import { Dropdown } from '@/app/components/dropdown';
-import { FormLabel } from '@/app/components/form-label';
-import { FieldSet } from '@/app/components/form/fieldset';
-import { HTMLAttributes } from 'react';
+import { HTMLAttributes, useMemo } from 'react';
 import { NoiseCancellation } from '@/providers';
 import { Metadata } from '@rapidaai/react';
 import { NoiseCancellationConfigComponent } from '@/app/components/providers/noise-removal/provider';
+import { Dropdown } from '@carbon/react';
+import { Stack } from '@/app/components/carbon/form';
 
 interface NoiseCancellationProviderProps
   extends HTMLAttributes<HTMLDivElement> {
@@ -21,38 +20,23 @@ export const NoiseCancellationProvider: React.FC<
   onChangeNoiseCancellationProvider,
   parameters,
   onChangeParameter,
-  className,
 }) => {
+  const providers = useMemo(() => NoiseCancellation(), []);
+  const selectedProvider = providers.find(x => x.code === noiseCancellationProvider) || null;
+
   return (
-    <div className={['flex flex-col gap-6', className].filter(Boolean).join(' ')}>
-      <FieldSet>
-        <FormLabel>Background noise provider</FormLabel>
-        <Dropdown
-          className="bg-light-background max-w-full dark:bg-gray-950"
-          currentValue={NoiseCancellation().find(
-            x => x.code === noiseCancellationProvider,
-          )}
-          setValue={v => {
-            onChangeNoiseCancellationProvider(v.code);
-          }}
-          allValue={NoiseCancellation()}
-          placeholder="Select noise removal provider"
-          option={c => {
-            return (
-              <span className="inline-flex items-center gap-2 sm:gap-2.5 max-w-full text-sm font-medium">
-                <span className="truncate capitalize">{c.name}</span>
-              </span>
-            );
-          }}
-          label={c => {
-            return (
-              <span className="inline-flex items-center gap-2 sm:gap-2.5 max-w-full text-sm font-medium">
-                <span className="truncate capitalize">{c.name}</span>
-              </span>
-            );
-          }}
-        />
-      </FieldSet>
+    <Stack gap={6}>
+      <Dropdown
+        id="noise-provider"
+        titleText="Background noise provider"
+        label="Select noise removal provider"
+        items={providers}
+        selectedItem={selectedProvider}
+        itemToString={(item: any) => item?.name || ''}
+        onChange={({ selectedItem }: any) => {
+          if (selectedItem) onChangeNoiseCancellationProvider(selectedItem.code);
+        }}
+      />
       {noiseCancellationProvider && parameters && onChangeParameter && (
         <NoiseCancellationConfigComponent
           provider={noiseCancellationProvider}
@@ -61,6 +45,6 @@ export const NoiseCancellationProvider: React.FC<
           onChangeProvider={() => {}}
         />
       )}
-    </div>
+    </Stack>
   );
 };

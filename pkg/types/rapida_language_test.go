@@ -6,10 +6,11 @@
 package types
 
 import (
+	"reflect"
 	"testing"
 )
 
-func TestGetLanguageByName(t *testing.T) {
+func TestLookupLanguage(t *testing.T) {
 	tests := []struct {
 		name     string
 		input    string
@@ -37,9 +38,18 @@ func TestGetLanguageByName(t *testing.T) {
 			name:  "unknown",
 			input: "unknown",
 			expected: Language{
-				Name:     "English",
-				ISO639_1: "en",
-				ISO639_2: "eng",
+				Name:     "Unknown",
+				ISO639_1: "unknown",
+				ISO639_2: "unknown",
+			},
+		},
+		{
+			name:  "not found falls back to unknown",
+			input: "xx",
+			expected: Language{
+				Name:     "Unknown",
+				ISO639_1: "unknown",
+				ISO639_2: "unknown",
 			},
 		},
 		{
@@ -55,10 +65,22 @@ func TestGetLanguageByName(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := GetLanguageByName(tt.input)
-			if got != tt.expected {
-				t.Errorf("GetLanguageByName() = %v, want %v", got, tt.expected)
+			got := LookupLanguage(tt.input)
+			if !reflect.DeepEqual(got, tt.expected) {
+				t.Errorf("LookupLanguage() = %v, want %v", got, tt.expected)
 			}
 		})
+	}
+}
+
+func TestUnknownLanguageConstant(t *testing.T) {
+	got := UNKNOWN_LANGUAGE
+	expected := Language{
+		Name:     "Unknown",
+		ISO639_1: "unknown",
+		ISO639_2: "unknown",
+	}
+	if !reflect.DeepEqual(got, expected) {
+		t.Errorf("UNKNOWN_LANGUAGE = %v, want %v", got, expected)
 	}
 }

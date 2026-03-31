@@ -183,7 +183,7 @@ func TestGoogleTTSInterruption(t *testing.T) {
 	collector.WaitForAudio(t, 15*time.Second)
 
 	// Send interruption mid-stream
-	require.NoError(t, tts.Transform(ctx, internal_type.InterruptionPacket{
+	require.NoError(t, tts.Transform(ctx, internal_type.InterruptionDetectedPacket{
 		ContextID: "google-tts-interrupt",
 		Source:    internal_type.InterruptionSourceVad,
 	}))
@@ -278,7 +278,7 @@ func TestGoogleTTSFlow_DeltaInterruptDeltaDone(t *testing.T) {
 	t.Logf("phase1: audio_packets=%d", len(collector.AudioPackets()))
 
 	// Phase 2: user interrupts mid-speech
-	require.NoError(t, tts.Transform(ctx, internal_type.InterruptionPacket{
+	require.NoError(t, tts.Transform(ctx, internal_type.InterruptionDetectedPacket{
 		ContextID: "ctx-1",
 		Source:    internal_type.InterruptionSourceVad,
 	}))
@@ -346,7 +346,7 @@ func TestGoogleTTSFlow_DeltaDoneInterrupt(t *testing.T) {
 	t.Logf("before_interrupt: events=%v", ttsEventTypes(collector.EventPackets()))
 
 	// Late interrupt after TTS already finished
-	err = tts.Transform(ctx, internal_type.InterruptionPacket{
+	err = tts.Transform(ctx, internal_type.InterruptionDetectedPacket{
 		ContextID: "ctx-late",
 		Source:    internal_type.InterruptionSourceVad,
 	})
@@ -395,7 +395,7 @@ func TestGoogleTTSFlow_InterruptBeforeDelta(t *testing.T) {
 	defer tts.Close(ctx)
 
 	// Interrupt before any text — contextId is "" so this should be a no-op
-	err = tts.Transform(ctx, internal_type.InterruptionPacket{
+	err = tts.Transform(ctx, internal_type.InterruptionDetectedPacket{
 		ContextID: "ctx-early",
 		Source:    internal_type.InterruptionSourceVad,
 	})
@@ -448,7 +448,7 @@ func TestGoogleTTSFlow_MultipleInterrupts(t *testing.T) {
 	require.NoError(t, tts.Transform(ctx, internal_type.LLMResponseDeltaPacket{
 		ContextID: "round-1", Text: "First attempt at speaking."}))
 	collector.WaitForAudio(t, 15*time.Second)
-	require.NoError(t, tts.Transform(ctx, internal_type.InterruptionPacket{
+	require.NoError(t, tts.Transform(ctx, internal_type.InterruptionDetectedPacket{
 		ContextID: "round-1", Source: internal_type.InterruptionSourceVad}))
 	time.Sleep(500 * time.Millisecond)
 
@@ -457,7 +457,7 @@ func TestGoogleTTSFlow_MultipleInterrupts(t *testing.T) {
 	require.NoError(t, tts.Transform(ctx, internal_type.LLMResponseDeltaPacket{
 		ContextID: "round-2", Text: "Second attempt, interrupted again."}))
 	collector.WaitForAudio(t, 15*time.Second)
-	require.NoError(t, tts.Transform(ctx, internal_type.InterruptionPacket{
+	require.NoError(t, tts.Transform(ctx, internal_type.InterruptionDetectedPacket{
 		ContextID: "round-2", Source: internal_type.InterruptionSourceVad}))
 	time.Sleep(500 * time.Millisecond)
 
@@ -508,7 +508,7 @@ func TestGoogleTTSFlow_DeltaInterruptNoComplete(t *testing.T) {
 	collector.WaitForAudio(t, 15*time.Second)
 
 	// Interrupt without ever sending done
-	require.NoError(t, tts.Transform(ctx, internal_type.InterruptionPacket{
+	require.NoError(t, tts.Transform(ctx, internal_type.InterruptionDetectedPacket{
 		ContextID: "ctx-no-done",
 		Source:    internal_type.InterruptionSourceVad,
 	}))
@@ -669,7 +669,7 @@ func TestGoogleSTTLifecycle(t *testing.T) {
 		t.Logf("stt_event_sequence=%v", eventTypes)
 
 		// Verify interruption packets accompany transcripts
-		interruptions := collector.InterruptionPackets()
+		interruptions := collector.InterruptionDetectedPackets()
 		assert.NotEmpty(t, interruptions, "should emit interruption packets with transcripts")
 
 		// Verify latency metric
@@ -698,7 +698,7 @@ func TestGoogleSTTAudioAcceptance(t *testing.T) {
 	// Flow: each Transform call accepts the audio chunk without error
 	chunks := testutil.ChunkAudio(testutil.SineTonePCM(440, 1.0), testutil.FrameSize)
 	for i, chunk := range chunks {
-		err := stt.Transform(ctx, internal_type.UserAudioPacket{
+		err := stt.Transform(ctx, internal_type.UserAudioReceivedPacket{
 			ContextID: "google-stt-accept",
 			Audio:     chunk,
 		})
@@ -811,7 +811,7 @@ func TestGoogleSTTCloseWhileStreaming(t *testing.T) {
 				return
 			default:
 			}
-			_ = stt.Transform(ctx, internal_type.UserAudioPacket{
+			_ = stt.Transform(ctx, internal_type.UserAudioReceivedPacket{
 				ContextID: "google-stt-close-mid",
 				Audio:     chunk,
 			})

@@ -4,9 +4,10 @@ import { useCredential } from '@/hooks/use-credential';
 import { useParams } from 'react-router-dom';
 import { Helmet } from '@/app/components/helmet';
 import {
-  IBlueBGArrowButton,
-  ICancelButton,
-} from '@/app/components/form/button';
+  PrimaryButton,
+  SecondaryButton,
+} from '@/app/components/carbon/button';
+import { ButtonSet } from '@carbon/react';
 import { TabForm } from '@/app/components/form/tab-form';
 import { FieldSet } from '@/app/components/form/fieldset';
 import { useConfirmDialog } from '@/app/pages/assistant/actions/hooks/use-confirmation';
@@ -70,7 +71,7 @@ const CreateNewVersion: FC<{ assistantId: string }> = ({ assistantId }) => {
   const [versionMessage, setVersionMessage] = useState(
     `Changed on ${currentDate}`,
   );
-  const { loading, showLoader, hideLoader } = useRapidaStore();
+  const { showLoader, hideLoader } = useRapidaStore();
 
   const [agentKitUrl, setAgentKitUrl] = useState('');
   const [certificate, setCertificate] = useState('');
@@ -225,24 +226,22 @@ const CreateNewVersion: FC<{ assistantId: string }> = ({ assistantId }) => {
             description:
               'Provide the connection configuration for your Rapida AgentKit setup.',
             actions: [
-              <ICancelButton
-                className="w-full h-full"
-                onClick={() => showDialog(navigator.goBack)}
-              >
-                Cancel
-              </ICancelButton>,
-              <IBlueBGArrowButton
-                type="button"
-                isLoading={loading}
-                onClick={() => {
-                  if (validateAgentKit()) {
-                    setActiveTab('commit-assistant');
-                  }
-                }}
-                className="w-full h-full"
-              >
-                Continue
-              </IBlueBGArrowButton>,
+              <ButtonSet className="!w-full [&>button]:!flex-1 [&>button]:!max-w-none">
+                <SecondaryButton size="lg"
+                  onClick={() => showDialog(navigator.goBack)}
+                >
+                  Cancel
+                </SecondaryButton>
+                <PrimaryButton size="lg"
+                  onClick={() => {
+                    if (validateAgentKit()) {
+                      setActiveTab('commit-assistant');
+                    }
+                  }}
+                >
+                  Continue
+                </PrimaryButton>
+              </ButtonSet>,
             ],
             body: (
               <>
@@ -319,22 +318,20 @@ const CreateNewVersion: FC<{ assistantId: string }> = ({ assistantId }) => {
             description:
               'Write a brief note describing what changed in this version.',
             actions: [
-              <ICancelButton
-                className="w-full h-full"
-                onClick={() => showDialog(navigator.goBack)}
-              >
-                Cancel
-              </ICancelButton>,
-              <IBlueBGArrowButton
-                isLoading={loading}
-                type="button"
-                onClick={() => {
-                  createProviderModel();
-                }}
-                className="w-full h-full"
-              >
-                Create new version
-              </IBlueBGArrowButton>,
+              <ButtonSet className="!w-full [&>button]:!flex-1 [&>button]:!max-w-none">
+                <SecondaryButton size="lg"
+                  onClick={() => showDialog(navigator.goBack)}
+                >
+                  Cancel
+                </SecondaryButton>
+                <PrimaryButton size="lg"
+                  onClick={() => {
+                    createProviderModel();
+                  }}
+                >
+                  Create new version
+                </PrimaryButton>
+              </ButtonSet>,
             ],
             body: (
               <div className="px-8 pt-8 pb-8 max-w-2xl flex flex-col gap-10">

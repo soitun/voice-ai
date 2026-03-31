@@ -16,7 +16,15 @@ type Language struct {
 	ISO639_2 string
 }
 
+var UNKNOWN_LANGUAGE = Language{
+	Name:     "Unknown",
+	ISO639_1: "unknown",
+	ISO639_2: "unknown",
+}
+
 var languages = map[string]Language{
+	"unknown": UNKNOWN_LANGUAGE,
+
 	// 🌍 International Languages
 	"en": {"English", "en", "eng"},
 	"fr": {"French", "fr", "fra"},
@@ -57,11 +65,11 @@ var languages = map[string]Language{
 	"ks": {"Kashmiri", "ks", "kas"},
 }
 
-// Lookup function by long name
-func GetLanguageByName(name string) Language {
+// LookupLanguage returns a language by key without fallback.
+func LookupLanguage(name string) Language {
 	lang, ok := languages[strings.ToLower(name)]
 	if !ok {
-		lang = languages["en"]
+		return UNKNOWN_LANGUAGE
 	}
 	return lang
 }

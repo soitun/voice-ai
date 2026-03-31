@@ -1,6 +1,4 @@
 import React, { useCallback, useContext, useState } from 'react';
-import { Input } from '@/app/components/form/input';
-import { Textarea } from '@/app/components/form/textarea';
 import { CreateProject } from '@rapidaai/react';
 import { CreateProjectResponse } from '@rapidaai/react';
 import { useForm } from 'react-hook-form';
@@ -8,67 +6,30 @@ import { useCurrentCredential } from '@/hooks/use-credential';
 import { useRapidaStore } from '@/hooks';
 import { ErrorMessage } from '@/app/components/form/error-message';
 import toast from 'react-hot-toast/headless';
-import { GenericModal, ModalProps } from '@/app/components/base/modal';
+import { ModalProps } from '@/app/components/base/modal';
 import { ServiceError } from '@rapidaai/react';
 import { AuthContext } from '@/context/auth-context';
-import { FieldSet } from '@/app/components/form/fieldset';
 import {
-  IBlueBGArrowButton,
-  ICancelButton,
-} from '@/app/components/form/button';
-import { ModalHeader } from '@/app/components/base/modal/modal-header';
-import { ModalBody } from '@/app/components/base/modal/modal-body';
-import { ModalFooter } from '@/app/components/base/modal/modal-footer';
-import { FormLabel } from '@/app/components/form-label';
-import { ModalTitleBlock } from '@/app/components/blocks/modal-title-block';
-import { ModalFormBlock } from '@/app/components/blocks/modal-form-block';
+  Modal,
+  ModalHeader,
+  ModalBody,
+  ModalFooter,
+} from '@/app/components/carbon/modal';
+import { PrimaryButton, SecondaryButton } from '@/app/components/carbon/button';
+import { Form, Stack, TextInput, TextArea } from '@/app/components/carbon/form';
 import { connectionConfig } from '@/configs';
 
-/**
- * for project creation dialog
- */
 interface CreateProjectDialogProps extends ModalProps {
-  /**
-   *
-   * @param boolean
-   * @returns
-   */
   afterCreateProject: () => void;
 }
 
-/**
- *
- * @param props
- * @returns
- */
 export const CreateProjectDialog = (props: CreateProjectDialogProps) => {
-  /**
-   * form submit
-   */
   const { register, handleSubmit } = useForm();
-
-  /**
-   * loading context
-   */
   const { loading, showLoader, hideLoader } = useRapidaStore();
-
-  /**
-   * revive authorization
-   */
   const { authorize } = useContext(AuthContext);
-  /**
-   * Credentials
-   */
   const { authId, token } = useCurrentCredential();
-
-  /**
-   * error
-   */
   const [error, setError] = useState<string>();
 
-  /**
-   * after creation of the project
-   */
   const afterCreateProject = useCallback(
     async (err: ServiceError | null, cpr: CreateProjectResponse | null) => {
       if (err) {
@@ -110,10 +71,6 @@ export const CreateProjectDialog = (props: CreateProjectDialogProps) => {
     [],
   );
 
-  /**
-   *
-   * @param data
-   */
   const onCreateProject = data => {
     showLoader();
     CreateProject(
@@ -129,49 +86,47 @@ export const CreateProjectDialog = (props: CreateProjectDialogProps) => {
   };
 
   return (
-    <GenericModal modalOpen={props.modalOpen} setModalOpen={props.setModalOpen}>
-      <ModalFormBlock onSubmit={handleSubmit(onCreateProject)}>
-        <ModalHeader
-          onClose={() => {
-            props.setModalOpen(false);
-          }}
-        >
-          <ModalTitleBlock>Create a project</ModalTitleBlock>
-        </ModalHeader>
-        <ModalBody>
-          <FieldSet>
-            <FormLabel>Project Name</FormLabel>
-            <Input
-              required
-              type="text"
+    <Modal
+      open={props.modalOpen}
+      onClose={() => props.setModalOpen(false)}
+      size="sm"
+      selectorPrimaryFocus="#projectName"
+    >
+      <ModalHeader
+        label="Project"
+        title="Create a project"
+        onClose={() => props.setModalOpen(false)}
+      />
+      <Form onSubmit={handleSubmit(onCreateProject)}>
+        <ModalBody hasForm>
+          <Stack gap={6}>
+            <TextInput
+              id="projectName"
+              labelText="Project Name"
               placeholder="eg: your favorite project"
+              required
               {...register('projectName')}
-            ></Input>
-          </FieldSet>
-          <FieldSet>
-            <FormLabel>Project Description</FormLabel>
-            <Textarea
+            />
+            <TextArea
+              id="projectDescription"
+              labelText="Project Description"
+              placeholder="An optional description of what this project about..."
+              rows={3}
               required
               {...register('projectDescription')}
-              row={3}
-              placeholder="An optional description of what this project about..."
-            ></Textarea>
-          </FieldSet>
-          <ErrorMessage message={error} />
+            />
+            <ErrorMessage message={error} />
+          </Stack>
         </ModalBody>
         <ModalFooter>
-          <ICancelButton
-            onClick={() => {
-              props.setModalOpen(false);
-            }}
-          >
+          <SecondaryButton size="lg" onClick={() => props.setModalOpen(false)}>
             Cancel
-          </ICancelButton>
-          <IBlueBGArrowButton type="submit" isLoading={loading}>
+          </SecondaryButton>
+          <PrimaryButton size="lg" type="submit" isLoading={loading}>
             Create Project
-          </IBlueBGArrowButton>
+          </PrimaryButton>
         </ModalFooter>
-      </ModalFormBlock>
-    </GenericModal>
+      </Form>
+    </Modal>
   );
 };

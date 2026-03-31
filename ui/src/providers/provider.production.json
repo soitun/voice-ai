@@ -662,5 +662,100 @@
             }
         ],
         "website": "https://www.nvidia.com/en-us/ai-data-science/products/riva/"
+    },
+    {
+        "code": "otlp_http",
+        "name": "OTLP",
+        "description": "OpenTelemetry exporter (HTTP/protobuf or gRPC).",
+        "featureList": [
+            "telemetry",
+            "external"
+        ],
+        "configurations": [
+            {
+                "name": "api_key",
+                "type": "string",
+                "label": "API Key"
+            },
+            {
+                "name": "headers",
+                "type": "text",
+                "label": "Headers (key=value, one per line)"
+            }
+        ]
+    },
+    {
+        "code": "datadog",
+        "name": "Datadog",
+        "description": "Datadog tracing via OTLP-compatible collector.",
+        "featureList": [
+            "telemetry",
+            "external"
+        ],
+        "configurations": [
+            {
+                "name": "api_key",
+                "type": "string",
+                "label": "API Key (DD-API-KEY)"
+            }
+        ]
+    },
+    {
+        "code": "xray",
+        "name": "AWS X-Ray",
+        "description": "AWS X-Ray tracing via ADOT Collector.",
+        "featureList": [
+            "telemetry",
+            "external"
+        ],
+        "configurations": [
+            {
+                "name": "access_key_id",
+                "type": "string",
+                "label": "AWS Access Key ID"
+            },
+            {
+                "name": "secret_access_key",
+                "type": "string",
+                "label": "AWS Secret Access Key"
+            }
+        ]
+    },
+    {
+        "code": "google_trace",
+        "name": "Google Trace",
+        "description": "Google Cloud Trace via OTLP collector.",
+        "featureList": [
+            "telemetry",
+            "external"
+        ],
+        "configurations": [
+            {
+                "name": "api_key",
+                "type": "string",
+                "label": "API Key (x-goog-api-key)"
+            },
+            {
+                "name": "access_token",
+                "type": "string",
+                "label": "Access Token (OAuth2 Bearer)"
+            }
+        ]
+    },
+    {
+        "code": "azure_monitor",
+        "name": "Azure Monitor",
+        "description": "Azure Monitor / Application Insights via OTLP.",
+        "featureList": [
+            "telemetry",
+            "external"
+        ],
+        "configurations": [
+            {
+                "name": "api_key",
+                "type": "string",
+                "label": "Instrumentation Key / API Key"
+            }
+        ]
     }
 ]

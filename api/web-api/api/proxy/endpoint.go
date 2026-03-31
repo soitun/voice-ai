@@ -42,7 +42,7 @@ func NewEndpointGRPC(config *config.WebAppConfig, logger commons.Logger, postgre
 }
 
 func (endpoint *webEndpointGRPCApi) GetEndpoint(c context.Context, iRequest *protos.GetEndpointRequest) (*protos.GetEndpointResponse, error) {
-	endpoint.logger.Debugf("GetEndpoint from grpc with requestPayload %v, %v", iRequest, c)
+	// endpoint.logger.Debugf("GetEndpoint from grpc with requestPayload %v, %v", iRequest, c)
 	iAuth, isAuthenticated := types.GetSimplePrincipleGRPC(c)
 	if !isAuthenticated {
 		endpoint.logger.Errorf("unauthenticated request for get actvities")
@@ -61,7 +61,7 @@ func (endpoint *webEndpointGRPCApi) GetEndpoint(c context.Context, iRequest *pro
 /*
  */
 func (endpoint *webEndpointGRPCApi) GetAllEndpoint(c context.Context, iRequest *protos.GetAllEndpointRequest) (*protos.GetAllEndpointResponse, error) {
-	endpoint.logger.Debugf("GetAllEndpoint from grpc with requestPayload %v, %v", iRequest, c)
+	// endpoint.logger.Debugf("GetAllEndpoint from grpc with requestPayload %v, %v", iRequest, c)
 	iAuth, isAuthenticated := types.GetSimplePrincipleGRPC(c)
 	if !isAuthenticated {
 		endpoint.logger.Errorf("unauthenticated request for get actvities")
@@ -86,7 +86,7 @@ func (endpoint *webEndpointGRPCApi) GetAllEndpoint(c context.Context, iRequest *
 }
 
 func (endpoint *webEndpointGRPCApi) CreateEndpoint(c context.Context, iRequest *protos.CreateEndpointRequest) (*protos.CreateEndpointResponse, error) {
-	endpoint.logger.Debugf("Create endpoint from grpc with requestPayload %v, %v", iRequest, c)
+	// endpoint.logger.Debugf("Create endpoint from grpc with requestPayload %v, %v", iRequest, c)
 	iAuth, isAuthenticated := types.GetAuthPrincipleGPRC(c)
 	if !isAuthenticated {
 		endpoint.logger.Errorf("unauthenticated request for get actvities")
@@ -182,7 +182,7 @@ func (endpointGRPCApi *webEndpointGRPCApi) UpdateEndpointDetail(ctx context.Cont
 
 // ForkEndpoint implements protos.EndpointServiceServer.
 func (endpointGRPCApi *webEndpointGRPCApi) ForkEndpoint(ctx context.Context, iRequest *protos.ForkEndpointRequest) (*protos.BaseResponse, error) {
-	endpointGRPCApi.logger.Debugf("Create endpoint provider model request %v, %v", iRequest, ctx)
+	// endpointGRPCApi.logger.Debugf("Create endpoint provider model request %v, %v", iRequest, ctx)
 	iAuth, isAuthenticated := types.GetAuthPrincipleGPRC(ctx)
 	if !isAuthenticated {
 		endpointGRPCApi.logger.Errorf("unauthenticated request to fork endpoint")
@@ -192,7 +192,7 @@ func (endpointGRPCApi *webEndpointGRPCApi) ForkEndpoint(ctx context.Context, iRe
 }
 
 func (endpoint *webEndpointGRPCApi) GetEndpointLog(c context.Context, iRequest *protos.GetEndpointLogRequest) (*protos.GetEndpointLogResponse, error) {
-	endpoint.logger.Debugf("GetEndpoint from grpc with requestPayload %v, %v", iRequest, c)
+	// endpoint.logger.Debugf("GetEndpoint from grpc with requestPayload %v, %v", iRequest, c)
 	iAuth, isAuthenticated := types.GetSimplePrincipleGRPC(c)
 	if !isAuthenticated {
 		endpoint.logger.Errorf("unauthenticated request for get actvities")
@@ -205,7 +205,7 @@ func (endpoint *webEndpointGRPCApi) GetEndpointLog(c context.Context, iRequest *
  */
 
 func (endpoint *webEndpointGRPCApi) GetAllEndpointLog(c context.Context, iRequest *protos.GetAllEndpointLogRequest) (*protos.GetAllEndpointLogResponse, error) {
-	endpoint.logger.Debugf("GetAllEndpoint from grpc with requestPayload %v, %v", iRequest, c)
+	// endpoint.logger.Debugf("GetAllEndpoint from grpc with requestPayload %v, %v", iRequest, c)
 	iAuth, isAuthenticated := types.GetSimplePrincipleGRPC(c)
 	if !isAuthenticated {
 		endpoint.logger.Errorf("unauthenticated request for get actvities")

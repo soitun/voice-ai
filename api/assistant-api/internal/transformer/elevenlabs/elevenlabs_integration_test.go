@@ -174,7 +174,7 @@ func TestElevenLabsTTSInterruption(t *testing.T) {
 
 	collector.WaitForAudio(t, 15*time.Second)
 
-	require.NoError(t, tts.Transform(ctx, internal_type.InterruptionPacket{
+	require.NoError(t, tts.Transform(ctx, internal_type.InterruptionDetectedPacket{
 		ContextID: "el-tts-interrupt",
 		Source:    internal_type.InterruptionSourceVad,
 	}))
@@ -259,7 +259,7 @@ func TestElevenLabsTTSFlow_DeltaInterruptDeltaDone(t *testing.T) {
 	collector.WaitForAudio(t, 15*time.Second)
 
 	// Phase 2: interrupt
-	require.NoError(t, tts.Transform(ctx, internal_type.InterruptionPacket{
+	require.NoError(t, tts.Transform(ctx, internal_type.InterruptionDetectedPacket{
 		ContextID: "ctx-1", Source: internal_type.InterruptionSourceVad}))
 	time.Sleep(500 * time.Millisecond)
 	assert.Contains(t, ttsEventTypes(collector.EventPackets()), "interrupted")
@@ -306,7 +306,7 @@ func TestElevenLabsTTSFlow_DeltaDoneInterrupt(t *testing.T) {
 	collector.WaitForTTSEnd(t, 15*time.Second)
 	assert.NotEmpty(t, collector.EndPackets(), "should have completed before interrupt")
 
-	err = tts.Transform(ctx, internal_type.InterruptionPacket{
+	err = tts.Transform(ctx, internal_type.InterruptionDetectedPacket{
 		ContextID: "ctx-late", Source: internal_type.InterruptionSourceVad})
 	require.NoError(t, err, "late interrupt should not error")
 	time.Sleep(1 * time.Second)
@@ -347,7 +347,7 @@ func TestElevenLabsTTSFlow_MultipleInterrupts(t *testing.T) {
 		require.NoError(t, tts.Transform(ctx, internal_type.LLMResponseDonePacket{
 			ContextID: fmt.Sprintf("round-%d", round)}))
 		collector.WaitForAudio(t, 15*time.Second)
-		require.NoError(t, tts.Transform(ctx, internal_type.InterruptionPacket{
+		require.NoError(t, tts.Transform(ctx, internal_type.InterruptionDetectedPacket{
 			ContextID: fmt.Sprintf("round-%d", round),
 			Source:    internal_type.InterruptionSourceVad}))
 		time.Sleep(500 * time.Millisecond)

@@ -27,6 +27,7 @@ type assistantApi struct {
 	knowledgeDocumentService  internal_services.KnowledgeDocumentService
 	conversactionService      internal_services.AssistantConversationService
 	assistantWebhookService   internal_services.AssistantWebhookService
+	assistantTelemetryService internal_services.AssistantTelemetryProviderService
 	assistantAnalysisService  internal_services.AssistantAnalysisService
 	assistantToolService      internal_services.AssistantToolService
 	assistantKnowledgeService internal_services.AssistantKnowledgeService
@@ -34,6 +35,7 @@ type assistantApi struct {
 
 type assistantGrpcApi struct {
 	assistantApi
+	protos.UnimplementedAssistantServiceServer
 }
 
 func NewAssistantGRPCApi(config *config.AssistantConfig, logger commons.Logger,
@@ -48,7 +50,7 @@ func NewAssistantGRPCApi(config *config.AssistantConfig, logger commons.Logger,
 		knowledgeDocSvc = internal_knowledge_service.NewKnowledgeDocumentService(config, logger, postgres, opensearch)
 	}
 	return &assistantGrpcApi{
-		assistantApi{
+		assistantApi: assistantApi{
 			cfg:                       config,
 			logger:                    logger,
 			postgres:                  postgres,
@@ -59,6 +61,7 @@ func NewAssistantGRPCApi(config *config.AssistantConfig, logger commons.Logger,
 			knowledgeDocumentService:  knowledgeDocSvc,
 			conversactionService:      internal_assistant_service.NewAssistantConversationService(logger, postgres, storage_files.NewStorage(config.AssetStoreConfig, logger)),
 			assistantWebhookService:   internal_assistant_service.NewAssistantWebhookService(logger, postgres, storage_files.NewStorage(config.AssetStoreConfig, logger)),
+			assistantTelemetryService: internal_assistant_service.NewAssistantTelemetryProviderService(logger, postgres),
 			assistantAnalysisService:  internal_assistant_service.NewAssistantAnalysisService(logger, postgres),
 			assistantToolService:      internal_assistant_service.NewAssistantToolService(logger, postgres, storage_files.NewStorage(config.AssetStoreConfig, logger)),
 			assistantKnowledgeService: internal_assistant_service.NewAssistantKnowledgeService(logger, postgres, storage_files.NewStorage(config.AssetStoreConfig, logger)),

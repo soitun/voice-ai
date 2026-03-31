@@ -1,13 +1,8 @@
 import { FC } from 'react';
-import { cn } from '@/utils';
-import { FormLabel } from '@/app/components/form-label';
-import { FieldSet } from '@/app/components/form/fieldset';
-import { Input } from '@/app/components/form/input';
-import { Textarea } from '@/app/components/form/textarea';
-import { InputGroup } from '@/app/components/input-group';
+import { Select, SelectItem } from '@carbon/react';
+import { TextInput, TextArea } from '@/app/components/carbon/form';
 import { ConfigureToolProps, useParameterManager } from '../common';
 import { BlueNoticeBlock } from '@/app/components/container/message/notice-block';
-import { Select } from '@/app/components/form/select';
 import { APiStringHeader } from '@/app/components/external-api/api-header';
 import { MCP_PROTOCOL_OPTIONS } from './constant';
 
@@ -40,74 +35,64 @@ export const ConfigureMCP: FC<ConfigureToolProps> = ({
 
   return (
     <>
-      <InputGroup title="MCP Tool Configuration">
+      <div className="px-6 pb-6">
         <div className="flex flex-col gap-6 max-w-6xl">
-          <FieldSet>
-            <FormLabel>Name</FormLabel>
-            <Input
-              className={cn('bg-light-background', inputClass)}
-              value={toolDefinition?.name || ''}
-              onChange={e => handleChange('name', e.target.value)}
-              placeholder="Enter MCP tool name"
-            />
-          </FieldSet>
+          <TextInput
+            id="mcp-tool-name"
+            labelText="Name"
+            value={toolDefinition?.name || ''}
+            onChange={e => handleChange('name', e.target.value)}
+            placeholder="Enter MCP tool name"
+          />
 
-          <FieldSet>
-            <FormLabel>Description</FormLabel>
-            <Textarea
-              className={cn('bg-light-background', inputClass)}
-              value={toolDefinition?.description || ''}
-              onChange={e => handleChange('description', e.target.value)}
-              placeholder="A tool description or definition of when this MCP tool will get triggered."
-              rows={2}
-            />
-          </FieldSet>
+          <TextArea
+            id="mcp-tool-description"
+            labelText="Description"
+            value={toolDefinition?.description || ''}
+            onChange={e => handleChange('description', e.target.value)}
+            placeholder="A tool description or definition of when this MCP tool will get triggered."
+            rows={2}
+          />
 
-          <FieldSet>
-            <FormLabel>MCP Server URL</FormLabel>
-            <Input
-              className={cn('bg-light-background', inputClass)}
-              value={serverUrl}
-              onChange={e => updateParameter('mcp.server_url', e.target.value)}
-              placeholder="https://your-mcp-server.com"
-              type="url"
-            />
-          </FieldSet>
+          <TextInput
+            id="mcp-server-url"
+            labelText="MCP Server URL"
+            value={serverUrl}
+            onChange={e => updateParameter('mcp.server_url', e.target.value)}
+            placeholder="https://your-mcp-server.com"
+            type="url"
+          />
 
           <div className="grid grid-cols-2 gap-4">
-            <FieldSet>
-              <FormLabel>Protocol</FormLabel>
-              <Select
-                className={cn('bg-light-background', inputClass)}
-                value={protocol}
-                onChange={e => updateParameter('mcp.protocol', e.target.value)}
-                options={MCP_PROTOCOL_OPTIONS}
-                placeholder="Select protocol"
-              />
-            </FieldSet>
+            <Select
+              id="mcp-protocol"
+              labelText="Protocol"
+              value={protocol}
+              onChange={e => updateParameter('mcp.protocol', e.target.value)}
+            >
+              {MCP_PROTOCOL_OPTIONS.map(o => (
+                <SelectItem key={o.value} value={o.value} text={o.name} />
+              ))}
+            </Select>
 
-            <FieldSet>
-              <FormLabel>Timeout (seconds)</FormLabel>
-              <Input
-                className={cn('bg-light-background', inputClass)}
-                value={timeout}
-                onChange={e => updateParameter('mcp.timeout', e.target.value)}
-                placeholder="30"
-                type="number"
-                min="1"
-                max="300"
-              />
-            </FieldSet>
+            <TextInput
+              id="mcp-timeout"
+              labelText="Timeout (seconds)"
+              value={timeout}
+              onChange={e => updateParameter('mcp.timeout', e.target.value)}
+              placeholder="30"
+              type="number"
+            />
           </div>
 
-          <FieldSet>
-            <FormLabel>Headers</FormLabel>
+          <div>
+            <p className="text-xs font-medium mb-2">Headers</p>
             <APiStringHeader
               inputClass={inputClass}
               headerValue={headers}
               setHeaderValue={value => updateParameter('mcp.headers', value)}
             />
-          </FieldSet>
+          </div>
 
           <BlueNoticeBlock>
             <div className="text-sm text-blue-900 dark:text-blue-100">
@@ -120,7 +105,7 @@ export const ConfigureMCP: FC<ConfigureToolProps> = ({
             </div>
           </BlueNoticeBlock>
         </div>
-      </InputGroup>
+      </div>
     </>
   );
 };

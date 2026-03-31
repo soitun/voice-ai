@@ -21,6 +21,7 @@ import (
 type SpeechSegment struct {
 	ContextID string
 	Text      string
+	Chunks    []internal_type.SpeechToTextPacket
 	Timestamp time.Time
 }
 
@@ -99,7 +100,7 @@ func (eos *SilenceBasedEOS) Name() string {
 // Analyze processes incoming speech packets
 func (eos *SilenceBasedEOS) Analyze(ctx context.Context, pkt internal_type.Packet) error {
 	switch p := pkt.(type) {
-	case internal_type.UserTextPacket:
+	case internal_type.UserTextReceivedPacket:
 		if p.Text == "" {
 			return nil
 		}
@@ -113,7 +114,7 @@ func (eos *SilenceBasedEOS) Analyze(ctx context.Context, pkt internal_type.Packe
 		)
 		eos.send(command{ctx: ctx, segment: seg, fireNow: true})
 
-	case internal_type.InterruptionPacket:
+	case internal_type.InterruptionDetectedPacket:
 		eos.mu.RLock()
 		seg := eos.state.segment
 		eos.mu.RUnlock()
@@ -164,12 +165,14 @@ func (eos *SilenceBasedEOS) Analyze(ctx context.Context, pkt internal_type.Packe
 			ContextID: p.ContextId(),
 			Timestamp: time.Now(),
 			Text:      eos.state.segment.Text,
+			Chunks:    append([]internal_type.SpeechToTextPacket(nil), eos.state.segment.Chunks...),
 		}
 		if newSeg.Text != "" {
 			newSeg.Text = fmt.Sprintf("%s %s", eos.state.segment.Text, p.Script)
 		} else {
 			newSeg.Text = p.Script
 		}
+		newSeg.Chunks = append(newSeg.Chunks, p)
 		eos.state.segment = newSeg
 		eos.mu.Unlock()
 
@@ -197,9 +200,20 @@ func (eos *SilenceBasedEOS) Analyze(ctx context.Context, pkt internal_type.Packe
 // send dispatches a command to the worker
 func (eos *SilenceBasedEOS) send(cmd command) {
 	select {
+	case <-eos.stopCh:
+		return
+	default:
+	}
+
+	select {
 	case eos.cmdCh <- cmd:
 	default:
-		go func() { eos.cmdCh <- cmd }()
+		go func() {
+			select {
+			case eos.cmdCh <- cmd:
+			case <-eos.stopCh:
+			}
+		}()
 	}
 }
 
@@ -302,7 +316,11 @@ func (eos *SilenceBasedEOS) fire(ctx context.Context, seg SpeechSegment) {
 	wordCount := len(strings.Fields(seg.Text))
 	triggerAt := time.Now()
 	_ = eos.callback(ctx,
-		internal_type.EndOfSpeechPacket{Speech: seg.Text, ContextID: seg.ContextID},
+		internal_type.EndOfSpeechPacket{
+			Speech:    seg.Text,
+			ContextID: seg.ContextID,
+			Speechs:   append([]internal_type.SpeechToTextPacket(nil), seg.Chunks...),
+		},
 		internal_type.ConversationEventPacket{
 			Name: "eos",
 			Data: map[string]string{

@@ -1,88 +1,38 @@
 import React, { useCallback, useContext, useState } from 'react';
-import { Input } from '@/app/components/form/input';
-import { Textarea } from '@/app/components/form/textarea';
 import { UpdateProject } from '@rapidaai/react';
-
 import { Project, UpdateProjectResponse } from '@rapidaai/react';
 import toast from 'react-hot-toast/headless';
 import { useForm } from 'react-hook-form';
 import { useCredential } from '@/hooks/use-credential';
 import { useRapidaStore } from '@/hooks';
 import { ErrorMessage } from '@/app/components/form/error-message';
-import { GenericModal, ModalProps } from '@/app/components/base/modal';
+import { ModalProps } from '@/app/components/base/modal';
 import { ServiceError } from '@rapidaai/react';
 import { AuthContext } from '@/context/auth-context';
 import {
-  IBlueBGArrowButton,
-  ICancelButton,
-} from '@/app/components/form/button';
-import { ModalBody } from '@/app/components/base/modal/modal-body';
-import { ModalFooter } from '@/app/components/base/modal/modal-footer';
-import { FieldSet } from '@/app/components/form/fieldset';
-import { FormLabel } from '@/app/components/form-label';
-import { ModalTitleBlock } from '@/app/components/blocks/modal-title-block';
-import { ModalFormBlock } from '@/app/components/blocks/modal-form-block';
-import { ModalHeader } from '@/app/components/base/modal/modal-header';
+  Modal,
+  ModalHeader,
+  ModalBody,
+  ModalFooter,
+} from '@/app/components/carbon/modal';
+import { PrimaryButton, SecondaryButton } from '@/app/components/carbon/button';
+import { Form, Stack, TextInput, TextArea } from '@/app/components/carbon/form';
 import { connectionConfig } from '@/configs';
 
-/**
- * for project creation dialog
- */
 interface UpdateProjectDialogProps extends ModalProps {
-  /**
-   *
-   * @param boolean
-   * @returns
-   */
   afterUpdateProject: () => void;
-
-  /**
-   * for updation of existing project
-   */
   existingProject: Project.AsObject;
 }
 
-/**
- *
- * @param props
- * @returns
- */
 export const UpdateProjectDialog = (props: UpdateProjectDialogProps) => {
-  /**
-   *form hook
-   */
   const { register, handleSubmit } = useForm();
-
-  /**
-   * existing project
-   */
   const [project, setProject] = useState<Partial<Project.AsObject>>(
     props.existingProject,
   );
-
-  /**
-   * error
-   */
   const [error, setError] = useState<string>();
-
-  /**
-   * use credentials
-   */
   const [userId, token] = useCredential();
-
-  /**
-   * set loading context
-   */
   const { loading, showLoader, hideLoader } = useRapidaStore();
-
-  /**
-   * to re initiate the cookies
-   */
   const { authorize } = useContext(AuthContext);
-
-  /**
-   * After update project
-   */
 
   const afterUpdateProject = useCallback(
     (err: ServiceError | null, upr: UpdateProjectResponse | null) => {
@@ -116,17 +66,12 @@ export const UpdateProjectDialog = (props: UpdateProjectDialogProps) => {
             'Unable to process your request. please try again later.',
           );
         }
-
         return;
       }
     },
     [],
   );
 
-  /**
-   * updating the project
-   * @param data
-   */
   const onUpdateProject = data => {
     showLoader();
     UpdateProject(
@@ -142,67 +87,60 @@ export const UpdateProjectDialog = (props: UpdateProjectDialogProps) => {
     );
   };
 
-  /**
-   *
-   */
   return (
-    <GenericModal modalOpen={props.modalOpen} setModalOpen={props.setModalOpen}>
-      <ModalFormBlock onSubmit={handleSubmit(onUpdateProject)}>
-        <ModalHeader
-          onClose={() => {
-            props.setModalOpen(false);
-          }}
-        >
-          <ModalTitleBlock>Update the project</ModalTitleBlock>
-        </ModalHeader>
-        <ModalBody>
-          <FieldSet>
-            <input
-              {...register('projectId', { value: project?.id })}
-              type="hidden"
-            />
-
-            <FormLabel>Project Name</FormLabel>
-            <Input
+    <Modal
+      open={props.modalOpen}
+      onClose={() => props.setModalOpen(false)}
+      size="sm"
+      selectorPrimaryFocus="#projectName"
+    >
+      <ModalHeader
+        label="Project"
+        title="Update the project"
+        onClose={() => props.setModalOpen(false)}
+      />
+      <Form onSubmit={handleSubmit(onUpdateProject)}>
+        <input
+          {...register('projectId', { value: project?.id })}
+          type="hidden"
+        />
+        <ModalBody hasForm>
+          <Stack gap={6}>
+            <TextInput
+              id="projectName"
+              labelText="Project Name"
+              placeholder="eg: your favorite project"
               required
-              type="text"
+              value={project?.name || ''}
               {...register('projectName')}
-              value={project?.name}
               onChange={e => {
                 setProject({ ...project, name: e.target.value });
               }}
-              placeholder="eg: your favorite project"
-            ></Input>
-          </FieldSet>
-          <FieldSet>
-            <FormLabel>Project Description</FormLabel>
-            <Textarea
-              id="description"
-              row={3}
-              {...register('projectDescription')}
+            />
+            <TextArea
+              id="projectDescription"
+              labelText="Project Description"
+              placeholder="A description of what this project is about..."
+              rows={3}
               required
-              value={project?.description}
+              value={project?.description || ''}
+              {...register('projectDescription')}
               onChange={e => {
                 setProject({ ...project, description: e.target.value });
               }}
-              placeholder="An description of what this project about..."
-            ></Textarea>
-          </FieldSet>
-          <ErrorMessage message={error} />
+            />
+            <ErrorMessage message={error} />
+          </Stack>
         </ModalBody>
         <ModalFooter>
-          <ICancelButton
-            onClick={() => {
-              props.setModalOpen(false);
-            }}
-          >
+          <SecondaryButton size="lg" onClick={() => props.setModalOpen(false)}>
             Cancel
-          </ICancelButton>
-          <IBlueBGArrowButton type="submit" isLoading={loading}>
+          </SecondaryButton>
+          <PrimaryButton size="lg" type="submit" isLoading={loading}>
             Update
-          </IBlueBGArrowButton>
+          </PrimaryButton>
         </ModalFooter>
-      </ModalFormBlock>
-    </GenericModal>
+      </Form>
+    </Modal>
   );
 };

@@ -51,13 +51,16 @@ type Communication interface {
 	Auth() types.SimplePrinciple
 
 	// phone, debugger, sdk etc
-	Source() utils.RapidaSource
+	GetSource() utils.RapidaSource
 
 	// current assistant
 	Assistant() *internal_assistant_entity.Assistant
 
 	// deployment behavior
 	GetBehavior() (*internal_assistant_entity.AssistantDeploymentBehavior, error)
+
+	//
+	GetMode() type_enums.MessageMode
 
 	// current conversation
 	Conversation() *internal_conversation_entity.AssistantConversation
@@ -71,10 +74,7 @@ type Communication interface {
 	GetMetadata() map[string]interface{}
 	GetArgs() map[string]interface{}
 	GetOptions() utils.Option
-
-	//
 	GetKnowledge(ctx context.Context, knowledgeId uint64) (*internal_knowledge_gorm.Knowledge, error)
-
 	RetrieveToolKnowledge(
 		ctx context.Context,
 		knowledge *internal_knowledge_gorm.Knowledge,

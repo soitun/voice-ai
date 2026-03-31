@@ -1,14 +1,10 @@
 import { Tag } from '@rapidaai/react';
-import { ModalBody } from '@/app/components/base/modal/modal-body';
-import { ModalFooter } from '@/app/components/base/modal/modal-footer';
-import { ModalHeader } from '@/app/components/base/modal/modal-header';
-import { ModalFitHeightBlock } from '@/app/components/blocks/modal-fit-height-block';
-import { ModalTitleBlock } from '@/app/components/blocks/modal-title-block';
-import { IBlueBGButton, ICancelButton } from '@/app/components/form/button';
-import { ErrorMessage } from '@/app/components/form/error-message';
+import { Modal, ModalHeader, ModalBody, ModalFooter } from '@/app/components/carbon/modal';
+import { PrimaryButton, SecondaryButton } from '@/app/components/carbon/button';
+import { Notification } from '@/app/components/carbon/notification';
 import { TagInput } from '@/app/components/form/tag-input';
 import { KnowledgeTags } from '@/app/components/form/tag-input/knowledge-tags';
-import { GenericModal, ModalProps } from '@/app/components/base/modal';
+import { ModalProps } from '@/app/components/base/modal';
 import { useRapidaStore } from '@/hooks';
 import React, { FC, memo, useEffect, useState } from 'react';
 
@@ -59,36 +55,41 @@ export const CreateTagDialog: FC<CreateTagDialogProps> = memo(
     };
 
     return (
-      <GenericModal modalOpen={modalOpen} setModalOpen={setModalOpen}>
-        <ModalFitHeightBlock className="w-[592px]">
-          <ModalHeader onClose={() => setModalOpen(false)}>
-            <ModalTitleBlock>{title}</ModalTitleBlock>
-          </ModalHeader>
-
-          <ModalBody className="px-4 py-5">
-            <TagInput
-              tags={_tags}
-              addTag={addTag}
-              removeTag={removeTag}
-              allTags={allTags ?? KnowledgeTags}
-            />
-            <ErrorMessage message={error} />
-          </ModalBody>
-
-          <ModalFooter>
-            <ICancelButton onClick={() => setModalOpen(false)}>
-              Cancel
-            </ICancelButton>
-            <IBlueBGButton
-              type="button"
-              onClick={createTag}
-              isLoading={rapidaStore.loading}
-            >
-              Save tags
-            </IBlueBGButton>
-          </ModalFooter>
-        </ModalFitHeightBlock>
-      </GenericModal>
+      <Modal
+        open={modalOpen}
+        onClose={() => setModalOpen(false)}
+        size="sm"
+        preventCloseOnClickOutside
+      >
+        <ModalHeader
+          label="Tags"
+          title={title}
+          onClose={() => setModalOpen(false)}
+        />
+        <ModalBody hasForm>
+          <TagInput
+            tags={_tags}
+            addTag={addTag}
+            removeTag={removeTag}
+            allTags={allTags ?? KnowledgeTags}
+          />
+          {error && (
+            <Notification kind="error" title="Error" subtitle={error} />
+          )}
+        </ModalBody>
+        <ModalFooter>
+          <SecondaryButton size="lg" onClick={() => setModalOpen(false)}>
+            Cancel
+          </SecondaryButton>
+          <PrimaryButton
+            size="lg"
+            onClick={createTag}
+            isLoading={rapidaStore.loading}
+          >
+            Save tags
+          </PrimaryButton>
+        </ModalFooter>
+      </Modal>
     );
   },
 );

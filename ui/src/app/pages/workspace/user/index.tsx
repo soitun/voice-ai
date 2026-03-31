@@ -4,52 +4,52 @@ import { InviteUserDialog } from '@/app/components/base/modal/invite-user-modal'
 import { User } from '@rapidaai/react';
 import { useCurrentCredential } from '@/hooks/use-credential';
 import toast from 'react-hot-toast/headless';
-import { SearchIconInput } from '@/app/components/form/input/IconInput';
-import { TablePagination } from '@/app/components/base/tables/table-pagination';
 import { useRapidaStore } from '@/hooks';
-import { BluredWrapper } from '@/app/components/wrapper/blured-wrapper';
 import { useUserPageStore } from '@/hooks';
 import { SingleUser } from '@/app/pages/workspace/user/single-user';
-import { IButton } from '@/app/components/form/button';
-import { Plus, RotateCw } from 'lucide-react';
-import { PaginationButtonBlock } from '@/app/components/blocks/pagination-button-block';
+import { PrimaryButton } from '@/app/components/carbon/button';
+import { Pagination } from '@/app/components/carbon/pagination';
+import { Add, Renew } from '@carbon/icons-react';
+import {
+  Table,
+  TableHead,
+  TableRow,
+  TableHeader,
+  TableBody,
+  TableToolbar,
+  TableToolbarContent,
+  TableToolbarSearch,
+  Button,
+} from '@carbon/react';
 import { PageHeaderBlock } from '@/app/components/blocks/page-header-block';
 import { PageTitleWithCount } from '@/app/components/blocks/page-title-with-count';
 import { TableSection } from '@/app/components/sections/table-section';
-import { Table } from '@/app/components/base/tables/table';
-import { TableBody } from '@/app/components/base/tables/table-body';
-import { TableHead } from '@/app/components/base/tables/table-head';
 
-/**
- *
- * @returns
- */
+const headers = [
+  { key: 'id', header: 'ID' },
+  { key: 'name', header: 'Name' },
+  { key: 'email', header: 'Email' },
+  { key: 'role', header: 'Role' },
+  { key: 'createdDate', header: 'Date Created' },
+  { key: 'status', header: 'Status' },
+  { key: 'actions', header: '' },
+];
+
 export function UserPage() {
-  /**
-   *loader
-   */
-  const { showLoader, hideLoader } = useRapidaStore();
-
-  /**
-   * for create a user modal
-   */
+  const { loading, showLoader, hideLoader } = useRapidaStore();
   const [createUserModalOpen, setCreateUserModalOpen] = useState(false);
-
-  /**
-   * authentication with token
-   */
   const { projectId, authId, token } = useCurrentCredential();
   const userActions = useUserPageStore();
+
   const onError = useCallback((err: string) => {
     hideLoader();
     toast.error(err);
   }, []);
+
   const onSuccess = useCallback((data: User[]) => {
     hideLoader();
   }, []);
-  /**
-   * call the api
-   */
+
   const getUsers = useCallback((token, userId, projectId) => {
     showLoader();
     userActions.getAllUser(token, userId, projectId, onError, onSuccess);
@@ -58,53 +58,67 @@ export function UserPage() {
   useEffect(() => {
     getUsers(token, authId, projectId);
   }, [userActions.page, userActions.pageSize, userActions.criteria]);
-  /**
-   *
-   */
+
   return (
     <>
       <Helmet title="User and Teams" />
       <PageHeaderBlock>
-        <PageTitleWithCount count={userActions.users.length} total={userActions.totalCount}>
+        <PageTitleWithCount
+          count={userActions.users.length}
+          total={userActions.totalCount}
+        >
           Users
         </PageTitleWithCount>
-        <div className="flex items-stretch h-12 border-l border-gray-200 dark:border-gray-800">
-          <button
-            type="button"
+      </PageHeaderBlock>
+      <TableToolbar>
+        <TableToolbarContent>
+          <TableToolbarSearch placeholder="Search users..." />
+          <Button
+            hasIconOnly
+            renderIcon={Renew}
+            iconDescription="Refresh"
+            kind="ghost"
+            onClick={() => getUsers(token, authId, projectId)}
+            tooltipPosition="bottom"
+          />
+          <PrimaryButton
+            size="md"
+            renderIcon={Add}
+            isLoading={loading}
             onClick={() => setCreateUserModalOpen(true)}
-            className="flex items-center gap-2 px-4 text-sm text-white bg-primary hover:bg-primary/90 transition-colors whitespace-nowrap"
           >
             Invite user
-            <Plus strokeWidth={1.5} className="w-4 h-4" />
-          </button>
-        </div>
-      </PageHeaderBlock>
-      <BluredWrapper className="sticky top-0 z-11">
-        <SearchIconInput className="bg-light-background flex-1" />
-        <PaginationButtonBlock className="shrink-0">
-          <TablePagination
-            columns={userActions.columns}
-            currentPage={userActions.page}
-            onChangeCurrentPage={userActions.setPage}
-            totalItem={userActions.totalCount}
-            pageSize={userActions.pageSize}
-            onChangePageSize={userActions.setPageSize}
-            onChangeColumns={userActions.setColumns}
-          />
-          <IButton onClick={() => getUsers(token, authId, projectId)}>
-            <RotateCw strokeWidth={1.5} className="h-4 w-4" />
-          </IButton>
-        </PaginationButtonBlock>
-      </BluredWrapper>
+          </PrimaryButton>
+        </TableToolbarContent>
+      </TableToolbar>
       <TableSection>
-        <Table className="bg-white dark:bg-gray-900">
-          <TableHead columns={userActions.columns} isActionable />
+        <Table>
+          <TableHead>
+            <TableRow>
+              {headers.map(h => (
+                <TableHeader key={h.key}>{h.header}</TableHeader>
+              ))}
+            </TableRow>
+          </TableHead>
           <TableBody>
-            {userActions.users.map((usr, idx) => {
-              return <SingleUser key={idx} user={usr} />;
-            })}
+            {userActions.users.map((usr, idx) => (
+              <SingleUser key={idx} user={usr} />
+            ))}
           </TableBody>
         </Table>
+        <Pagination
+          totalItems={userActions.totalCount}
+          page={userActions.page}
+          pageSize={userActions.pageSize}
+          pageSizes={[10, 20, 50]}
+          onChange={({ page, pageSize }) => {
+            if (pageSize !== userActions.pageSize) {
+              userActions.setPageSize(pageSize);
+            } else {
+              userActions.setPage(page);
+            }
+          }}
+        />
       </TableSection>
       <InviteUserDialog
         modalOpen={createUserModalOpen}
@@ -112,7 +126,7 @@ export function UserPage() {
         onSuccess={() => {
           getUsers(token, authId, projectId);
         }}
-      ></InviteUserDialog>
+      />
     </>
   );
 }

@@ -20,6 +20,7 @@ import (
 	resembleai_internal "github.com/rapidaai/api/assistant-api/internal/transformer/resembleai/internal"
 	internal_type "github.com/rapidaai/api/assistant-api/internal/type"
 	"github.com/rapidaai/pkg/commons"
+	type_enums "github.com/rapidaai/pkg/types/enums"
 	"github.com/rapidaai/pkg/utils"
 	"github.com/rapidaai/protos"
 )
@@ -29,8 +30,9 @@ type resembleaiTTS struct {
 	ctx       context.Context
 	ctxCancel context.CancelFunc
 
-	mu        sync.Mutex
-	contextId string
+	mu             sync.Mutex
+	contextId      string
+	ttsConnectedAt time.Time
 
 	ttsStartedAt  time.Time
 	ttsMetricSent bool
@@ -73,6 +75,9 @@ func (ct *resembleaiTTS) Initialize() error {
 
 	ct.mu.Lock()
 	ct.connection = conn
+	if ct.ttsConnectedAt.IsZero() {
+		ct.ttsConnectedAt = time.Now()
+	}
 	ct.mu.Unlock()
 
 	go ct.readLoop(conn)
@@ -156,7 +161,7 @@ func (rt *resembleaiTTS) readLoop(conn *websocket.Conn) {
 				rt.mu.Unlock()
 				if ctxId != "" {
 					if !metricSent && !startedAt.IsZero() {
-						rt.onPacket(internal_type.MessageMetricPacket{
+						rt.onPacket(internal_type.AssistantMessageMetricPacket{
 							ContextID: ctxId,
 							Metrics: []*protos.Metric{{
 								Name:  "tts_latency_ms",
@@ -191,7 +196,7 @@ func (t *resembleaiTTS) Transform(ctx context.Context, in internal_type.LLMPacke
 	t.mu.Unlock()
 
 	switch input := in.(type) {
-	case internal_type.InterruptionPacket:
+	case internal_type.InterruptionDetectedPacket:
 		t.mu.Lock()
 		t.contextId = ""
 		t.ttsStartedAt = time.Time{}
@@ -264,12 +269,37 @@ func (t *resembleaiTTS) Transform(ctx context.Context, in internal_type.LLMPacke
 func (t *resembleaiTTS) Close(ctx context.Context) error {
 	t.ctxCancel()
 	t.mu.Lock()
-	defer t.mu.Unlock()
+	ctxID := t.contextId
+	connectedAt := t.ttsConnectedAt
+	t.ttsConnectedAt = time.Time{}
 
 	if t.connection != nil {
 		conn := t.connection
 		t.connection = nil // mark before Close so readLoop sees intentional
 		conn.Close()
+	}
+	t.mu.Unlock()
+
+	if !connectedAt.IsZero() {
+		t.onPacket(
+			internal_type.ConversationEventPacket{
+				ContextID: ctxID,
+				Name:      "tts",
+				Data: map[string]string{
+					"type":     "closed",
+					"provider": t.Name(),
+				},
+				Time: time.Now(),
+			},
+			internal_type.ConversationMetricPacket{
+				ContextID: 0,
+				Metrics: []*protos.Metric{{
+					Name:        type_enums.CONVERSATION_TTS_DURATION.String(),
+					Value:       fmt.Sprintf("%d", time.Since(connectedAt).Nanoseconds()),
+					Description: "Total TTS connection duration in nanoseconds",
+				}},
+			},
+		)
 	}
 	return nil
 }

@@ -77,7 +77,7 @@ func TestRecordUserAudio(t *testing.T) {
 	rec, _ := newTestRecorderWithClock(t)
 	rec.Start()
 	data := pcm(0x01, 320)
-	rec.Record(context.Background(), internal_type.UserAudioPacket{Audio: data})
+	rec.Record(context.Background(), internal_type.UserAudioReceivedPacket{Audio: data})
 
 	if len(rec.chunks) != 1 {
 		t.Fatalf("expected 1 chunk, got %d", len(rec.chunks))
@@ -108,8 +108,8 @@ func TestRecordEmptyDataIsIgnored(t *testing.T) {
 	rec, _ := newTestRecorderWithClock(t)
 	rec.Start()
 	ctx := context.Background()
-	rec.Record(ctx, internal_type.UserAudioPacket{Audio: nil})
-	rec.Record(ctx, internal_type.UserAudioPacket{Audio: []byte{}})
+	rec.Record(ctx, internal_type.UserAudioReceivedPacket{Audio: nil})
+	rec.Record(ctx, internal_type.UserAudioReceivedPacket{Audio: []byte{}})
 	rec.Record(ctx, internal_type.TextToSpeechAudioPacket{ContextID: "c", AudioChunk: nil})
 
 	if len(rec.chunks) != 0 {
@@ -129,7 +129,7 @@ func TestTimelineBasedPlacement(t *testing.T) {
 	rec.Start()
 	ctx := context.Background()
 
-	rec.Record(ctx, internal_type.UserAudioPacket{Audio: pcm(0x11, 100)})
+	rec.Record(ctx, internal_type.UserAudioReceivedPacket{Audio: pcm(0x11, 100)})
 
 	fc.Advance(100 * time.Millisecond)
 	rec.Record(ctx, internal_type.TextToSpeechAudioPacket{ContextID: "c1", AudioChunk: pcm(0x22, 200)})
@@ -185,7 +185,7 @@ func TestTracksAreIndependent(t *testing.T) {
 	rec.Start()
 	ctx := context.Background()
 
-	rec.Record(ctx, internal_type.UserAudioPacket{Audio: pcm(0x11, 100)})
+	rec.Record(ctx, internal_type.UserAudioReceivedPacket{Audio: pcm(0x11, 100)})
 	rec.Record(ctx, internal_type.TextToSpeechAudioPacket{ContextID: "c1", AudioChunk: pcm(0x22, 150)})
 
 	userWAV, systemWAV, err := rec.Persist()
@@ -400,7 +400,7 @@ func TestInterruptionTruncatesSystemTrack(t *testing.T) {
 
 	// User interrupts at t=10ms (320 bytes).
 	fc.Advance(10 * time.Millisecond)
-	rec.Record(ctx, internal_type.InterruptionPacket{ContextID: "c1", Source: internal_type.InterruptionSourceVad})
+	rec.Record(ctx, internal_type.InterruptionDetectedPacket{ContextID: "c1", Source: internal_type.InterruptionSourceVad})
 
 	// Only the first chunk (offset 0, 320 bytes) should survive — it ends
 	// exactly at cutoff=320, so chunkEnd(320) <= cutoff(320) → kept.
@@ -430,7 +430,7 @@ func TestInterruptionPartialTrim(t *testing.T) {
 	rec.Record(ctx, internal_type.TextToSpeechAudioPacket{ContextID: "c1", AudioChunk: pcm(0xBB, 640)})
 
 	fc.Advance(10 * time.Millisecond) // cutoff = 320
-	rec.Record(ctx, internal_type.InterruptionPacket{ContextID: "c1", Source: internal_type.InterruptionSourceWord})
+	rec.Record(ctx, internal_type.InterruptionDetectedPacket{ContextID: "c1", Source: internal_type.InterruptionSourceWord})
 
 	if len(rec.chunks) != 1 {
 		t.Fatalf("expected 1 trimmed chunk, got %d", len(rec.chunks))
@@ -467,11 +467,11 @@ func TestInterruptionPreservesUserTrack(t *testing.T) {
 	rec.Start()
 	ctx := context.Background()
 
-	rec.Record(ctx, internal_type.UserAudioPacket{Audio: pcm(0x11, 640)})
+	rec.Record(ctx, internal_type.UserAudioReceivedPacket{Audio: pcm(0x11, 640)})
 	rec.Record(ctx, internal_type.TextToSpeechAudioPacket{ContextID: "c1", AudioChunk: pcm(0x22, 640)})
 
 	fc.Advance(10 * time.Millisecond) // cutoff = 320
-	rec.Record(ctx, internal_type.InterruptionPacket{ContextID: "c1", Source: internal_type.InterruptionSourceVad})
+	rec.Record(ctx, internal_type.InterruptionDetectedPacket{ContextID: "c1", Source: internal_type.InterruptionSourceVad})
 
 	// User chunk (640 bytes) untouched.  System chunk trimmed to 320.
 	userChunks := 0
@@ -508,7 +508,7 @@ func TestInterruptionThenNewTTS(t *testing.T) {
 
 	// Interrupt at t=10ms (cutoff = 320).
 	fc.Advance(10 * time.Millisecond)
-	rec.Record(ctx, internal_type.InterruptionPacket{ContextID: "c1", Source: internal_type.InterruptionSourceVad})
+	rec.Record(ctx, internal_type.InterruptionDetectedPacket{ContextID: "c1", Source: internal_type.InterruptionSourceVad})
 
 	// After interrupt, cursor is at 320, so first chunk is trimmed.
 	if rec.cursor[trackSystem] != 320 {
@@ -544,7 +544,7 @@ func TestPushCopiesData(t *testing.T) {
 	rec, _ := newTestRecorderWithClock(t)
 	rec.Start()
 	data := pcm(0xFF, 100)
-	rec.Record(context.Background(), internal_type.UserAudioPacket{Audio: data})
+	rec.Record(context.Background(), internal_type.UserAudioReceivedPacket{Audio: data})
 	data[0] = 0x00
 	if rec.chunks[0].Data[0] != 0xFF {
 		t.Error("push must copy data")
@@ -568,7 +568,7 @@ func TestPersistProducesValidWAV(t *testing.T) {
 	rec.Start()
 	ctx := context.Background()
 
-	rec.Record(ctx, internal_type.UserAudioPacket{Audio: pcm(0x01, 3200)})
+	rec.Record(ctx, internal_type.UserAudioReceivedPacket{Audio: pcm(0x01, 3200)})
 	fc.Advance(200 * time.Millisecond)
 	rec.Record(ctx, internal_type.TextToSpeechAudioPacket{ContextID: "c1", AudioChunk: pcm(0x02, 6400)})
 
@@ -604,7 +604,7 @@ func TestPersistPadsToSessionDuration(t *testing.T) {
 	rec.Start()
 	ctx := context.Background()
 
-	rec.Record(ctx, internal_type.UserAudioPacket{Audio: pcm(0x11, 100)})
+	rec.Record(ctx, internal_type.UserAudioReceivedPacket{Audio: pcm(0x11, 100)})
 	rec.Record(ctx, internal_type.TextToSpeechAudioPacket{ContextID: "c1", AudioChunk: pcm(0x22, 200)})
 
 	fc.Advance(500 * time.Millisecond)
@@ -641,7 +641,7 @@ func TestPersistSystemAudioPlacedAtCorrectTime(t *testing.T) {
 	rec.Start()
 	ctx := context.Background()
 
-	rec.Record(ctx, internal_type.UserAudioPacket{Audio: pcm(0x11, 100)})
+	rec.Record(ctx, internal_type.UserAudioReceivedPacket{Audio: pcm(0x11, 100)})
 
 	fc.Advance(500 * time.Millisecond)
 	rec.Record(ctx, internal_type.TextToSpeechAudioPacket{ContextID: "c1", AudioChunk: pcm(0x22, 200)})
@@ -690,7 +690,7 @@ func TestPersistSystemAudioPlacedAtCorrectTime(t *testing.T) {
 func TestPersistOnlyUserAudio(t *testing.T) {
 	rec, fc := newTestRecorderWithClock(t)
 	rec.Start()
-	rec.Record(context.Background(), internal_type.UserAudioPacket{Audio: pcm(0xAA, 500)})
+	rec.Record(context.Background(), internal_type.UserAudioReceivedPacket{Audio: pcm(0xAA, 500)})
 	fc.Advance(100 * time.Millisecond) // 3200 session bytes
 
 	userWAV, systemWAV, err := rec.Persist()

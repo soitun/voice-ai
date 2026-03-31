@@ -19,6 +19,7 @@ import (
 
 	internal_type "github.com/rapidaai/api/assistant-api/internal/type"
 	"github.com/rapidaai/pkg/commons"
+	type_enums "github.com/rapidaai/pkg/types/enums"
 	"github.com/rapidaai/pkg/utils"
 	"github.com/rapidaai/protos"
 )
@@ -28,9 +29,10 @@ type nvidiaTTS struct {
 	ctx       context.Context
 	ctxCancel context.CancelFunc
 
-	mu         sync.Mutex
-	contextId  string
-	textBuffer strings.Builder
+	mu             sync.Mutex
+	contextId      string
+	ttsConnectedAt time.Time
+	textBuffer     strings.Builder
 
 	ttsStartedAt  time.Time
 	ttsMetricSent bool
@@ -59,6 +61,11 @@ func NewNvidiaTextToSpeech(ctx context.Context, logger commons.Logger, credentia
 
 func (ct *nvidiaTTS) Initialize() error {
 	start := time.Now()
+	ct.mu.Lock()
+	if ct.ttsConnectedAt.IsZero() {
+		ct.ttsConnectedAt = time.Now()
+	}
+	ct.mu.Unlock()
 	ct.onPacket(internal_type.ConversationEventPacket{
 		Name: "tts",
 		Data: map[string]string{
@@ -151,7 +158,7 @@ func (t *nvidiaTTS) streamHTTPTTS(text string, ctxId string) {
 				}
 				t.mu.Unlock()
 				if !metricSent && !startedAt.IsZero() {
-					t.onPacket(internal_type.MessageMetricPacket{
+					t.onPacket(internal_type.AssistantMessageMetricPacket{
 						ContextID: ctxId,
 						Metrics: []*protos.Metric{{
 							Name:  "tts_latency_ms",
@@ -193,7 +200,7 @@ func (t *nvidiaTTS) Transform(ctx context.Context, in internal_type.LLMPacket) e
 	t.mu.Unlock()
 
 	switch input := in.(type) {
-	case internal_type.InterruptionPacket:
+	case internal_type.InterruptionDetectedPacket:
 		if currentCtx != "" {
 			t.mu.Lock()
 			t.ttsStartedAt = time.Time{}
@@ -233,5 +240,32 @@ func (t *nvidiaTTS) Transform(ctx context.Context, in internal_type.LLMPacket) e
 
 func (t *nvidiaTTS) Close(ctx context.Context) error {
 	t.ctxCancel()
+	t.mu.Lock()
+	ctxID := t.contextId
+	connectedAt := t.ttsConnectedAt
+	t.ttsConnectedAt = time.Time{}
+	t.mu.Unlock()
+
+	if !connectedAt.IsZero() {
+		t.onPacket(
+			internal_type.ConversationEventPacket{
+				ContextID: ctxID,
+				Name:      "tts",
+				Data: map[string]string{
+					"type":     "closed",
+					"provider": t.Name(),
+				},
+				Time: time.Now(),
+			},
+			internal_type.ConversationMetricPacket{
+				ContextID: 0,
+				Metrics: []*protos.Metric{{
+					Name:        type_enums.CONVERSATION_TTS_DURATION.String(),
+					Value:       fmt.Sprintf("%d", time.Since(connectedAt).Nanoseconds()),
+					Description: "Total TTS connection duration in nanoseconds",
+				}},
+			},
+		)
+	}
 	return nil
 }

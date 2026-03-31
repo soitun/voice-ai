@@ -18,6 +18,7 @@ import (
 	cartesia_internal "github.com/rapidaai/api/assistant-api/internal/transformer/cartesia/internal"
 	internal_type "github.com/rapidaai/api/assistant-api/internal/type"
 	"github.com/rapidaai/pkg/commons"
+	type_enums "github.com/rapidaai/pkg/types/enums"
 	"github.com/rapidaai/pkg/utils"
 	protos "github.com/rapidaai/protos"
 )
@@ -31,8 +32,10 @@ type cartesiaSpeechToText struct {
 	ctx       context.Context
 	ctxCancel context.CancelFunc
 
-	connection *websocket.Conn
-	onPacket   func(pkt ...internal_type.Packet) error
+	connection     *websocket.Conn
+	contextId      string
+	sttConnectedAt time.Time
+	onPacket       func(pkt ...internal_type.Packet) error
 
 	startedAt time.Time
 }
@@ -69,13 +72,18 @@ func (cst *cartesiaSpeechToText) Initialize() error {
 
 	cst.mu.Lock()
 	cst.connection = conn
+	cst.sttConnectedAt = time.Now()
 	cst.mu.Unlock()
 
 	go cst.readLoop(conn)
 	cst.logger.Debugf("cartesia-stt: connection established")
 
+	cst.mu.Lock()
+	ctxID := cst.contextId
+	cst.mu.Unlock()
 	cst.onPacket(internal_type.ConversationEventPacket{
-		Name: "stt",
+		ContextID: ctxID,
+		Name:      "stt",
 		Data: map[string]string{
 			"type":     "initialized",
 			"provider": cst.Name(),
@@ -107,9 +115,10 @@ func (cst *cartesiaSpeechToText) readLoop(conn *websocket.Conn) {
 			if !intentional {
 				cst.logger.Errorf("cartesia-stt: connection lost: %v", err)
 				cst.onPacket(internal_type.ConversationEventPacket{
-					Name: "stt",
-					Data: map[string]string{"type": "error", "error": err.Error()},
-					Time: time.Now(),
+					ContextID: cst.contextId,
+					Name:      "stt",
+					Data:      map[string]string{"type": "error", "error": err.Error()},
+					Time:      time.Now(),
 				})
 			}
 			return
@@ -119,17 +128,22 @@ func (cst *cartesiaSpeechToText) readLoop(conn *websocket.Conn) {
 		if err := json.Unmarshal(msg, &resp); err != nil || resp.Text == "" {
 			continue
 		}
+		cst.mu.Lock()
+		ctxID := cst.contextId
+		cst.mu.Unlock()
 
 		if !resp.IsFinal {
 			cst.onPacket(
-				internal_type.InterruptionPacket{Source: internal_type.InterruptionSourceWord},
+				internal_type.InterruptionDetectedPacket{ContextID: ctxID, Source: internal_type.InterruptionSourceWord},
 				internal_type.SpeechToTextPacket{
-					Script:   resp.Text,
-					Language: resp.Language,
-					Interim:  true,
+					ContextID: ctxID,
+					Script:    resp.Text,
+					Language:  resp.Language,
+					Interim:   true,
 				},
 				internal_type.ConversationEventPacket{
-					Name: "stt",
+					ContextID: ctxID,
+					Name:      "stt",
 					Data: map[string]string{
 						"type":       "interim",
 						"script":     resp.Text,
@@ -148,14 +162,16 @@ func (cst *cartesiaSpeechToText) readLoop(conn *websocket.Conn) {
 			}
 			cst.mu.Unlock()
 			cst.onPacket(
-				internal_type.InterruptionPacket{Source: internal_type.InterruptionSourceWord},
+				internal_type.InterruptionDetectedPacket{ContextID: ctxID, Source: internal_type.InterruptionSourceWord},
 				internal_type.SpeechToTextPacket{
-					Script:   resp.Text,
-					Language: resp.Language,
-					Interim:  false,
+					ContextID: ctxID,
+					Script:    resp.Text,
+					Language:  resp.Language,
+					Interim:   false,
 				},
 				internal_type.ConversationEventPacket{
-					Name: "stt",
+					ContextID: ctxID,
+					Name:      "stt",
 					Data: map[string]string{
 						"type":       "completed",
 						"script":     resp.Text,
@@ -166,44 +182,84 @@ func (cst *cartesiaSpeechToText) readLoop(conn *websocket.Conn) {
 					},
 					Time: now,
 				},
-				internal_type.MessageMetricPacket{
-					Metrics: []*protos.Metric{{Name: "stt_latency_ms", Value: fmt.Sprintf("%d", latencyMs)}},
+				internal_type.UserMessageMetricPacket{
+					ContextID: ctxID,
+					Metrics:   []*protos.Metric{{Name: "stt_latency_ms", Value: fmt.Sprintf("%d", latencyMs)}},
 				},
 			)
 		}
 	}
 }
 
-func (cst *cartesiaSpeechToText) Transform(ctx context.Context, in internal_type.UserAudioPacket) error {
-	cst.mu.Lock()
-	conn := cst.connection
-	if cst.startedAt.IsZero() {
-		cst.startedAt = time.Now()
-	}
-	cst.mu.Unlock()
+func (cst *cartesiaSpeechToText) Transform(ctx context.Context, in internal_type.Packet) error {
+	switch pkt := in.(type) {
+	case internal_type.TurnChangePacket:
+		cst.mu.Lock()
+		cst.contextId = pkt.ContextID
+		cst.mu.Unlock()
+		return nil
+	case internal_type.InterruptionDetectedPacket:
+		cst.mu.Lock()
+		if pkt.Source == internal_type.InterruptionSourceVad && cst.startedAt.IsZero() {
+			cst.startedAt = time.Now()
+		}
+		cst.mu.Unlock()
+		return nil
+	case internal_type.UserAudioReceivedPacket:
+		cst.mu.Lock()
+		conn := cst.connection
+		cst.mu.Unlock()
 
-	if conn == nil {
-		return fmt.Errorf("cartesia-stt: websocket connection is not initialized")
-	}
+		if conn == nil {
+			return fmt.Errorf("cartesia-stt: websocket connection is not initialized")
+		}
 
-	cst.writeMu.Lock()
-	err := conn.WriteMessage(websocket.BinaryMessage, in.Audio)
-	cst.writeMu.Unlock()
-	if err != nil {
-		return fmt.Errorf("cartesia-stt: failed to send audio data: %w", err)
+		cst.writeMu.Lock()
+		err := conn.WriteMessage(websocket.BinaryMessage, pkt.Audio)
+		cst.writeMu.Unlock()
+		if err != nil {
+			return fmt.Errorf("cartesia-stt: failed to send audio data: %w", err)
+		}
+		return nil
+	default:
+		return nil
 	}
-	return nil
 }
 
 func (cst *cartesiaSpeechToText) Close(ctx context.Context) error {
 	cst.ctxCancel()
 	cst.mu.Lock()
-	defer cst.mu.Unlock()
+	ctxID := cst.contextId
+	connectedAt := cst.sttConnectedAt
+	cst.sttConnectedAt = time.Time{}
 
 	if cst.connection != nil {
 		conn := cst.connection
 		cst.connection = nil // mark before Close so readLoop sees intentional
 		conn.Close()
+	}
+	cst.mu.Unlock()
+
+	if !connectedAt.IsZero() {
+		cst.onPacket(
+			internal_type.ConversationEventPacket{
+				ContextID: ctxID,
+				Name:      "stt",
+				Data: map[string]string{
+					"type":     "closed",
+					"provider": cst.Name(),
+				},
+				Time: time.Now(),
+			},
+			internal_type.ConversationMetricPacket{
+				ContextID: 0,
+				Metrics: []*protos.Metric{{
+					Name:        type_enums.CONVERSATION_STT_DURATION.String(),
+					Value:       fmt.Sprintf("%d", time.Since(connectedAt).Nanoseconds()),
+					Description: "Total STT connection duration in nanoseconds",
+				}},
+			},
+		)
 	}
 	return nil
 }

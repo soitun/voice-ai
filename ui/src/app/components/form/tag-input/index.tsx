@@ -1,72 +1,80 @@
-import { FieldSet } from '@/app/components/form/fieldset';
-import React, { FC } from 'react';
-import { CloseIcon } from '@/app/components/Icon/Close';
-import { Input } from '@/app/components/form/input';
-import { InputHelper } from '@/app/components/input-helper';
-import { FormLabel } from '@/app/components/form-label';
+import React, { FC, useState } from 'react';
+import { DismissibleTag, Tag } from '@carbon/react';
+import { TextInput } from '@/app/components/carbon/form';
 
-/**
- *
- */
 interface TagInputProps {
   tags: string[];
-  addTag: (string) => void;
-  removeTag: (string) => void;
+  addTag: (tag: string) => void;
+  removeTag: (tag: string) => void;
   allTags: Array<string>;
   className?: string;
 }
 
-/**
- *
- * @param param0
- * @returns
- */
 export const TagInput: FC<TagInputProps> = ({
   tags,
   addTag,
   removeTag,
   allTags,
-  className,
 }) => {
-  //   all the tags
+  const [inputValue, setInputValue] = useState('');
 
-  //
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      const value = inputValue.trim();
+      if (value && !tags.includes(value)) {
+        addTag(value);
+        setInputValue('');
+      }
+    }
+  };
+
+  const suggestedTags = allTags.filter(t => !tags.includes(t));
+
   return (
     <div>
-      <div className="mb-4 flex flex-wrap gap-2">
-        {tags.map((t, idx) => (
-          <span
-            key={idx}
-            className="inline-flex items-center gap-1.5 px-2 py-0.5 text-xs font-medium bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600"
-          >
-            {t}
-            <CloseIcon
-              className="h-3 w-3 cursor-pointer text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100"
-              stroke="currentColor"
-              onClick={() => removeTag(t)}
+      <TextInput
+        id="tag-input"
+        labelText="Tags (Optional)"
+        placeholder="Type a tag and press Enter"
+        value={inputValue}
+        onChange={e => setInputValue(e.target.value)}
+        onKeyDown={handleKeyDown}
+        helperText="Add tags to organize and locate items more efficiently."
+      />
+      {tags.length > 0 && (
+        <div className="flex flex-wrap gap-1 mt-3">
+          {tags.map(t => (
+            <DismissibleTag
+              key={t}
+              text={t}
+              type="blue"
+              size="md"
+              onClose={() => removeTag(t)}
             />
-          </span>
-        ))}
-      </div>
-      <FieldSet>
-        <FormLabel>Tags (Optional)</FormLabel>
-        <Input
-          type="text"
-          className={className}
-          placeholder="Add tags"
-          onKeyDown={e => {
-            if (e.key === 'Enter' && e.currentTarget.value.trim() !== '') {
-              addTag(e.currentTarget.value.trim());
-              e.currentTarget.value = '';
-            }
-          }}
-        />
-
-        <InputHelper>
-          Add tags to organize and locate items more efficiently. Separate tags
-          with commas and press Enter to add them.
-        </InputHelper>
-      </FieldSet>
+          ))}
+        </div>
+      )}
+      {suggestedTags.length > 0 && (
+        <div className="mt-3">
+          <p className="text-[10px] font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-1.5">
+            Suggestions
+          </p>
+          <div className="flex flex-wrap gap-1">
+            {suggestedTags.slice(0, 12).map(t => (
+              <Tag
+                key={t}
+                type="outline"
+                size="md"
+                className="cursor-pointer"
+                onClick={() => addTag(t)}
+              >
+                {t}
+              </Tag>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 };

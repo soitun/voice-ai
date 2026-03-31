@@ -174,7 +174,7 @@ func TestSarvamTTSInterruption(t *testing.T) {
 
 	collector.WaitForAudio(t, 15*time.Second)
 
-	require.NoError(t, tts.Transform(ctx, internal_type.InterruptionPacket{
+	require.NoError(t, tts.Transform(ctx, internal_type.InterruptionDetectedPacket{
 		ContextID: "sarvam-tts-interrupt",
 		Source:    internal_type.InterruptionSourceVad,
 	}))
@@ -260,7 +260,7 @@ func TestSarvamTTSFlow_DeltaInterruptDeltaDone(t *testing.T) {
 	t.Logf("phase1: audio_packets=%d", len(collector.AudioPackets()))
 
 	// Phase 2: interrupt
-	require.NoError(t, tts.Transform(ctx, internal_type.InterruptionPacket{
+	require.NoError(t, tts.Transform(ctx, internal_type.InterruptionDetectedPacket{
 		ContextID: "ctx-1", Source: internal_type.InterruptionSourceVad}))
 	time.Sleep(500 * time.Millisecond)
 
@@ -310,7 +310,7 @@ func TestSarvamTTSFlow_DeltaDoneInterrupt(t *testing.T) {
 
 	assert.NotEmpty(t, collector.EndPackets(), "should have completed before interrupt")
 
-	err = tts.Transform(ctx, internal_type.InterruptionPacket{
+	err = tts.Transform(ctx, internal_type.InterruptionDetectedPacket{
 		ContextID: "ctx-late", Source: internal_type.InterruptionSourceVad})
 	require.NoError(t, err, "late interrupt should not error")
 	time.Sleep(1 * time.Second)
@@ -353,7 +353,7 @@ func TestSarvamTTSFlow_MultipleInterrupts(t *testing.T) {
 		require.NoError(t, tts.Transform(ctx, internal_type.LLMResponseDonePacket{
 			ContextID: fmt.Sprintf("round-%d", round)}))
 		collector.WaitForAudio(t, 15*time.Second)
-		require.NoError(t, tts.Transform(ctx, internal_type.InterruptionPacket{
+		require.NoError(t, tts.Transform(ctx, internal_type.InterruptionDetectedPacket{
 			ContextID: fmt.Sprintf("round-%d", round),
 			Source:    internal_type.InterruptionSourceVad}))
 		time.Sleep(500 * time.Millisecond)
@@ -400,7 +400,7 @@ func TestSarvamTTSFlow_DeltaInterruptNoComplete(t *testing.T) {
 		ContextID: "ctx-no-complete"}))
 	collector.WaitForAudio(t, 15*time.Second)
 
-	require.NoError(t, tts.Transform(ctx, internal_type.InterruptionPacket{
+	require.NoError(t, tts.Transform(ctx, internal_type.InterruptionDetectedPacket{
 		ContextID: "ctx-no-complete", Source: internal_type.InterruptionSourceVad}))
 	time.Sleep(1 * time.Second)
 
@@ -519,7 +519,7 @@ func TestSarvamSTTLifecycle(t *testing.T) {
 		assert.Contains(t, eventTypes, "completed")
 		t.Logf("stt_event_sequence=%v", eventTypes)
 
-		interruptions := collector.InterruptionPackets()
+		interruptions := collector.InterruptionDetectedPackets()
 		assert.NotEmpty(t, interruptions, "should emit interruption packets with transcripts")
 
 		assertSTTLatencyMetric(t, collector)
@@ -545,7 +545,7 @@ func TestSarvamSTTAudioAcceptance(t *testing.T) {
 
 	chunks := testutil.ChunkAudio(testutil.SineTonePCM(440, 1.0), testutil.FrameSize)
 	for i, chunk := range chunks {
-		err := stt.Transform(ctx, internal_type.UserAudioPacket{
+		err := stt.Transform(ctx, internal_type.UserAudioReceivedPacket{
 			ContextID: "sarvam-stt-accept", Audio: chunk})
 		require.NoError(t, err, "chunk %d should be accepted", i)
 	}
@@ -646,7 +646,7 @@ func TestSarvamSTTCloseWhileStreaming(t *testing.T) {
 				return
 			default:
 			}
-			_ = stt.Transform(ctx, internal_type.UserAudioPacket{
+			_ = stt.Transform(ctx, internal_type.UserAudioReceivedPacket{
 				ContextID: "sarvam-stt-close-mid", Audio: chunk})
 			time.Sleep(time.Duration(testutil.FrameDuration) * time.Millisecond)
 		}

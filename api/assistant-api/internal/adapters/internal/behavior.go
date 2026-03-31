@@ -79,7 +79,7 @@ func (r *genericRequestor) initializeGreeting(ctx context.Context, behavior *int
 
 	// r.Transition(Interrupted)
 	if err := r.OnPacket(ctx,
-		internal_type.StaticPacket{ContextID: r.GetID(), Text: greetingContent},
+		internal_type.InjectMessagePacket{ContextID: r.GetID(), Text: greetingContent},
 		internal_type.ConversationEventPacket{
 			Name: "behavior",
 			Data: map[string]string{"type": "greeting", "text_chars": fmt.Sprintf("%d", len(greetingContent))},
@@ -133,7 +133,7 @@ func (r *genericRequestor) OnError(ctx context.Context) error {
 
 	r.Transition(Interrupted)
 	if err := r.OnPacket(ctx,
-		internal_type.StaticPacket{ContextID: r.GetID(), Text: mistakeContent},
+		internal_type.InjectMessagePacket{ContextID: r.GetID(), Text: mistakeContent},
 		internal_type.ConversationEventPacket{
 			Name: "behavior",
 			Data: map[string]string{"type": "error", "text_chars": fmt.Sprintf("%d", len(mistakeContent))},
@@ -185,9 +185,18 @@ func (r *genericRequestor) onIdleTimeout(ctx context.Context) error {
 	if behavior.IdleTimeoutBackoff != nil {
 		maxCount = int(*behavior.IdleTimeoutBackoff)
 	}
+	// Rotate context before injecting the timeout message.
+	// InjectMessagePacket routes to outputCh; the context must be rotated
+	// before enqueueing so GetID() returns the new context.
 	r.Transition(Interrupted)
+	// Reinitialize TTS synchronously — the provider enters "completed" state
+	// after speaking and needs an interrupt to accept new text. Calling inline
+	// guarantees TTS is ready before InjectMessagePacket reaches handleSpeakText.
+	if r.textToSpeechTransformer != nil {
+		r.textToSpeechTransformer.Transform(ctx, internal_type.InterruptionDetectedPacket{ContextID: r.GetID()})
+	}
 	if err := r.OnPacket(ctx,
-		internal_type.StaticPacket{ContextID: r.GetID(), Text: timeoutContent},
+		internal_type.InjectMessagePacket{ContextID: r.GetID(), Text: timeoutContent},
 		internal_type.ConversationEventPacket{
 			Name: "behavior",
 			Data: map[string]string{
@@ -258,6 +267,14 @@ func (r *genericRequestor) extendIdleTimeoutTimer(d time.Duration) {
 	}
 }
 
+// stopIdleTimeoutTimerAndResetCount stops the timer AND resets the consecutive
+// idle backoff counter. Used when the user actually speaks — signaling active
+// engagement and breaking the consecutive idle chain.
+func (r *genericRequestor) stopIdleTimeoutTimerAndResetCount() {
+	r.stopIdleTimeoutTimer()
+	r.idleTimeoutCount = 0
+}
+
 // ResetIdleTimeoutTimer resets the idle timeout timer when the user responds,
 // indicating they are still engaged in the conversation.
 // The inputDuration parameter extends the idle timeout to account for user input time.
@@ -269,12 +286,13 @@ func (r *genericRequestor) resetIdleTimeoutTimer(ctx context.Context, inputDurat
 	r.startIdleTimeoutTimer(ctx, inputDuration...)
 }
 
-// stopIdleTimeoutTimer stops the idle timeout timer and resets retry count.
+// stopIdleTimeoutTimer stops the idle timeout timer without resetting the
+// retry count. The count is only reset when the user actually speaks
+// (handleNormalizedText), not when a system-generated interrupt fires.
 func (r *genericRequestor) stopIdleTimeoutTimer() {
 	if r.idleTimeoutTimer != nil {
 		r.idleTimeoutTimer.Stop()
 		r.idleTimeoutTimer = nil
 	}
-	r.idleTimeoutCount = 0
 	r.idleTimeoutDeadline = time.Time{}
 }

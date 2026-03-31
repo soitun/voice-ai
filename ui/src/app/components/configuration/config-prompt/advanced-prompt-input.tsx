@@ -21,6 +21,7 @@ type PromptEditorProps = {
   onDelete: () => void;
   className?: string;
   instanceId?: string;
+  enableReservedVariableSuggestions?: boolean;
 };
 
 const AdvancedPromptInput: FC<PromptEditorProps> = ({
@@ -31,6 +32,7 @@ const AdvancedPromptInput: FC<PromptEditorProps> = ({
   canDelete,
   onDelete,
   className,
+  enableReservedVariableSuggestions = false,
 }) => {
   // expand feature
   const ref = useRef<HTMLDivElement>(null);
@@ -129,6 +131,7 @@ const AdvancedPromptInput: FC<PromptEditorProps> = ({
           onFocus={setFocus}
           onChange={handlePromptChange}
           onBlur={setBlur}
+          enableReservedVariableSuggestions={enableReservedVariableSuggestions}
         />
       </div>
     </div>

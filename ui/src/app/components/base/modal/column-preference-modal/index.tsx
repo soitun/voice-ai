@@ -1,85 +1,45 @@
 import React, { useEffect, useState } from 'react';
-import { Switch } from '@/app/components/form/switch';
-import { Label } from '@/app/components/form/label';
-import { IBlueBGButton, ICancelButton } from '@/app/components/form/button';
 import { ErrorMessage } from '@/app/components/form/error-message';
-import { ModalFooter } from '@/app/components/base/modal/modal-footer';
-import { ModalBody } from '@/app/components/base/modal/modal-body';
-import { GenericModal } from '@/app/components/base/modal';
-import { ModalFitHeightBlock } from '@/app/components/blocks/modal-fit-height-block';
-import { ModalHeader } from '@/app/components/base/modal/modal-header';
-import { ModalTitleBlock } from '@/app/components/blocks/modal-title-block';
+import {
+  Modal,
+  ModalHeader,
+  ModalBody,
+  ModalFooter,
+} from '@/app/components/carbon/modal';
+import {
+  PrimaryButton,
+  SecondaryButton,
+} from '@/app/components/carbon/button';
+import { Stack, Checkbox, FormGroup } from '@/app/components/carbon/form';
+import { RadioButton, RadioButtonGroup } from '@carbon/react';
 
 interface TablePreferenceModalProps {
-  /**
-   * show and hide modal
-   */
   open: boolean;
-
-  /**
-   *
-   * @param boolean
-   * @returns
-   */
-  setOpen: (boolean) => void;
-
-  /**
-   * default page size
-   */
+  setOpen: (open: boolean) => void;
   defaultPageSize: number[];
-  /**
-   *
-   * The columns which is shown currently
-   */
   columns: { name: string; key: string; visible: boolean }[];
-
-  /**
-   *
-   * @param clmns
-   * @returns
-   */
   onChangeColumns: (
     clmns: { name: string; key: string; visible: boolean }[],
   ) => void;
-
-  /**
-   * Item per page
-   */
   pageSize: number;
-
-  /**
-   * onChange of page
-   */
-  onChangePageSize: (number) => void;
+  onChangePageSize: (size: number) => void;
 }
 
 export function ColumnPreferencesDialog(props: TablePreferenceModalProps) {
-  /**
-   * to control locally page size
-   */
   const [pgs, setPgs] = useState(props.pageSize);
+  const [clmns, setClmns] = useState<
+    { name: string; key: string; visible: boolean }[]
+  >([]);
+  const [error, setError] = useState('');
 
   useEffect(() => {
     setPgs(props.pageSize);
   }, [props.pageSize]);
 
-  /**
-   *
-   * to control locally columns
-   */
-
-  const [clmns, setClmns] = useState<
-    { name: string; key: string; visible: boolean }[]
-  >([]);
-
   useEffect(() => {
     setClmns(props.columns);
   }, [props.columns]);
 
-  /**
-   *
-   * @param k
-   */
   const changeVisibility = (k: string) => {
     setClmns(prevClmns =>
       prevClmns.map(column =>
@@ -88,116 +48,73 @@ export function ColumnPreferencesDialog(props: TablePreferenceModalProps) {
     );
   };
 
-  /**
-   *
-   * @param e
-   */
-  const [error, setError] = useState('');
-
-  const onAction = e => {
-    let cnt = clmns.filter(x => {
-      return x.visible;
-    });
+  const onAction = () => {
+    const cnt = clmns.filter(x => x.visible);
     if (cnt.length < 1 && clmns.length > 0) {
       setError('Please have 2 or more column visibility selected');
       return;
     }
-
     props.onChangePageSize(pgs);
     props.onChangeColumns(clmns);
     props.setOpen(false);
   };
+
   return (
-    <GenericModal
-      className="flex"
-      modalOpen={props.open}
-      setModalOpen={props.setOpen}
+    <Modal
+      open={props.open}
+      onClose={() => props.setOpen(false)}
+      size="sm"
     >
-      <ModalFitHeightBlock>
-        <ModalHeader
-          onClose={() => {
-            props.setOpen(false);
-          }}
-          title={'Column Preferences'}
-        >
-          <ModalTitleBlock>Column Preferences</ModalTitleBlock>
-        </ModalHeader>
-        <ModalBody>
+      <ModalHeader
+        label="Table Settings"
+        title="Column Preferences"
+        onClose={() => props.setOpen(false)}
+      />
+      <ModalBody>
+        <Stack gap={6}>
           {clmns.length > 0 && (
-            <div>
-              <h4 className="text-sm">Column preferences</h4>
-              <ul className="my-2">
-                {clmns.map((cl, idx) => {
-                  return (
-                    <li
-                      className="flex cursor-pointer items-center justify-between border-b py-3 dark:border-gray-800"
-                      key={idx}
-                    >
-                      <span
-                        className="text-sm opacity-80 font-medium flex-1"
-                        onClick={() => {
-                          changeVisibility(cl.key);
-                        }}
-                      >
-                        {cl.name}
-                      </span>
-                      <Switch
-                        enable={cl.visible}
-                        setEnable={() => {
-                          changeVisibility(cl.key);
-                        }}
-                      />
-                    </li>
-                  );
-                })}
-              </ul>
-            </div>
+            <FormGroup legendText="Visible Columns">
+              <Stack gap={3}>
+                {clmns.map((cl, idx) => (
+                  <Checkbox
+                    key={cl.key}
+                    id={`col-pref-${cl.key}`}
+                    labelText={cl.name}
+                    checked={cl.visible}
+                    onChange={() => changeVisibility(cl.key)}
+                  />
+                ))}
+              </Stack>
+            </FormGroup>
           )}
-          {/*  */}
-          <div>
-            <h1 className="text-sm">Page Size</h1>
-            <ul className="my-2">
-              {props.defaultPageSize.map((sz, idx) => {
-                return (
-                  <li
-                    className="flex items-center space-x-2 py-1"
-                    key={`page-size-${idx}`}
-                  >
-                    <input
-                      type="radio"
-                      value={sz}
-                      name="page-size"
-                      id={`page-size-${idx}`}
-                      checked={sz === pgs}
-                      onChange={t => {
-                        setPgs(sz);
-                      }}
-                      className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-gray-800 dark:bg-gray-700 dark:border-gray-700"
-                    />
-                    <Label
-                      for={`page-size-${idx}`}
-                      text={`${sz} Items`}
-                    ></Label>
-                  </li>
-                );
-              })}
-            </ul>
-          </div>
+          <FormGroup legendText="Page Size">
+            <RadioButtonGroup
+              name="page-size"
+              valueSelected={String(pgs)}
+              onChange={(value: string) => setPgs(Number(value))}
+              orientation="vertical"
+            >
+              {props.defaultPageSize.map(sz => (
+                <RadioButton
+                  key={sz}
+                  id={`page-size-${sz}`}
+                  value={String(sz)}
+                  labelText={`${sz} Items`}
+                />
+              ))}
+            </RadioButtonGroup>
+          </FormGroup>
           <ErrorMessage message={error} />
-        </ModalBody>
-        <ModalFooter>
-          <ICancelButton
-            onClick={() => {
-              props.setOpen(false);
-            }}
-          >
-            Cancel
-          </ICancelButton>
-          <IBlueBGButton type="button" onClick={onAction}>
-            Save Preference
-          </IBlueBGButton>
-        </ModalFooter>
-      </ModalFitHeightBlock>
-    </GenericModal>
+        </Stack>
+      </ModalBody>
+      <ModalFooter>
+        <SecondaryButton size="lg" onClick={() => props.setOpen(false)}>
+          Cancel
+        </SecondaryButton>
+        <PrimaryButton size="lg" onClick={onAction}>
+          Save Preference
+        </PrimaryButton>
+      </ModalFooter>
+    </Modal>
   );
 }

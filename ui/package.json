@@ -67,6 +67,8 @@
         }
     },
     "dependencies": {
+        "@carbon/react": "1.104.0",
+        "@carbon/styles": "1.103.0",
         "@craco/craco": "7.1.0",
         "@floating-ui/react": "0.26.9",
         "@formatjs/intl-localematcher": "0.5.4",
@@ -79,7 +81,7 @@
         "@popperjs/core": "2.11.8",
         "@protobuf-ts/plugin": "2.9.4",
         "@protobuf-ts/runtime": "2.9.4",
-        "@rapidaai/react": "1.1.64",
+        "@rapidaai/react": "1.1.67",
         "@rapidaai/react-widget": "1.0.0",
         "@reduxjs/toolkit": "1.8.5",
         "@sentry/react": "7.101.1",
@@ -152,6 +154,7 @@
         "redux-injectors": "2.1.0",
         "redux-saga": "1.2.1",
         "sanitize.css": "13.0.0",
+        "sass": "1.98.0",
         "simplex-noise": "4.0.3",
         "sortablejs": "1.15.2",
         "styled-components": "6.1.14",

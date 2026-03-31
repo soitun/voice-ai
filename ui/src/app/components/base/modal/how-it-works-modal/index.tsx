@@ -1,11 +1,7 @@
-import { ModalBody } from '@/app/components/base/modal/modal-body';
+import { Modal, ModalHeader, ModalBody, ModalFooter } from '@/app/components/carbon/modal';
 import React, { FC } from 'react';
-import { GenericModal, ModalProps } from '@/app/components/base/modal';
+import { ModalProps } from '@/app/components/base/modal';
 import { Check } from 'lucide-react';
-import { ModalFooter } from '@/app/components/base/modal/modal-footer';
-import { ModalFitHeightBlock } from '@/app/components/blocks/modal-fit-height-block';
-import { ModalHeader } from '@/app/components/base/modal/modal-header';
-import { ModalTitleBlock } from '@/app/components/blocks/modal-title-block';
 
 export const HowItWorksDialog: FC<
   ModalProps & {
@@ -14,24 +10,20 @@ export const HowItWorksDialog: FC<
     className?: string;
   }
 > = ({ modalOpen, setModalOpen, steps, title = 'How it works', className = 'w-[800px]' }) => (
-  <GenericModal modalOpen={modalOpen} setModalOpen={setModalOpen}>
-    <ModalFitHeightBlock className={className}>
-      <ModalHeader onClose={() => setModalOpen(false)}>
-        <ModalTitleBlock>{title}</ModalTitleBlock>
-      </ModalHeader>
-      <HowItWorks steps={steps} />
-      <ModalFooter>
-        <button
-          type="button"
-          className="inline-flex items-center gap-2 h-10 px-4 text-sm text-white bg-primary hover:bg-primary/90 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary"
-          onClick={() => setModalOpen(false)}
-        >
-          Got it
-          <Check className="w-4 h-4" strokeWidth={1.5} />
-        </button>
-      </ModalFooter>
-    </ModalFitHeightBlock>
-  </GenericModal>
+  <Modal open={modalOpen} onClose={() => setModalOpen(false)} size="lg" containerClassName={className}>
+    <ModalHeader title={title} onClose={() => setModalOpen(false)} />
+    <HowItWorks steps={steps} />
+    <ModalFooter>
+      <button
+        type="button"
+        className="inline-flex items-center gap-2 h-10 px-4 text-sm text-white bg-primary hover:bg-primary/90 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary"
+        onClick={() => setModalOpen(false)}
+      >
+        Got it
+        <Check className="w-4 h-4" strokeWidth={1.5} />
+      </button>
+    </ModalFooter>
+  </Modal>
 );
 
 export const HowItWorks: FC<{

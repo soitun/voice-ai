@@ -1,27 +1,62 @@
 import { Endpoint, EndpointProviderModel } from '@rapidaai/react';
-import { IButton } from '@/app/components/form/button';
 import { useEndpointProviderModelPageStore } from '@/hooks';
 import { useRapidaStore } from '@/hooks';
 import { useCurrentCredential } from '@/hooks/use-credential';
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import toast from 'react-hot-toast/headless';
 import { toHumanReadableRelativeTime } from '@/utils/date';
-import { RevisionIndicator } from '@/app/components/indicators/revision';
-import { VersionIndicator } from '@/app/components/indicators/version';
-import { RotateCw } from 'lucide-react';
-import { BluredWrapper } from '@/app/components/wrapper/blured-wrapper';
-import { YellowNoticeBlock } from '@/app/components/container/message/notice-block';
-import { ScrollableResizableTable } from '@/app/components/data-table';
-import { TableRow } from '@/app/components/base/tables/table-row';
-import { TableCell } from '@/app/components/base/tables/table-cell';
+import { TableSection } from '@/app/components/sections/table-section';
+import { Pagination } from '@/app/components/carbon/pagination';
+import IconIndicator from '@carbon/react/es/components/IconIndicator';
+import {
+  Button,
+  Table,
+  TableHead,
+  TableRow,
+  TableHeader,
+  TableBody,
+  TableCell,
+  TableToolbar,
+  TableToolbarContent,
+  TableToolbarSearch,
+  TableBatchActions,
+  TableBatchAction,
+  RadioButton,
+} from '@carbon/react';
+import { Copy, Checkmark, Rocket, Renew } from '@carbon/icons-react';
+import { ActionableEmptyMessage } from '@/app/components/container/message/actionable-empty-message';
 
-const TABLE_COLUMNS = [
-  { name: 'Description', key: 'description' },
-  { name: 'Version', key: 'version' },
-  { name: 'Status', key: 'status' },
-  { name: 'Created by', key: 'created_by' },
-  { name: 'Date', key: 'date' },
+const headers = [
+  { key: 'description', header: 'Description' },
+  { key: 'version', header: 'Version' },
+  { key: 'status', header: 'Status' },
+  { key: 'createdBy', header: 'Created By' },
+  { key: 'createdDate', header: 'Date' },
 ];
+
+function VersionId({ id }: { id: string }) {
+  const [copied, setCopied] = useState(false);
+  const version = `vrsn_${id}`;
+  const copy = () => {
+    navigator.clipboard.writeText(version);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+  return (
+    <span className="inline-flex items-center gap-1 font-mono text-xs text-gray-600 dark:text-gray-400">
+      {version}
+      <Button
+        hasIconOnly
+        renderIcon={copied ? Checkmark : Copy}
+        iconDescription="Copy"
+        kind="ghost"
+        size="sm"
+        onClick={copy}
+        className="!min-h-0 !p-1"
+      />
+    </span>
+  );
+}
 
 export function Version(props: {
   currentEndpoint: Endpoint;
@@ -30,6 +65,8 @@ export function Version(props: {
   const { authId, token, projectId } = useCurrentCredential();
   const rapidaContext = useRapidaStore();
   const endpointProviderAction = useEndpointProviderModelPageStore();
+  const [searchTerm, setSearchTerm] = useState('');
+  const [selectedVersionId, setSelectedVersionId] = useState<string | null>(null);
 
   const fetchVersions = () => {
     rapidaContext.showLoader();
@@ -83,74 +120,134 @@ export function Version(props: {
 
   const versions = endpointProviderAction.endpointProviderModels;
 
-  return (
-    <div className="flex flex-col flex-1">
-      <BluredWrapper className="p-0">
-        <span className="px-4 text-xs font-medium uppercase tracking-[0.08em] text-gray-500 dark:text-gray-400">
-          {versions.length} version{versions.length !== 1 ? 's' : ''}
-        </span>
-        <IButton onClick={fetchVersions}>
-          <RotateCw strokeWidth={1.5} className="h-4 w-4" />
-        </IButton>
-      </BluredWrapper>
+  const filteredVersions = searchTerm
+    ? versions.filter(epm =>
+        `vrsn_${epm.getId()}`.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (epm.getDescription() || '').toLowerCase().includes(searchTerm.toLowerCase()),
+      )
+    : versions;
 
-      {versions.length > 0 ? (
-        <ScrollableResizableTable
-          isExpandable={false}
-          isActionable={false}
-          clms={TABLE_COLUMNS}
+  if (versions.length === 0 && !rapidaContext.loading) {
+    return (
+      <div className="flex flex-1 items-center justify-center">
+        <ActionableEmptyMessage
+          title="No versions found"
+          subtitle="Create a new version of this endpoint to get started."
+        />
+      </div>
+    );
+  }
+
+  return (
+    <TableSection>
+      <TableToolbar>
+        <TableBatchActions
+          shouldShowBatchActions={!!selectedVersionId}
+          totalSelected={selectedVersionId ? 1 : 0}
+          onCancel={() => setSelectedVersionId(null)}
+          totalCount={filteredVersions.length}
         >
-          {versions.map((epm, idx) => {
+          <TableBatchAction
+            renderIcon={Rocket}
+            kind="ghost"
+            onClick={() => {
+              if (selectedVersionId) {
+                deployRevision(selectedVersionId);
+                setSelectedVersionId(null);
+              }
+            }}
+          >
+            Deploy version
+          </TableBatchAction>
+        </TableBatchActions>
+        <TableToolbarContent>
+          <TableToolbarSearch
+            placeholder="Search versions..."
+            onChange={(e: any) => setSearchTerm(e.target?.value || '')}
+          />
+          <Button
+            hasIconOnly
+            renderIcon={Renew}
+            iconDescription="Refresh"
+            kind="ghost"
+            onClick={fetchVersions}
+            tooltipPosition="bottom"
+          />
+        </TableToolbarContent>
+      </TableToolbar>
+      <Table>
+        <TableHead>
+          <TableRow>
+            <TableHeader className="!w-12" />
+            {headers.map(h => (
+              <TableHeader key={h.key}>{h.header}</TableHeader>
+            ))}
+          </TableRow>
+        </TableHead>
+        <TableBody>
+          {filteredVersions.map((epm, idx) => {
             const isDeployed =
               endpointProviderAction.currentEndpoint?.getEndpointprovidermodelid() ===
               epm.getId();
+
             return (
-              <TableRow key={idx}>
-                <TableCell>
-                  <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                    {epm.getDescription() || 'Initial endpoint version'}
-                  </span>
-                </TableCell>
-
-                <TableCell>
-                  <VersionIndicator id={epm.getId()} />
-                </TableCell>
-
-                <TableCell>
-                  <RevisionIndicator
-                    status={isDeployed ? 'DEPLOYED' : 'NOT_DEPLOYED'}
-                    onClick={
-                      !isDeployed
-                        ? () => deployRevision(epm.getId())
-                        : undefined
+              <TableRow
+                key={idx}
+                isSelected={selectedVersionId === epm.getId()}
+                onClick={() => !isDeployed && setSelectedVersionId(selectedVersionId === epm.getId() ? null : epm.getId())}
+                className={!isDeployed ? 'cursor-pointer' : ''}
+              >
+                <TableCell className="!w-12 !pr-0">
+                  <RadioButton
+                    id={`ep-version-select-${epm.getId()}`}
+                    name="ep-version-select"
+                    labelText=""
+                    hideLabel
+                    checked={selectedVersionId === epm.getId()}
+                    onClick={() =>
+                      setSelectedVersionId(
+                        selectedVersionId === epm.getId() ? null : epm.getId(),
+                      )
                     }
+                    disabled={isDeployed}
                   />
                 </TableCell>
-
                 <TableCell>
-                  {epm.getCreateduser() && (
-                    <span className="text-gray-600 dark:text-gray-400">
-                      {epm.getCreateduser()?.getName()}
-                    </span>
+                  {epm.getDescription() || 'Initial endpoint version'}
+                </TableCell>
+                <TableCell>
+                  <VersionId id={epm.getId()} />
+                </TableCell>
+                <TableCell>
+                  {isDeployed ? (
+                    <IconIndicator kind="succeeded" label="In use" size={16} />
+                  ) : (
+                    <IconIndicator kind="incomplete" label="Available" size={16} />
                   )}
                 </TableCell>
-
                 <TableCell>
-                  <span className=" tabular-nums text-gray-500 dark:text-gray-400">
-                    {epm.getCreateddate() &&
-                      toHumanReadableRelativeTime(epm.getCreateddate()!)}
-                  </span>
+                  {epm.getCreateduser()?.getName() || ''}
+                </TableCell>
+                <TableCell>
+                  {epm.getCreateddate() &&
+                    toHumanReadableRelativeTime(epm.getCreateddate()!)}
                 </TableCell>
               </TableRow>
             );
           })}
-        </ScrollableResizableTable>
-      ) : (
-        <YellowNoticeBlock>
-          <span className="font-semibold">No versions found</span>, create a new
-          version of this endpoint to get started.
-        </YellowNoticeBlock>
-      )}
-    </div>
+        </TableBody>
+      </Table>
+      <Pagination
+        totalItems={endpointProviderAction.totalCount}
+        page={endpointProviderAction.page}
+        pageSize={endpointProviderAction.pageSize}
+        pageSizes={[10, 20, 50]}
+        onChange={({ page, pageSize }) => {
+          endpointProviderAction.setPage(page);
+          if (pageSize !== endpointProviderAction.pageSize)
+            endpointProviderAction.setPageSize(pageSize);
+        }}
+      />
+    </TableSection>
   );
 }

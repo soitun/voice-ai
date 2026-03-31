@@ -1,19 +1,18 @@
 import React, { FC, useCallback, useEffect, useState } from 'react';
+import { PrimaryButton, SecondaryButton } from '@/app/components/carbon/button';
 import {
-  IBlueBGArrowButton,
-  ICancelButton,
-} from '@/app/components/form/button';
-import { GenericModal, ModalProps } from '@/app/components/base/modal';
-import { ModalFitHeightBlock } from '@/app/components/blocks/modal-fit-height-block';
-import { ModalHeader } from '@/app/components/base/modal/modal-header';
-import { ModalTitleBlock } from '@/app/components/blocks/modal-title-block';
-import { ModalBody } from '@/app/components/base/modal/modal-body';
-import { ModalFooter } from '@/app/components/base/modal/modal-footer';
+  Modal,
+  ModalHeader,
+  ModalBody,
+  ModalFooter,
+} from '@/app/components/carbon/modal';
+import { ModalProps } from '@/app/components/base/modal';
 import { ManualFile } from '@/app/pages/knowledge-base/action/components/datasource-uploader/manual-file';
 import { KnowledgeDocument } from '@rapidaai/react';
 import { useCreateKnowledgeDocumentPageStore } from '@/hooks/use-create-knowledge-document-page-store';
 import { useCredential } from '@/hooks/use-credential';
 import { useRapidaStore } from '@/hooks/use-rapida-store';
+import { Notification } from '@/app/components/carbon/notification';
 
 interface CreateKnowledgeDocumentDialogProps extends ModalProps {
   knowledgeId: string;
@@ -25,28 +24,15 @@ export const CreateKnowledgeDocumentDialog: FC<
 > = props => {
   const [errorMessage, setErrorMessage] = useState('');
   const { clear } = useCreateKnowledgeDocumentPageStore();
+
   useEffect(() => {
     clear();
   }, [props.knowledgeId]);
-  /**
-   * all the credentials you will need do things
-   */
+
   const [userId, token, projectId] = useCredential();
-
-  /**
-   * show and hide loaders
-   */
   const { loading, showLoader, hideLoader } = useRapidaStore();
-
-  /**
-   *
-   */
-
   const knowledgeDocumentAction = useCreateKnowledgeDocumentPageStore();
 
-  /**
-   *
-   */
   const onSuccess = useCallback(
     (d: KnowledgeDocument[]) => {
       hideLoader();
@@ -56,9 +42,6 @@ export const CreateKnowledgeDocumentDialog: FC<
     [props.knowledgeId],
   );
 
-  /**
-   *
-   */
   const onError = useCallback(
     (e: string) => {
       hideLoader();
@@ -67,9 +50,6 @@ export const CreateKnowledgeDocumentDialog: FC<
     [props.knowledgeId],
   );
 
-  /**
-   *
-   */
   const onCreateKnowledgeDocument = () => {
     showLoader('overlay');
     knowledgeDocumentAction.onCreateKnowledgeDocument(
@@ -81,41 +61,41 @@ export const CreateKnowledgeDocumentDialog: FC<
       onError,
     );
   };
+
   return (
-    <GenericModal
-      className="flex"
-      modalOpen={props.modalOpen}
-      setModalOpen={props.setModalOpen}
+    <Modal
+      open={props.modalOpen}
+      onClose={() => props.setModalOpen(false)}
+      size="lg"
+      containerClassName="!w-[1000px] !max-w-[1000px]"
+      preventCloseOnClickOutside
     >
-      <ModalFitHeightBlock className="w-[1000px]">
-        <ModalHeader
-          onClose={() => {
-            props.setModalOpen(false);
-          }}
-          title={'Add document to knowledge'}
+      <ModalHeader
+        label="Knowledge"
+        title="Add document to knowledge"
+        onClose={() => props.setModalOpen(false)}
+      />
+      <ModalBody hasForm hasScrollingContent>
+        <ManualFile />
+        {errorMessage && (
+          <Notification kind="error" title="Error" subtitle={errorMessage} />
+        )}
+      </ModalBody>
+      <ModalFooter>
+        <SecondaryButton
+          size="lg"
+          onClick={() => props.setModalOpen(false)}
         >
-          <ModalTitleBlock>Add document to knowledge</ModalTitleBlock>
-        </ModalHeader>
-        <ModalBody className="overflow-auto max-h-[80dvh]">
-          <ManualFile />
-        </ModalBody>
-        <ModalFooter errorMessage={errorMessage}>
-          <ICancelButton
-            onClick={() => {
-              props.setModalOpen(false);
-            }}
-          >
-            Cancel
-          </ICancelButton>
-          <IBlueBGArrowButton
-            type="button"
-            isLoading={loading}
-            onClick={onCreateKnowledgeDocument}
-          >
-            Create Document
-          </IBlueBGArrowButton>
-        </ModalFooter>
-      </ModalFitHeightBlock>
-    </GenericModal>
+          Cancel
+        </SecondaryButton>
+        <PrimaryButton
+          size="lg"
+          isLoading={loading}
+          onClick={onCreateKnowledgeDocument}
+        >
+          Create Document
+        </PrimaryButton>
+      </ModalFooter>
+    </Modal>
   );
 };

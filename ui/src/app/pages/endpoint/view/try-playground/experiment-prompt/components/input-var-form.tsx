@@ -19,7 +19,7 @@ export const InputVarForm = React.forwardRef<
     >
       <label
         htmlFor={props.var.getName()}
-        className="flex shrink-0 items-center justify-between break-all p-3 pr-5 font-mono text-sm font-medium tracking-wide"
+        className="flex shrink-0 items-center justify-between break-all p-3 pr-5 font-mono text-sm font-medium tracking-wide border-b border-gray-100 dark:border-gray-800"
       >
         <span>
           {'{{'}

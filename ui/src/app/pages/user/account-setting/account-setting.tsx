@@ -1,11 +1,11 @@
 import { RedNoticeBlock } from '@/app/components/container/message/notice-block';
 import { FormLabel } from '@/app/components/form-label';
 import { IBlueBGArrowButton, IRedBGButton } from '@/app/components/form/button';
-import { ErrorMessage } from '@/app/components/form/error-message';
 import { FieldSet } from '@/app/components/form/fieldset';
 import { Input } from '@/app/components/form/input';
-import { InputGroup } from '@/app/components/input-group';
 import { InputHelper } from '@/app/components/input-helper';
+import { PageActionButtonBlock } from '@/app/components/blocks/page-action-button-block';
+import { SectionDivider } from '@/app/components/blocks/section-divider';
 import { connectionConfig } from '@/configs';
 import { useRapidaStore } from '@/hooks';
 import {
@@ -49,8 +49,10 @@ export const AccountSetting = () => {
    * @param data
    */
   const onChangePassword = data => {
+    setError('');
     if (data.password !== data.re_password) {
       setError('The new passwords do not match. Please try again.');
+      return;
     }
     showLoader();
     const request = new ChangePasswordRequest();
@@ -88,18 +90,19 @@ export const AccountSetting = () => {
   };
 
   return (
-    <div className="w-full flex flex-col flex-1">
-      <div className="overflow-auto flex flex-col flex-1 pb-20">
-        <InputGroup
-          title="Account Information"
-          className="bg-white dark:bg-gray-900"
-        >
-          <div className="space-y-6 max-w-md">
+    <form
+      id="account-settings-form"
+      className="w-full flex flex-col flex-1 min-h-0"
+      onSubmit={handleSubmit(onChangePassword)}
+    >
+      <div className="overflow-auto flex flex-col flex-1">
+        <div className="px-4 pt-4 pb-12 flex flex-col gap-10 max-w-2xl">
+          <div className="flex flex-col gap-6">
+            <SectionDivider label="Account Information" />
             <FieldSet>
               <FormLabel>Name</FormLabel>
               <Input
                 disabled
-                className="bg-light-background"
                 value={user?.name}
                 placeholder="eg: John Deo"
               ></Input>
@@ -108,18 +111,13 @@ export const AccountSetting = () => {
               <FormLabel>Email</FormLabel>
               <Input
                 disabled
-                className="bg-light-background"
                 value={user?.email}
                 placeholder="eg: john@rapida.ai"
               ></Input>
             </FieldSet>
           </div>
-        </InputGroup>
-        <InputGroup title="Password" className="bg-white dark:bg-gray-900">
-          <form
-            className="space-y-6 max-w-lg"
-            onSubmit={handleSubmit(onChangePassword)}
-          >
+          <div className="flex flex-col gap-6">
+            <SectionDivider label="Password" />
             <FieldSet>
               <Input
                 name="username"
@@ -132,10 +130,10 @@ export const AccountSetting = () => {
                 required
                 type="password"
                 autoComplete=""
-                className="bg-light-background"
                 {...register('current_password')}
                 placeholder="*******"
               ></Input>
+              <InputHelper>Enter your current password to confirm.</InputHelper>
             </FieldSet>
             <FieldSet>
               <FormLabel>New Password</FormLabel>
@@ -143,8 +141,7 @@ export const AccountSetting = () => {
                 required
                 autoComplete="new-password"
                 type="password"
-                className="bg-light-background"
-                {...register('re_password')}
+                {...register('password')}
                 placeholder="*******"
               ></Input>
             </FieldSet>
@@ -154,48 +151,23 @@ export const AccountSetting = () => {
                 required
                 type="password"
                 autoComplete="new-password"
-                className="bg-light-background"
-                {...register('password')}
+                {...register('re_password')}
                 placeholder="*******"
               ></Input>
             </FieldSet>
-            <ErrorMessage message={error} />
+          </div>
+          <div className="flex-col gap-6">
             <IBlueBGArrowButton
               type="submit"
+              form="account-settings-form"
               isLoading={loading}
-              className="px-4 rounded-[2px]"
+              className="px-4"
             >
-              Change Password
+              Save changes
             </IBlueBGArrowButton>
-          </form>
-        </InputGroup>
-        <InputGroup
-          title="Account Deletion"
-          initiallyExpanded={false}
-          className="hidden"
-        >
-          <RedNoticeBlock>
-            Active connections will be terminated immediately, and the data will
-            be permanently deleted after the rolling period.
-          </RedNoticeBlock>
-          <div className="flex flex-row items-center justify-between p-6">
-            <FieldSet>
-              <p className="font-semibold">Delete this account</p>
-              <InputHelper className="-mt-1">
-                No longer want to use our service? You can delete your account
-                here. This action is not reversible. All information related to
-                this account will be deleted permanently.
-              </InputHelper>
-            </FieldSet>
-            <IRedBGButton
-              className="rounded-[2px] font-medium text-sm/6"
-              // isLoading={loading}
-            >
-              Yes, delete my account
-            </IRedBGButton>
           </div>
-        </InputGroup>
+        </div>
       </div>
-    </div>
+    </form>
   );
 };

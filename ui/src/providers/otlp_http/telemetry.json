@@ -1,0 +1,36 @@
+{
+  "parameters": [
+    {
+      "key": "endpoint",
+      "label": "Endpoint",
+      "type": "input",
+      "required": true,
+      "placeholder": "e.g. localhost:4318",
+      "errorMessage": "Endpoint is required for OTLP."
+    },
+    {
+      "key": "protocol",
+      "label": "Protocol",
+      "type": "select",
+      "required": false,
+      "default": "http/protobuf",
+      "choices": [
+        { "label": "HTTP/Protobuf", "value": "http/protobuf" },
+        { "label": "gRPC", "value": "grpc" }
+      ],
+      "helpText": "Transport protocol for the OTLP exporter."
+    },
+    {
+      "key": "insecure",
+      "label": "Insecure",
+      "type": "select",
+      "required": false,
+      "default": "false",
+      "choices": [
+        { "label": "No", "value": "false" },
+        { "label": "Yes", "value": "true" }
+      ],
+      "helpText": "Skip TLS verification."
+    }
+  ]
+}

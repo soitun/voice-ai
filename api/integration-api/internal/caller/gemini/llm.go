@@ -16,6 +16,7 @@ import (
 	internal_caller_metrics "github.com/rapidaai/api/integration-api/internal/caller/metrics"
 	internal_callers "github.com/rapidaai/api/integration-api/internal/type"
 	"github.com/rapidaai/pkg/commons"
+	type_enums "github.com/rapidaai/pkg/types/enums"
 	"github.com/rapidaai/pkg/utils"
 	"github.com/rapidaai/protos"
 )
@@ -197,13 +198,15 @@ func (llc *largeLanguageCaller) getContentConfig(opts *internal_callers.ChatComp
 			if topK, err := utils.AnyToFloat32(value); err == nil {
 				config.TopK = utils.Ptr(topK)
 			}
-		case "model.max_completion_tokens":
+		case "model.max_output_tokens":
 			if maxTokens, err := utils.AnyToInt64(value); err == nil {
 				config.MaxOutputTokens = int32(maxTokens)
 			}
-		case "model.stop":
+		case "model.stop_sequences":
 			if stopStr, err := utils.AnyToString(value); err == nil {
-				config.StopSequences = strings.Split(stopStr, ",")
+				if strings.TrimSpace(stopStr) != "" {
+					config.StopSequences = strings.Split(stopStr, ",")
+				}
 			}
 		case "model.frequency_penalty":
 			if fp, err := utils.AnyToFloat32(value); err == nil {
@@ -216,6 +219,13 @@ func (llc *largeLanguageCaller) getContentConfig(opts *internal_callers.ChatComp
 		case "model.seed":
 			if seed, err := utils.AnyToInt32(value); err == nil {
 				config.Seed = utils.Ptr(seed)
+			}
+		case "model.thinking_budget":
+			if thinkingBudget, err := utils.AnyToInt32(value); err == nil {
+				if config.ThinkingConfig == nil {
+					config.ThinkingConfig = &genai.ThinkingConfig{}
+				}
+				config.ThinkingConfig.ThinkingBudget = utils.Ptr(thinkingBudget)
 			}
 		case "model.response_format":
 			if format, err := utils.AnyToJSON(value); err == nil {
@@ -372,7 +382,7 @@ func (llc *largeLanguageCaller) StreamChatCompletion(
 	// Add first token time metric if tokens were streamed
 	if firstTokenTime != nil {
 		metrics.OnAddMetrics(&protos.Metric{
-			Name:        "FIRST_TOKEN_RECIEVED_TIME",
+			Name:        type_enums.TIME_TO_FIRST_TOKEN.String(),
 			Value:       fmt.Sprintf("%d", firstTokenTime.Sub(start)),
 			Description: "Time to receive first token from LLM",
 		})

@@ -23,7 +23,6 @@ import { GetAssistantPhoneDeployment } from '@rapidaai/react';
 import { useCurrentCredential } from '@/hooks/use-credential';
 import toast from 'react-hot-toast/headless';
 import { Helmet } from '@/app/components/helmet';
-import { GetCartesiaDefaultOptions } from '@/app/components/providers/text-to-speech/cartesia';
 import {
   GetDefaultMicrophoneConfig,
   GetDefaultSpeechToTextIfInvalid,
@@ -41,9 +40,10 @@ import {
 } from '@/app/components/providers/telephony';
 import { TabForm } from '@/app/components/form/tab-form';
 import {
-  IBlueBGArrowButton,
-  ICancelButton,
-} from '@/app/components/form/button';
+  PrimaryButton,
+  SecondaryButton,
+} from '@/app/components/carbon/button';
+import { ButtonSet } from '@carbon/react';
 
 const STEPS = [
   {
@@ -86,12 +86,13 @@ const ConfigureAssistantCallDeployment: FC<{ assistantId: string }> = ({
   assistantId,
 }) => {
   const { goToDeploymentAssistant } = useGlobalNavigation();
-  const { loading, showLoader, hideLoader } = useRapidaStore();
+  const { showLoader, hideLoader } = useRapidaStore();
   const { providerCredentials } = useAllProviderCredentials();
   const { authId, projectId, token } = useCurrentCredential();
 
   const [activeTab, setActiveTab] = useState('telephony');
   const [errorMessage, setErrorMessage] = useState('');
+  const [isDeploying, setIsDeploying] = useState(false);
 
   const [experienceConfig, setExperienceConfig] = useState<ExperienceConfig>({
     greeting: undefined,
@@ -126,7 +127,7 @@ const ConfigureAssistantCallDeployment: FC<{ assistantId: string }> = ({
     parameters: Metadata[];
   }>({
     provider: 'cartesia',
-    parameters: GetCartesiaDefaultOptions(GetDefaultSpeakerConfig()),
+    parameters: GetDefaultTextToSpeechIfInvalid('cartesia', GetDefaultSpeakerConfig()),
   });
 
   const hasFetched = useRef(false);
@@ -255,7 +256,7 @@ const ConfigureAssistantCallDeployment: FC<{ assistantId: string }> = ({
   };
 
   const handleDeployPhone = () => {
-    showLoader('block');
+    setIsDeploying(true);
     setErrorMessage('');
 
     if (
@@ -264,13 +265,13 @@ const ConfigureAssistantCallDeployment: FC<{ assistantId: string }> = ({
         telephonyConfig.parameters,
       )
     ) {
-      hideLoader();
+      setIsDeploying(false);
       setErrorMessage('Please provide a valid telephony configuration.');
       return;
     }
 
     if (!audioInputConfig.provider) {
-      hideLoader();
+      setIsDeploying(false);
       setErrorMessage('Please provide a speech-to-text provider.');
       return;
     }
@@ -281,13 +282,13 @@ const ConfigureAssistantCallDeployment: FC<{ assistantId: string }> = ({
       getProviderCredentialIds(audioInputConfig.provider),
     );
     if (sttError) {
-      hideLoader();
+      setIsDeploying(false);
       setErrorMessage(sttError);
       return;
     }
 
     if (!audioOutputConfig.provider) {
-      hideLoader();
+      setIsDeploying(false);
       setErrorMessage('Please provide a text-to-speech provider.');
       return;
     }
@@ -298,7 +299,7 @@ const ConfigureAssistantCallDeployment: FC<{ assistantId: string }> = ({
       getProviderCredentialIds(audioOutputConfig.provider),
     );
     if (ttsError) {
-      hideLoader();
+      setIsDeploying(false);
       setErrorMessage(ttsError);
       return;
     }
@@ -346,7 +347,6 @@ const ConfigureAssistantCallDeployment: FC<{ assistantId: string }> = ({
       }),
     )
       .then(response => {
-        hideLoader();
         if (response?.getData() && response.getSuccess()) {
           toast.success('Phone call deployment updated successfully.');
           goToDeploymentAssistant(assistantId);
@@ -358,10 +358,12 @@ const ConfigureAssistantCallDeployment: FC<{ assistantId: string }> = ({
         }
       })
       .catch(err => {
-        hideLoader();
         setErrorMessage(
           err?.message || 'Error deploying phone call. Please try again.',
         );
+      })
+      .finally(() => {
+        setIsDeploying(false);
       });
   };
 
@@ -391,31 +393,35 @@ const ConfigureAssistantCallDeployment: FC<{ assistantId: string }> = ({
             description:
               'Select and configure your telephony provider for inbound and outbound calls.',
             body: (
-              <TelephonyProvider
-                provider={telephonyConfig.provider}
-                parameters={telephonyConfig.parameters}
-                onChangeProvider={provider =>
-                  setTelephonyConfig({ provider, parameters: [] })
-                }
-                onChangeParameter={parameters =>
-                  setTelephonyConfig(c => ({ ...c, parameters }))
-                }
-              />
+              <div className="max-w-4xl px-6 py-8">
+                <TelephonyProvider
+                  provider={telephonyConfig.provider}
+                  parameters={telephonyConfig.parameters}
+                  onChangeProvider={provider =>
+                    setTelephonyConfig({ provider, parameters: [] })
+                  }
+                  onChangeParameter={parameters =>
+                    setTelephonyConfig(c => ({ ...c, parameters }))
+                  }
+                />
+              </div>
             ),
             actions: [
-              <ICancelButton
-                className="w-full h-full"
-                onClick={() => goToDeploymentAssistant(assistantId)}
-              >
-                Cancel
-              </ICancelButton>,
-              <IBlueBGArrowButton
-                type="button"
-                className="w-full h-full"
-                onClick={handleNext}
-              >
-                Next
-              </IBlueBGArrowButton>,
+              <ButtonSet className="!w-full [&>button]:!flex-1 [&>button]:!max-w-none">
+                <SecondaryButton size="lg"
+                  className="w-full h-full"
+                  onClick={() => goToDeploymentAssistant(assistantId)}
+                >
+                  Cancel
+                </SecondaryButton>
+                <PrimaryButton size="lg"
+                  type="button"
+                  className="w-full h-full"
+                  onClick={handleNext}
+                >
+                  Next
+                </PrimaryButton>
+              </ButtonSet>,
             ],
           },
           {
@@ -430,19 +436,21 @@ const ConfigureAssistantCallDeployment: FC<{ assistantId: string }> = ({
               />
             ),
             actions: [
-              <ICancelButton
-                className="w-full h-full"
-                onClick={() => goToDeploymentAssistant(assistantId)}
-              >
-                Cancel
-              </ICancelButton>,
-              <IBlueBGArrowButton
-                type="button"
-                className="w-full h-full"
-                onClick={handleNext}
-              >
-                Next
-              </IBlueBGArrowButton>,
+              <ButtonSet className="!w-full [&>button]:!flex-1 [&>button]:!max-w-none">
+                <SecondaryButton size="lg"
+                  className="w-full h-full"
+                  onClick={() => goToDeploymentAssistant(assistantId)}
+                >
+                  Cancel
+                </SecondaryButton>
+                <PrimaryButton size="lg"
+                  type="button"
+                  className="w-full h-full"
+                  onClick={handleNext}
+                >
+                  Next
+                </PrimaryButton>
+              </ButtonSet>,
             ],
           },
           {
@@ -457,19 +465,21 @@ const ConfigureAssistantCallDeployment: FC<{ assistantId: string }> = ({
               />
             ),
             actions: [
-              <ICancelButton
-                className="w-full h-full"
-                onClick={() => goToDeploymentAssistant(assistantId)}
-              >
-                Cancel
-              </ICancelButton>,
-              <IBlueBGArrowButton
-                type="button"
-                className="w-full h-full"
-                onClick={handleNext}
-              >
-                Next
-              </IBlueBGArrowButton>,
+              <ButtonSet className="!w-full [&>button]:!flex-1 [&>button]:!max-w-none">
+                <SecondaryButton size="lg"
+                  className="w-full h-full"
+                  onClick={() => goToDeploymentAssistant(assistantId)}
+                >
+                  Cancel
+                </SecondaryButton>
+                <PrimaryButton size="lg"
+                  type="button"
+                  className="w-full h-full"
+                  onClick={handleNext}
+                >
+                  Next
+                </PrimaryButton>
+              </ButtonSet>,
             ],
           },
           {
@@ -484,20 +494,23 @@ const ConfigureAssistantCallDeployment: FC<{ assistantId: string }> = ({
               />
             ),
             actions: [
-              <ICancelButton
-                className="w-full h-full"
-                onClick={() => goToDeploymentAssistant(assistantId)}
-              >
-                Cancel
-              </ICancelButton>,
-              <IBlueBGArrowButton
-                type="button"
-                className="w-full h-full"
-                isLoading={loading}
-                onClick={handleDeployPhone}
-              >
-                Deploy Phone
-              </IBlueBGArrowButton>,
+              <ButtonSet className="!w-full [&>button]:!flex-1 [&>button]:!max-w-none">
+                <SecondaryButton size="lg"
+                  className="w-full h-full"
+                  onClick={() => goToDeploymentAssistant(assistantId)}
+                >
+                  Cancel
+                </SecondaryButton>
+                <PrimaryButton size="lg"
+                  type="button"
+                  className="w-full h-full"
+                  isLoading={isDeploying}
+                  disabled={isDeploying}
+                  onClick={handleDeployPhone}
+                >
+                  Deploy Phone
+                </PrimaryButton>
+              </ButtonSet>,
             ],
           },
         ]}

@@ -2,7 +2,9 @@ import { cn } from '@/utils';
 import { Check } from 'lucide-react';
 import { forwardRef, InputHTMLAttributes } from 'react';
 
-interface InputCheckboxProps extends InputHTMLAttributes<HTMLInputElement> {}
+interface InputCheckboxProps extends InputHTMLAttributes<HTMLInputElement> {
+  children?: React.ReactNode;
+}
 
 /**
  * Carbon checkbox — 16×16px square, zero border-radius.
@@ -13,12 +15,17 @@ interface InputCheckboxProps extends InputHTMLAttributes<HTMLInputElement> {}
  */
 export const InputCheckbox = forwardRef<HTMLInputElement, InputCheckboxProps>(
   (props, ref) => {
-    const { className, ...inputProps } = props;
+    const { className, children, ...inputProps } = props;
 
     return (
       <label className="cursor-pointer inline-flex items-center gap-2">
         {/* Native input — visually hidden but accessible */}
-        <input ref={ref} {...inputProps} type="checkbox" className="peer sr-only" />
+        <input
+          ref={ref}
+          {...inputProps}
+          type="checkbox"
+          className="peer sr-only"
+        />
 
         {/* Visual checkbox — 16×16, square, fills primary on checked */}
         <span
@@ -50,6 +57,12 @@ export const InputCheckbox = forwardRef<HTMLInputElement, InputCheckboxProps>(
           {/* Carbon uses a ~9px check inside a 16px box */}
           <Check className="w-3 h-3" strokeWidth={2.5} />
         </span>
+
+        {children && (
+          <span className="text-sm text-gray-900 dark:text-gray-100 select-none">
+            {children}
+          </span>
+        )}
       </label>
     );
   },

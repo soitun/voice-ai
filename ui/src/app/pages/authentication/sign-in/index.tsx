@@ -1,7 +1,6 @@
 import { useState, useContext, useEffect, useCallback } from 'react';
 import { Helmet } from '@/app/components/helmet';
 import { SocialButtonGroup } from '@/app/components/form/button-group/SocialButtonGroup';
-import { Input } from '@/app/components/form/input';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import {
@@ -12,54 +11,28 @@ import {
   AuthenticateUser,
 } from '@rapidaai/react';
 import { useRapidaStore } from '@/hooks';
-import { ErrorMessage } from '@/app/components/form/error-message';
-import { IBlueBGArrowButton } from '@/app/components/form/button';
 import { ServiceError } from '@rapidaai/react';
 import { AuthContext } from '@/context/auth-context';
-import { FormLabel } from '@/app/components/form-label';
-import { FieldSet } from '@/app/components/form/fieldset';
 import { useWorkspace } from '@/workspace';
 import { connectionConfig } from '@/configs';
-/**
- *
- * @returns
- */
+import { Stack, TextInput } from '@/app/components/carbon/form';
+import { PrimaryButton } from '@/app/components/carbon/button';
+import { Notification } from '@/app/components/carbon/notification';
+import { ArrowRight } from '@carbon/icons-react';
+import { Link, PasswordInput } from '@carbon/react';
+
 export function SignInPage() {
-  /**
-   * To naviagate to dashboard
-   */
   let navigate = useNavigate();
-  /**
-   * authentication context with a setter
-   */
   const { setAuthentication } = useContext(AuthContext);
-  /**
-   * set loading
-   */
   const { loading, showLoader, hideLoader } = useRapidaStore();
-  /**
-   * form utils
-   */
   const { register, handleSubmit } = useForm();
-
-  /**
-   * error for the page
-   */
   const [error, setError] = useState('');
-
-  /**
-   * workspace
-   */
   const workspace = useWorkspace();
   const [searchParams] = useSearchParams();
   const { next, externalValidation, code, state } = Object.fromEntries(
     searchParams.entries(),
   );
-  /**
-   *
-   * for setting authentication
-   * @param data
-   */
+
   const afterAuthenticate = useCallback(
     (err: ServiceError | null, auth: AuthenticateResponse | null) => {
       hideLoader();
@@ -85,10 +58,6 @@ export function SignInPage() {
     [],
   );
 
-  /**
-   * calling for authentication
-   * @param data
-   */
   const onAuthenticate = data => {
     showLoader();
     AuthenticateUser(
@@ -99,13 +68,9 @@ export function SignInPage() {
     );
   };
 
-  /**
-   * when we recieve the authentication from social connect
-   */
   useEffect(() => {
     if (state && code) {
       showLoader();
-
       if (state === 'google')
         Google(connectionConfig, afterAuthenticate, state, code);
       if (state === 'linkedin')
@@ -117,65 +82,59 @@ export function SignInPage() {
 
   return (
     <>
-      <Helmet title="Signin to your account"></Helmet>
+      <Helmet title="Sign in to your account" />
       <div className="flex justify-between items-baseline">
-        <h2 className="text-[28px] leading-9 text-gray-900 dark:text-gray-100">
-          Sign in
-        </h2>
+        <h2 className="text-2xl font-light tracking-tight">Sign in</h2>
         {workspace.authentication.signUp.enable && (
-          <a
-            className="text-sm text-primary underline hover:text-primary/80"
-            href="/auth/signup"
-          >
+          <Link href="/auth/signup" className="text-sm">
             I don't have an account
-          </a>
+          </Link>
         )}
       </div>
 
-      <form className="flex flex-col gap-4 mt-6" onSubmit={handleSubmit(onAuthenticate)}>
-        <FieldSet>
-          <FormLabel>Email Address</FormLabel>
-          <Input
-            {...register('email')}
-            autoComplete="email"
+      <form className="mt-6" onSubmit={handleSubmit(onAuthenticate)}>
+        <Stack gap={5}>
+          <TextInput
+            id="signin-email"
+            labelText="Email Address"
             type="email"
-            required={true}
-            className="bg-light-background"
+            required
+            autoComplete="email"
             placeholder="eg: john@rapida.ai"
-          ></Input>
-        </FieldSet>
-        <FieldSet>
-          <FormLabel>Password</FormLabel>
-          <Input
-            {...register('password')}
-            autoComplete="password"
-            type="password"
-            required={true}
-            className="bg-light-background"
+            {...register('email')}
+          />
+          <PasswordInput
+            id="signin-password"
+            labelText="Password"
+            required
+            autoComplete="current-password"
             placeholder="******"
-          ></Input>
-        </FieldSet>
-        <ErrorMessage message={error} />
-        <IBlueBGArrowButton
-          className="w-full justify-between h-11"
-          type="submit"
-          isLoading={loading}
-        >
-          Continue
-        </IBlueBGArrowButton>
+            {...register('password')}
+          />
+          {error && (
+            <Notification kind="error" title="Error" subtitle={error} />
+          )}
+          <PrimaryButton
+            size="lg"
+            renderIcon={ArrowRight}
+            isLoading={loading}
+            type="submit"
+            className="!w-full !max-w-none !justify-between"
+          >
+            Continue
+          </PrimaryButton>
+        </Stack>
       </form>
+
       <div className="mt-6 flex flex-col gap-3">
         <p className="text-center">
-          <a
-            className="text-sm text-primary underline hover:text-primary/80"
-            href="/auth/forgot-password"
-          >
+          <Link href="/auth/forgot-password" className="text-sm">
             Can't sign in?
-          </a>
+          </Link>
         </p>
         <SocialButtonGroup
           {...workspace.authentication.signIn.providers}
-        ></SocialButtonGroup>
+        />
       </div>
     </>
   );

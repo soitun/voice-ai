@@ -77,27 +77,16 @@ def _paths_from_env(repo_root: str) -> list[str]:
 
 
 def _changed_files(stdin_raw: str) -> list[str]:
+    """Return only files explicitly mentioned in the hook payload or env.
+    Never fall back to git diff — that picks up the entire branch and
+    causes the hook to run tests for files Claude didn't touch this turn."""
     repo_root = _repo_root()
 
     env_files = _paths_from_env(repo_root)
     if env_files:
         return env_files
 
-    payload_files = _paths_from_stdin_payload(stdin_raw, repo_root)
-    if payload_files:
-        return payload_files
-
-    rc, tracked = _run(["git", "diff", "--name-only", "--diff-filter=ACMRTUXB", "HEAD", "--", "."])
-    _ = rc
-    rc, untracked = _run(["git", "ls-files", "--others", "--exclude-standard"])
-    _ = rc
-    files = set()
-    for block in (tracked, untracked):
-        for line in block.splitlines():
-            line = line.strip()
-            if line:
-                files.add(line)
-    return sorted(files)
+    return _paths_from_stdin_payload(stdin_raw, repo_root)
 
 
 def _backend_dirs(changed: list[str]) -> list[str]:

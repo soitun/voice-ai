@@ -1,12 +1,11 @@
 import { memo } from 'react';
-import { cn } from '@/utils';
 import { SidebarIconWrapper } from '@/app/components/navigation/sidebar/sidebar-icon-wrapper';
 import { SidebarLabel } from '@/app/components/navigation/sidebar/sidebar-label';
 import { SidebarSimpleListItem } from '@/app/components/navigation/sidebar/sidebar-simple-list-item';
 import { useLocation } from 'react-router-dom';
 import { Tooltip } from '@/app/components/tooltip';
 import { BetaIcon } from '@/app/components/Icon/Beta';
-import { BotMessageSquare, Route } from 'lucide-react';
+import { ChatBot, Connect } from '@carbon/icons-react';
 
 export const Deployment = memo(() => {
   const location = useLocation();
@@ -19,10 +18,7 @@ export const Deployment = memo(() => {
         navigate="/deployment/assistant"
       >
         <SidebarIconWrapper>
-          <BotMessageSquare
-            className={cn('w-5 h-5 opacity-75')}
-            strokeWidth={1.5}
-          />
+          <ChatBot size={20} />
         </SidebarIconWrapper>
         <SidebarLabel>
           Assistants
@@ -35,7 +31,7 @@ export const Deployment = memo(() => {
               </p>
             }
             icon={<BetaIcon />}
-          ></Tooltip>
+          />
         </SidebarLabel>
       </SidebarSimpleListItem>
       <SidebarSimpleListItem
@@ -43,7 +39,7 @@ export const Deployment = memo(() => {
         navigate="/deployment/endpoint"
       >
         <SidebarIconWrapper>
-          <Route className={cn('w-5 h-5 opacity-75')} strokeWidth={1.5} />
+          <Connect size={20} />
         </SidebarIconWrapper>
         <SidebarLabel>Endpoints</SidebarLabel>
       </SidebarSimpleListItem>

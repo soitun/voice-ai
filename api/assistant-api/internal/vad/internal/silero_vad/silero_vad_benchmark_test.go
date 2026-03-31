@@ -36,17 +36,17 @@ func newBenchmarkVAD(b *testing.B, threshold float64) *SileroVAD {
 	return vad.(*SileroVAD)
 }
 
-func generateBenchmarkSilence(samples int) internal_type.UserAudioPacket {
-	return internal_type.UserAudioPacket{Audio: make([]byte, samples*2)}
+func generateBenchmarkSilence(samples int) internal_type.UserAudioReceivedPacket {
+	return internal_type.UserAudioReceivedPacket{Audio: make([]byte, samples*2)}
 }
 
-func generateBenchmarkSineWave(samples int, frequency, amplitude float64) internal_type.UserAudioPacket {
+func generateBenchmarkSineWave(samples int, frequency, amplitude float64) internal_type.UserAudioReceivedPacket {
 	data := make([]byte, samples*2)
 	for i := 0; i < samples; i++ {
 		sample := int16(amplitude * 32767 * math.Sin(2*math.Pi*float64(i)*frequency/16000))
 		binary.LittleEndian.PutUint16(data[i*2:i*2+2], uint16(sample))
 	}
-	return internal_type.UserAudioPacket{Audio: data}
+	return internal_type.UserAudioReceivedPacket{Audio: data}
 }
 
 // Single operation benchmarks
@@ -351,7 +351,7 @@ func BenchmarkSileroVAD_Process_MixedContent_SpeechSilence(b *testing.B) {
 
 func BenchmarkSileroVAD_Process_MixedContent_Alternating(b *testing.B) {
 	vad := newBenchmarkVAD(b, 0.5)
-	chunks := []internal_type.UserAudioPacket{
+	chunks := []internal_type.UserAudioReceivedPacket{
 		generateBenchmarkSineWave(1600, 440, 0.8),
 		generateBenchmarkSilence(1600),
 		generateBenchmarkSineWave(1600, 880, 0.7),

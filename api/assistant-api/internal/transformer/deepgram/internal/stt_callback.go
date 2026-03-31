@@ -25,6 +25,7 @@ type deepgramSttCallback struct {
 	onPacket      func(pkt ...internal_type.Packet) error
 	options       utils.Option
 	startedAtNano *atomic.Int64 // shared with parent deepgramSTT; 0 = not started
+	contextID     func() string
 }
 
 func NewDeepgramSttCallback(
@@ -32,12 +33,14 @@ func NewDeepgramSttCallback(
 	onPacket func(pkt ...internal_type.Packet) error,
 	options utils.Option,
 	startedAtNano *atomic.Int64,
+	contextID func() string,
 ) msginterfaces.LiveMessageCallback {
 	return &deepgramSttCallback{
 		logger:        logger,
 		onPacket:      onPacket,
 		options:       options,
 		startedAtNano: startedAtNano,
+		contextID:     contextID,
 	}
 }
 
@@ -58,9 +61,11 @@ func (d *deepgramSttCallback) Message(mr *msginterfaces.MessageResponse) error {
 		if v, err := d.options.GetFloat64("listen.threshold"); err == nil {
 			if alternative.Confidence < v {
 				// confidence below threshold, emit event and skip stt processing
+				ctxID := d.contextID()
 				d.onPacket(
 					internal_type.ConversationEventPacket{
-						Name: "stt",
+						ContextID: ctxID,
+						Name:      "stt",
 						Data: map[string]string{
 							"type":       "low_confidence",
 							"script":     alternative.Transcript,
@@ -83,16 +88,19 @@ func (d *deepgramSttCallback) Message(mr *msginterfaces.MessageResponse) error {
 				latencyMs = (now.UnixNano() - startNano) / 1_000_000
 			}
 			wordCount := len(strings.Fields(alternative.Transcript))
+			ctxID := d.contextID()
 			d.onPacket(
-				internal_type.InterruptionPacket{Source: "word"},
+				internal_type.InterruptionDetectedPacket{ContextID: ctxID, Source: "word"},
 				internal_type.SpeechToTextPacket{
+					ContextID:  ctxID,
 					Script:     alternative.Transcript,
 					Confidence: alternative.Confidence,
 					Language:   lang,
 					Interim:    false,
 				},
 				internal_type.ConversationEventPacket{
-					Name: "stt",
+					ContextID: ctxID,
+					Name:      "stt",
 					Data: map[string]string{
 						"type":       "completed",
 						"script":     alternative.Transcript,
@@ -103,22 +111,26 @@ func (d *deepgramSttCallback) Message(mr *msginterfaces.MessageResponse) error {
 					},
 					Time: now,
 				},
-				internal_type.MessageMetricPacket{
-					Metrics: []*protos.Metric{{Name: "stt_latency_ms", Value: fmt.Sprintf("%d", latencyMs)}},
+				internal_type.UserMessageMetricPacket{
+					ContextID: ctxID,
+					Metrics:   []*protos.Metric{{Name: "stt_latency_ms", Value: fmt.Sprintf("%d", latencyMs)}},
 				},
 			)
 		} else {
 			// Non-final interim transcript
+			ctxID := d.contextID()
 			d.onPacket(
-				internal_type.InterruptionPacket{Source: "word"},
+				internal_type.InterruptionDetectedPacket{ContextID: ctxID, Source: "word"},
 				internal_type.SpeechToTextPacket{
+					ContextID:  ctxID,
 					Script:     alternative.Transcript,
 					Confidence: alternative.Confidence,
 					Language:   lang,
 					Interim:    true,
 				},
 				internal_type.ConversationEventPacket{
-					Name: "stt",
+					ContextID: ctxID,
+					Name:      "stt",
 					Data: map[string]string{
 						"type":       "interim",
 						"script":     alternative.Transcript,
@@ -157,10 +169,12 @@ func (d *deepgramSttCallback) Close(cr *msginterfaces.CloseResponse) error {
 // Handle errors from Deepgram
 func (d *deepgramSttCallback) Error(er *msginterfaces.ErrorResponse) error {
 	d.logger.Errorf("Error %+v", er)
+	ctxID := d.contextID()
 	d.onPacket(internal_type.ConversationEventPacket{
-		Name: "stt",
-		Data: map[string]string{"type": "error", "error": er.ErrMsg},
-		Time: time.Now(),
+		ContextID: ctxID,
+		Name:      "stt",
+		Data:      map[string]string{"type": "error", "error": er.ErrMsg},
+		Time:      time.Now(),
 	})
 	return nil
 }

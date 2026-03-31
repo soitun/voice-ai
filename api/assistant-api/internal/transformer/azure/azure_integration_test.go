@@ -11,7 +11,7 @@
 //
 // NOTE: Azure uses the Microsoft Cognitive Services Speech SDK, not WebSockets.
 // Key differences from WebSocket providers:
-// - InterruptionPacket calls StopSpeakingAsync() — no close/reconnect cycle.
+// - InterruptionDetectedPacket calls StopSpeakingAsync() — no close/reconnect cycle.
 // - LLMResponseDonePacket is a no-op — the SDK handles synthesis completion.
 // - Audio arrives via SDK callbacks (OnSpeech), not a readLoop.
 
@@ -159,7 +159,7 @@ func TestAzureTTSInterruption(t *testing.T) {
 	collector.WaitForAudio(t, 15*time.Second)
 
 	// Azure: StopSpeakingAsync + emit "interrupted" event
-	err = tts.Transform(ctx, internal_type.InterruptionPacket{
+	err = tts.Transform(ctx, internal_type.InterruptionDetectedPacket{
 		ContextID: "azure-tts-interrupt", Source: internal_type.InterruptionSourceVad})
 	require.NoError(t, err, "interruption should not error")
 
@@ -235,7 +235,7 @@ func TestAzureTTSFlow_DeltaInterruptDelta(t *testing.T) {
 	t.Logf("phase1: audio_packets=%d", len(collector.AudioPackets()))
 
 	// Phase 2: interrupt (StopSpeakingAsync)
-	require.NoError(t, tts.Transform(ctx, internal_type.InterruptionPacket{
+	require.NoError(t, tts.Transform(ctx, internal_type.InterruptionDetectedPacket{
 		ContextID: "ctx-1", Source: internal_type.InterruptionSourceVad}))
 	time.Sleep(500 * time.Millisecond)
 	assert.Contains(t, ttsEventTypes(collector.EventPackets()), "interrupted")
@@ -308,7 +308,7 @@ func TestAzureTTSFlow_MultipleInterrupts(t *testing.T) {
 			ContextID: fmt.Sprintf("round-%d", round),
 			Text:      fmt.Sprintf("Attempt %d at speaking.", round)}))
 		collector.WaitForAudio(t, 15*time.Second)
-		require.NoError(t, tts.Transform(ctx, internal_type.InterruptionPacket{
+		require.NoError(t, tts.Transform(ctx, internal_type.InterruptionDetectedPacket{
 			ContextID: fmt.Sprintf("round-%d", round),
 			Source:    internal_type.InterruptionSourceVad}))
 		time.Sleep(500 * time.Millisecond)
@@ -386,7 +386,7 @@ func TestAzureSTTLifecycle(t *testing.T) {
 		assert.Contains(t, eventTypes, "completed")
 		t.Logf("stt_event_sequence=%v", eventTypes)
 
-		interruptions := collector.InterruptionPackets()
+		interruptions := collector.InterruptionDetectedPackets()
 		assert.NotEmpty(t, interruptions, "should emit interruption packets with transcripts")
 
 		assertSTTLatencyMetric(t, collector)
@@ -412,7 +412,7 @@ func TestAzureSTTAudioAcceptance(t *testing.T) {
 
 	chunks := testutil.ChunkAudio(testutil.SineTonePCM(440, 1.0), testutil.FrameSize)
 	for i, chunk := range chunks {
-		err := stt.Transform(ctx, internal_type.UserAudioPacket{
+		err := stt.Transform(ctx, internal_type.UserAudioReceivedPacket{
 			ContextID: "azure-stt-accept", Audio: chunk})
 		require.NoError(t, err, "chunk %d should be accepted", i)
 	}
@@ -512,7 +512,7 @@ func TestAzureSTTCloseWhileStreaming(t *testing.T) {
 				return
 			default:
 			}
-			_ = stt.Transform(ctx, internal_type.UserAudioPacket{
+			_ = stt.Transform(ctx, internal_type.UserAudioReceivedPacket{
 				ContextID: "azure-stt-close-mid", Audio: chunk})
 			time.Sleep(time.Duration(testutil.FrameDuration) * time.Millisecond)
 		}

@@ -1,6 +1,7 @@
 @import 'tailwindcss';
 @plugin '@tailwindcss/typography';
 
+
 @custom-variant dark {
     @media (prefers-color-scheme: dark) {
         &:not(.light *) {
@@ -112,9 +113,12 @@
 @theme {
     --font-sans: "IBM Plex Sans", sans-serif;
     --font-mono: "IBM Plex Mono", monospace;
-    --font-weight-medium: 450;    /* IBM Plex "Text" — labels, secondary UI */
-    --font-weight-semibold: 500;  /* IBM Plex Medium — headings, card titles */
-    --font-weight-bold: 700;      /* IBM Plex Bold — reserved, rarely used */
+    --font-weight-medium: 450;
+    /* IBM Plex "Text" — labels, secondary UI */
+    --font-weight-semibold: 500;
+    /* IBM Plex Medium — headings, card titles */
+    --font-weight-bold: 700;
+    /* IBM Plex Bold — reserved, rarely used */
     --color-primary: #1e40af;
     --color-secondary: #f4ede4;
     --color-light-background: #f4f4f4;
@@ -511,6 +515,7 @@
 }
 
 @layer base {
+
     :is(.dark *),
     :root:is(.dark) {
         --color-primary: #4589ff;

@@ -206,7 +206,7 @@ func (eService *assistantService) Get(ctx context.Context,
 			func() {
 				defer wg.Done()
 				var providers []*internal_telemetry_entity.AssistantTelemetryProvider
-				tx := db.Preload("Options").
+				tx := db.Preload("Options", "status = ?", type_enums.RECORD_ACTIVE).
 					Where("assistant_id = ? AND enabled = true", assistantId).
 					Find(&providers)
 				if tx.Error != nil {

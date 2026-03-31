@@ -129,25 +129,25 @@ func (pc *PacketCollector) EventPackets() []internal_type.ConversationEventPacke
 }
 
 // MetricPackets returns only MessageMetricPacket packets.
-func (pc *PacketCollector) MetricPackets() []internal_type.MessageMetricPacket {
+func (pc *PacketCollector) MetricPackets() []internal_type.AssistantMessageMetricPacket {
 	pc.mu.Lock()
 	defer pc.mu.Unlock()
-	var out []internal_type.MessageMetricPacket
+	var out []internal_type.AssistantMessageMetricPacket
 	for _, p := range pc.packets {
-		if m, ok := p.(internal_type.MessageMetricPacket); ok {
+		if m, ok := p.(internal_type.AssistantMessageMetricPacket); ok {
 			out = append(out, m)
 		}
 	}
 	return out
 }
 
-// InterruptionPackets returns only InterruptionPacket packets.
-func (pc *PacketCollector) InterruptionPackets() []internal_type.InterruptionPacket {
+// InterruptionDetectedPackets returns only InterruptionDetectedPacket packets.
+func (pc *PacketCollector) InterruptionDetectedPackets() []internal_type.InterruptionDetectedPacket {
 	pc.mu.Lock()
 	defer pc.mu.Unlock()
-	var out []internal_type.InterruptionPacket
+	var out []internal_type.InterruptionDetectedPacket
 	for _, p := range pc.packets {
-		if i, ok := p.(internal_type.InterruptionPacket); ok {
+		if i, ok := p.(internal_type.InterruptionDetectedPacket); ok {
 			out = append(out, i)
 		}
 	}

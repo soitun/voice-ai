@@ -1,9 +1,7 @@
 import { SidebarIconWrapper } from '@/app/components/navigation/sidebar/sidebar-icon-wrapper';
 import { SidebarLabel } from '@/app/components/navigation/sidebar/sidebar-label';
 import { SidebarSimpleListItem } from '@/app/components/navigation/sidebar/sidebar-simple-list-item';
-import { cn } from '@/utils';
-import { FolderGit } from 'lucide-react';
-import React from 'react';
+import { Catalog } from '@carbon/icons-react';
 import { useLocation } from 'react-router-dom';
 
 export function Project() {
@@ -17,7 +15,7 @@ export function Project() {
         active={pathname.includes(currentPath)}
       >
         <SidebarIconWrapper>
-          <FolderGit className={cn('w-5 h-5 opacity-75')} strokeWidth={1.5} />
+          <Catalog size={20} />
         </SidebarIconWrapper>
         <SidebarLabel>Projects</SidebarLabel>
       </SidebarSimpleListItem>

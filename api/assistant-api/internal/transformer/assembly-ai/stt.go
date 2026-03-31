@@ -19,22 +19,22 @@ import (
 	assemblyai_internal "github.com/rapidaai/api/assistant-api/internal/transformer/assembly-ai/internal"
 	internal_type "github.com/rapidaai/api/assistant-api/internal/type"
 	"github.com/rapidaai/pkg/commons"
+	type_enums "github.com/rapidaai/pkg/types/enums"
 	"github.com/rapidaai/pkg/utils"
 	"github.com/rapidaai/protos"
 )
 
 type assemblyaiSTT struct {
 	*assemblyaiOption
-
-	ctx       context.Context
-	ctxCancel context.CancelFunc
-
-	mu         sync.Mutex
-	connection *websocket.Conn
-	logger     commons.Logger
-	onPacket   func(pkt ...internal_type.Packet) error
-
-	startedAt time.Time
+	ctx            context.Context
+	ctxCancel      context.CancelFunc
+	mu             sync.Mutex
+	connection     *websocket.Conn
+	contextId      string
+	logger         commons.Logger
+	onPacket       func(pkt ...internal_type.Packet) error
+	startedAt      time.Time
+	sttConnectedAt time.Time
 }
 
 func NewAssemblyaiSpeechToText(ctx context.Context, logger commons.Logger, credential *protos.VaultCredential,
@@ -81,13 +81,15 @@ func (aai *assemblyaiSTT) Initialize() error {
 
 	aai.mu.Lock()
 	aai.connection = connection
+	aai.sttConnectedAt = time.Now()
 	aai.mu.Unlock()
 
 	aai.logger.Debugf("assembly-ai-stt: connection established")
 	go aai.readLoop(connection)
 
 	aai.onPacket(internal_type.ConversationEventPacket{
-		Name: "stt",
+		ContextID: aai.contextId,
+		Name:      "stt",
 		Data: map[string]string{
 			"type":     "initialized",
 			"provider": aai.Name(),
@@ -119,9 +121,10 @@ func (aai *assemblyaiSTT) readLoop(conn *websocket.Conn) {
 			if !intentional {
 				aai.logger.Errorf("assembly-ai-stt: connection lost: %v", err)
 				aai.onPacket(internal_type.ConversationEventPacket{
-					Name: "stt",
-					Data: map[string]string{"type": "error", "error": err.Error()},
-					Time: time.Now(),
+					ContextID: aai.contextId,
+					Name:      "stt",
+					Data:      map[string]string{"type": "error", "error": err.Error()},
+					Time:      time.Now(),
 				})
 			}
 			return
@@ -162,18 +165,23 @@ func (aai *assemblyaiSTT) readLoop(conn *websocket.Conn) {
 
 			isInterim := !transcript.EndOfTurn || !transcript.TurnIsFormatted
 			confStr := fmt.Sprintf("%.4f", totalConfidence/float64(wordCount))
+			aai.mu.Lock()
+			ctxID := aai.contextId
+			aai.mu.Unlock()
 
 			if isInterim {
 				aai.onPacket(
-					internal_type.InterruptionPacket{Source: internal_type.InterruptionSourceWord},
+					internal_type.InterruptionDetectedPacket{ContextID: ctxID, Source: internal_type.InterruptionSourceWord},
 					internal_type.SpeechToTextPacket{
+						ContextID:  ctxID,
 						Script:     filteredTranscript,
 						Language:   "en",
 						Confidence: totalConfidence / float64(wordCount),
 						Interim:    true,
 					},
 					internal_type.ConversationEventPacket{
-						Name: "stt",
+						ContextID: ctxID,
+						Name:      "stt",
 						Data: map[string]string{
 							"type":       "interim",
 							"script":     filteredTranscript,
@@ -192,15 +200,17 @@ func (aai *assemblyaiSTT) readLoop(conn *websocket.Conn) {
 				}
 				aai.mu.Unlock()
 				aai.onPacket(
-					internal_type.InterruptionPacket{Source: internal_type.InterruptionSourceWord},
+					internal_type.InterruptionDetectedPacket{ContextID: ctxID, Source: internal_type.InterruptionSourceWord},
 					internal_type.SpeechToTextPacket{
+						ContextID:  ctxID,
 						Script:     filteredTranscript,
 						Language:   "en",
 						Confidence: totalConfidence / float64(wordCount),
 						Interim:    false,
 					},
 					internal_type.ConversationEventPacket{
-						Name: "stt",
+						ContextID: ctxID,
+						Name:      "stt",
 						Data: map[string]string{
 							"type":       "completed",
 							"script":     filteredTranscript,
@@ -211,8 +221,9 @@ func (aai *assemblyaiSTT) readLoop(conn *websocket.Conn) {
 						},
 						Time: now,
 					},
-					internal_type.MessageMetricPacket{
-						Metrics: []*protos.Metric{{Name: "stt_latency_ms", Value: fmt.Sprintf("%d", latencyMs)}},
+					internal_type.UserMessageMetricPacket{
+						ContextID: ctxID,
+						Metrics:   []*protos.Metric{{Name: "stt_latency_ms", Value: fmt.Sprintf("%d", latencyMs)}},
 					},
 				)
 			}
@@ -226,31 +237,70 @@ func (aai *assemblyaiSTT) readLoop(conn *websocket.Conn) {
 	}
 }
 
-func (aai *assemblyaiSTT) Transform(ctx context.Context, in internal_type.UserAudioPacket) error {
-	aai.mu.Lock()
-	defer aai.mu.Unlock()
-	if aai.connection == nil {
-		return fmt.Errorf("assembly-ai-stt: websocket connection is not initialized")
+func (aai *assemblyaiSTT) Transform(ctx context.Context, in internal_type.Packet) error {
+	switch pkt := in.(type) {
+	case internal_type.TurnChangePacket:
+		aai.mu.Lock()
+		aai.contextId = pkt.ContextID
+		aai.mu.Unlock()
+		return nil
+	case internal_type.InterruptionDetectedPacket:
+		aai.mu.Lock()
+		if pkt.Source == internal_type.InterruptionSourceVad && aai.startedAt.IsZero() {
+			aai.startedAt = time.Now()
+		}
+		aai.mu.Unlock()
+		return nil
+	case internal_type.UserAudioReceivedPacket:
+		aai.mu.Lock()
+		defer aai.mu.Unlock()
+		if aai.connection == nil {
+			return fmt.Errorf("assembly-ai-stt: websocket connection is not initialized")
+		}
+		if err := aai.connection.WriteMessage(websocket.BinaryMessage, pkt.Content()); err != nil {
+			aai.logger.Errorf("assembly-ai-stt: error sending audio: %v", err)
+			return fmt.Errorf("error sending audio: %w", err)
+		}
+		return nil
+	default:
+		return nil
 	}
-	if aai.startedAt.IsZero() {
-		aai.startedAt = time.Now()
-	}
-	if err := aai.connection.WriteMessage(websocket.BinaryMessage, in.Content()); err != nil {
-		aai.logger.Errorf("assembly-ai-stt: error sending audio: %v", err)
-		return fmt.Errorf("error sending audio: %w", err)
-	}
-	return nil
 }
 
 func (aai *assemblyaiSTT) Close(ctx context.Context) error {
 	aai.ctxCancel()
 	aai.mu.Lock()
-	defer aai.mu.Unlock()
+	ctxID := aai.contextId
+	connectedAt := aai.sttConnectedAt
+	aai.sttConnectedAt = time.Time{}
 
 	if aai.connection != nil {
 		conn := aai.connection
 		aai.connection = nil // mark before Close so readLoop sees intentional
 		conn.Close()
+	}
+	aai.mu.Unlock()
+
+	if !connectedAt.IsZero() {
+		aai.onPacket(
+			internal_type.ConversationEventPacket{
+				ContextID: ctxID,
+				Name:      "stt",
+				Data: map[string]string{
+					"type":     "closed",
+					"provider": aai.Name(),
+				},
+				Time: time.Now(),
+			},
+			internal_type.ConversationMetricPacket{
+				ContextID: 0,
+				Metrics: []*protos.Metric{{
+					Name:        type_enums.CONVERSATION_STT_DURATION.String(),
+					Value:       fmt.Sprintf("%d", time.Since(connectedAt).Nanoseconds()),
+					Description: "Total STT connection duration in nanoseconds",
+				}},
+			},
+		)
 	}
 	return nil
 }

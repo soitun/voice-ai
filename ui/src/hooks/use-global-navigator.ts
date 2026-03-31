@@ -103,6 +103,20 @@ export const useGlobalNavigation = () => {
   const goToAssistantWebhook = (assistantId: string) =>
     navigate(`/deployment/assistant/${assistantId}/configure-webhook`);
 
+  const goToAssistantTelemetry = (assistantId: string) =>
+    navigate(`/deployment/assistant/${assistantId}/configure-telemetry`);
+
+  const goToCreateAssistantTelemetry = (assistantId: string) =>
+    navigate(`/deployment/assistant/${assistantId}/configure-telemetry/create`);
+
+  const goToEditAssistantTelemetry = (
+    assistantId: string,
+    telemetryId: string,
+  ) =>
+    navigate(
+      `/deployment/assistant/${assistantId}/configure-telemetry/${telemetryId}`,
+    );
+
   const goToAssistantSession = (assistantId: string, sessionId: string) =>
     navigate(`/deployment/assistant/${assistantId}/sessions/${sessionId}`);
 
@@ -174,6 +188,9 @@ export const useGlobalNavigation = () => {
     goToCreateAssistantWebhook,
     goToAssistantWebhook,
     goToEditAssistantWebhook,
+    goToAssistantTelemetry,
+    goToCreateAssistantTelemetry,
+    goToEditAssistantTelemetry,
 
     //
     goToAssistantSession,

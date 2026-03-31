@@ -13,6 +13,7 @@ import (
 	internal_caller_metrics "github.com/rapidaai/api/integration-api/internal/caller/metrics"
 	internal_callers "github.com/rapidaai/api/integration-api/internal/type"
 	"github.com/rapidaai/pkg/commons"
+	type_enums "github.com/rapidaai/pkg/types/enums"
 	"github.com/rapidaai/pkg/utils"
 	"github.com/rapidaai/protos"
 )
@@ -42,7 +43,7 @@ func (llc *largeLanguageCaller) GetChatCompletion(
 	}
 
 	// message and options
-	llmRequest := llc.getChatCompleteParameter(options)
+	llmRequest := llc.getChatCompleteParameter(options, false)
 	llmRequest.Messages = llc.buildHistory(allMessages)
 
 	// prehook
@@ -127,7 +128,7 @@ func (llc *largeLanguageCaller) StreamChatCompletion(
 		return err
 	}
 
-	completionsOptions := llc.getChatCompleteParameter(options)
+	completionsOptions := llc.getChatCompleteParameter(options, true)
 	completionsOptions.Messages = llc.buildHistory(allMessages)
 	options.PreHook(utils.ToJson(completionsOptions))
 	llc.logger.Benchmark("azure.llm.GetChatCompletion.llmRequestPrepare", time.Since(start))
@@ -224,7 +225,7 @@ func (llc *largeLanguageCaller) StreamChatCompletion(
 
 	if firstTokenTime != nil {
 		metrics.OnAddMetrics(&protos.Metric{
-			Name:        "FIRST_TOKEN_RECIEVED_TIME",
+			Name:        type_enums.TIME_TO_FIRST_TOKEN.String(),
 			Value:       fmt.Sprintf("%d", firstTokenTime.Sub(start)),
 			Description: "Time to receive first token from LLM",
 		})
@@ -303,8 +304,14 @@ func (llc *largeLanguageCaller) buildHistory(allMessages []*protos.Message) []op
 
 func (llc *largeLanguageCaller) getChatCompleteParameter(
 	opts *internal_callers.ChatCompletionOptions,
+	streaming bool,
 ) openai.ChatCompletionNewParams {
 	options := openai.ChatCompletionNewParams{}
+	if streaming {
+		options.StreamOptions = openai.ChatCompletionStreamOptionsParam{
+			IncludeUsage: openai.Bool(true),
+		}
+	}
 	if len(opts.ToolDefinitions) > 0 {
 		fns := make([]openai.ChatCompletionToolParam, len(opts.ToolDefinitions))
 		for idx, tl := range opts.ToolDefinitions {

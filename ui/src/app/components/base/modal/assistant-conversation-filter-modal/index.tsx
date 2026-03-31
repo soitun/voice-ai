@@ -6,7 +6,7 @@ import { FieldSet } from '@/app/components/form/fieldset';
 import { Datepicker } from '@/app/components/datepicker';
 import SourceSelector from '@/app/components/selectors/source';
 import { ModalFooter } from '@/app/components/base/modal/modal-footer';
-import { IBlueBGButton, ICancelButton } from '@/app/components/form/button';
+import { PrimaryButton, SecondaryButton } from '@/app/components/carbon/button';
 import { ModalBody } from '@/app/components/base/modal/modal-body';
 
 interface AssistantConversationFilterDialogProps
@@ -79,16 +79,17 @@ export const AssistantConversationFilterDialog: FC<AssistantConversationFilterDi
             </FieldSet>
           </ModalBody>
           <ModalFooter className="sticky bottom-0">
-            <ICancelButton
+            <SecondaryButton
+              size="lg"
               onClick={() => {
                 mldAttr.setModalOpen(false);
               }}
             >
               Cancel
-            </ICancelButton>
-            <IBlueBGButton type="button" onClick={handleApply}>
+            </SecondaryButton>
+            <PrimaryButton size="lg" type="button" onClick={handleApply}>
               Apply
-            </IBlueBGButton>
+            </PrimaryButton>
           </ModalFooter>
         </div>
       </RightSideModal>

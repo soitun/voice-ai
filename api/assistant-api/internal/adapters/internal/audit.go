@@ -9,10 +9,7 @@ import (
 	"context"
 
 	type_enums "github.com/rapidaai/pkg/types/enums"
-	protos "github.com/rapidaai/protos"
 )
-
-const ConversationPageHistory uint32 = 50
 
 func (kr *genericRequestor) CreateKnowledgeLog(ctx context.Context, knowledgeId uint64, retrievalMethod string,
 	topK uint32,
@@ -40,72 +37,6 @@ func (cr *genericRequestor) CreateWebhookLog(
 	defer cancel()
 	_, err := cr.webhookService.CreateLog(dbCtx, cr.auth, webhookID, cr.assistant.Id, cr.assistantConversation.Id, httpUrl, httpMethod, event, responseStatus, timeTaken, retryCount, status, request, response)
 	return err
-}
-
-func (cr *genericRequestor) GetConversationLogs(ctx context.Context) []*protos.Message {
-	messages := make([]*protos.Message, 0)
-	cnt, conversations, err := cr.
-		conversationService.
-		GetAllMessageActions(
-			ctx,
-			cr.auth,
-			cr.assistantConversation.Id,
-			[]*protos.Criteria{
-				{
-					Key:   "action_type",
-					Value: "llm-call",
-					Logic: "=",
-				},
-			},
-			&protos.Paginate{
-				Page:     1,
-				PageSize: ConversationPageHistory,
-			},
-			&protos.Ordering{
-				Column: "created_date",
-				Order:  "asc",
-			},
-		)
-
-	if cnt == 0 || err != nil {
-		return messages
-	}
-
-	for _, x := range conversations {
-		if x.Status == type_enums.RECORD_SUCCESS || x.Status == type_enums.RECORD_ACTIVE {
-			messages = append(messages, x.RequestMessage())
-			messages = append(messages, x.ResponseMessage())
-		}
-	}
-	return messages
-}
-
-func (cr *genericRequestor) CreateConversationMessageLog(ctx context.Context, messageid string, in, out *protos.Message, metrics []*protos.Metric) error {
-	dbCtx, cancel := context.WithTimeout(context.Background(), dbWriteTimeout)
-	defer cancel()
-	cr.conversationService.CreateLLMAction(
-		dbCtx,
-		cr.Auth(),
-		cr.assistant.Id,
-		cr.assistantConversation.Id,
-		messageid,
-		in, out, metrics)
-	return nil
-}
-
-func (cr *genericRequestor) CreateConversationToolLog(
-	ctx context.Context,
-	messageid string, in, out map[string]interface{}, metrics []*protos.Metric) error {
-	dbCtx, cancel := context.WithTimeout(context.Background(), dbWriteTimeout)
-	defer cancel()
-	cr.conversationService.CreateToolAction(
-		dbCtx,
-		cr.Auth(),
-		cr.assistant.Id,
-		cr.assistantConversation.Id,
-		messageid,
-		in, out, metrics)
-	return nil
 }
 
 func (cr *genericRequestor) CreateToolLog(

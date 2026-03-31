@@ -163,10 +163,10 @@ export const AudioPlayer: FC<AudioPlayerProps> = ({
     }
 
     return () => {
-      assistantWavesurfer.current?.pause();
-      userWavesurfer.current?.pause();
-      assistantWavesurfer.current?.destroy();
-      userWavesurfer.current?.destroy();
+      try { assistantWavesurfer.current?.pause(); } catch {}
+      try { userWavesurfer.current?.pause(); } catch {}
+      try { assistantWavesurfer.current?.destroy(); } catch {}
+      try { userWavesurfer.current?.destroy(); } catch {}
       assistantWavesurfer.current = null;
       userWavesurfer.current = null;
     };

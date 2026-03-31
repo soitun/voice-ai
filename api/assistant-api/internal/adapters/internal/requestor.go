@@ -8,6 +8,7 @@ package adapter_internal
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -24,6 +25,7 @@ import (
 	internal_assistant_entity "github.com/rapidaai/api/assistant-api/internal/entity/assistants"
 	internal_conversation_entity "github.com/rapidaai/api/assistant-api/internal/entity/conversations"
 	internal_knowledge_gorm "github.com/rapidaai/api/assistant-api/internal/entity/knowledges"
+	internal_input_normalizers "github.com/rapidaai/api/assistant-api/internal/normalizers/input"
 	observe "github.com/rapidaai/api/assistant-api/internal/observe"
 	observe_exporters "github.com/rapidaai/api/assistant-api/internal/observe/exporters"
 	internal_services "github.com/rapidaai/api/assistant-api/internal/services"
@@ -75,6 +77,12 @@ func (s InteractionState) String() string {
 	}
 }
 
+// packetEnvelope carries a packet together with the context it was sent from.
+type packetEnvelope struct {
+	ctx context.Context
+	pkt internal_type.Packet
+}
+
 type genericRequestor struct {
 	logger   commons.Logger
 	config   *config.AssistantConfig
@@ -118,6 +126,7 @@ type genericRequestor struct {
 	endOfSpeech internal_type.EndOfSpeech
 	vad         internal_type.Vad
 	denoiser    internal_type.Denoiser
+	normalizer  internal_input_normalizers.InputNormalizer
 
 	// speak
 	textToSpeechTransformer internal_type.TextToSpeechTransformer
@@ -190,6 +199,7 @@ func NewGenericRequestor(
 		interactionState:  Unknown,
 		msgMode:           type_enums.TextMode,
 		assistantExecutor: internal_agent_executor_llm.NewAssistantExecutor(logger),
+		normalizer:        internal_input_normalizers.NewInputNormalizer(logger),
 
 		//
 		histories: make([]internal_type.MessagePacket, 0),
@@ -198,28 +208,16 @@ func NewGenericRequestor(
 		options:   make(map[string]interface{}),
 
 		// dispatcher channels
-		criticalCh: make(chan packetEnvelope, 16),
+		criticalCh: make(chan packetEnvelope, 256),
 		inputCh:    make(chan packetEnvelope, 4096),
 		outputCh:   make(chan packetEnvelope, 2048),
-		lowCh:      make(chan packetEnvelope, 512),
+		lowCh:      make(chan packetEnvelope, 2048),
 	}
 }
 
 // GetSource implements internal_adapter_requests.Messaging.
-func (dm *genericRequestor) Source() utils.RapidaSource {
+func (dm *genericRequestor) GetSource() utils.RapidaSource {
 	return dm.source
-}
-
-func (deb *genericRequestor) onCreateMessage(ctx context.Context, msg internal_type.MessagePacket) error {
-	deb.histories = append(deb.histories, msg)
-	dbCtx, cancel := context.WithTimeout(context.Background(), dbWriteTimeout)
-	defer cancel()
-	_, err := deb.conversationService.CreateConversationMessage(dbCtx, deb.Auth(), deb.Source(), deb.Assistant().Id, deb.Assistant().AssistantProviderId, deb.Conversation().Id, msg.ContextId(), msg.Role(), msg.Content())
-	if err != nil {
-		deb.logger.Error("unable to create message for the user")
-		return err
-	}
-	return nil
 }
 
 func (gr *genericRequestor) GetAssistantConversation(ctx context.Context, auth types.SimplePrinciple, assistantId uint64, assistantConversationId uint64) (*internal_conversation_entity.AssistantConversation, error) {
@@ -232,20 +230,10 @@ func (gr *genericRequestor) GetAssistantConversation(ctx context.Context, auth t
 	)
 }
 
-func (r *genericRequestor) identifier(config *protos.ConversationInitialization) string {
-	switch identity := config.GetUserIdentity().(type) {
-	case *protos.ConversationInitialization_Phone:
-		return identity.Phone.GetPhoneNumber()
-	case *protos.ConversationInitialization_Web:
-		return identity.Web.GetUserId()
-	default:
-		return uuid.NewString()
-	}
-}
-
 func (talking *genericRequestor) BeginConversation(ctx context.Context, assistant *internal_assistant_entity.Assistant, direction type_enums.ConversationDirection, config *protos.ConversationInitialization) (*internal_conversation_entity.AssistantConversation, error) {
 	talking.assistant = assistant
-	conversation, err := talking.conversationService.CreateConversation(ctx, talking.Auth(), talking.identifier(config), assistant.Id, assistant.AssistantProviderId, direction, talking.Source())
+
+	conversation, err := talking.conversationService.CreateConversation(ctx, talking.Auth(), talking.identifier(config), assistant.Id, assistant.AssistantProviderId, direction, talking.GetSource())
 	if err != nil {
 		return conversation, err
 	}
@@ -274,6 +262,7 @@ func (talking *genericRequestor) BeginConversation(ctx context.Context, assistan
 
 func (talking *genericRequestor) ResumeConversation(ctx context.Context, assistant *internal_assistant_entity.Assistant, config *protos.ConversationInitialization) (*internal_conversation_entity.AssistantConversation, error) {
 	talking.assistant = assistant
+
 	conversation, err := talking.GetAssistantConversation(ctx, talking.Auth(), assistant.Id, config.GetAssistantConversationId())
 	if err != nil {
 		talking.logger.Errorf("failed to get assistant conversation: %+v", err)
@@ -386,13 +375,21 @@ func (r *genericRequestor) Transition(newState InteractionState) error {
 		if r.interactionState == Interrupted {
 			return fmt.Errorf("Transition: already interrupted")
 		}
+		oldCtxID := r.contextID // read directly — we already hold msgMu
 		nCtxID := uuid.NewString()
-		// r.OnPacket(context.Background(), internal_type.ConversationEventPacket{
-		// 	Name: "behavior",
-		// 	Data: map[string]string{"type": "eos", "turn_change": r.GetID(), "new": nCtxID},
-		// 	Time: time.Now(),
-		// })
 		r.contextID = nCtxID
+		// Emit turn-change event asynchronously to avoid holding msgMu while
+		// enqueuing into a dispatcher channel (which could stall if the channel
+		// is near capacity and the consumer goroutine is also waiting on msgMu).
+		utils.Go(context.Background(), func() {
+			r.OnPacket(context.Background(), internal_type.TurnChangePacket{
+				ContextID:         nCtxID,
+				PreviousContextID: oldCtxID,
+				Reason:            "interrupted",
+				Source:            "state_machine",
+				Time:              time.Now(),
+			})
+		})
 	}
 	r.interactionState = newState
 	return nil
@@ -415,7 +412,6 @@ func (r *genericRequestor) initializeCollectors(ctx context.Context) {
 	if oid := r.auth.GetCurrentOrganizationId(); oid != nil {
 		orgID = *oid
 	}
-
 	meta := observe.SessionMeta{
 		AssistantID:             r.assistant.Id,
 		AssistantConversationID: r.assistantConversation.Id,
@@ -425,25 +421,60 @@ func (r *genericRequestor) initializeCollectors(ctx context.Context) {
 
 	var eventExporters []observe.EventExporter
 	var metricExporters []observe.MetricExporter
-
-	// OpenSearch is the platform's own telemetry store — register only when reachable.
-	if r.opensearch != nil && r.opensearch.IsConnected(ctx) {
-		evtExp, metExp, err := observe_exporters.GetExporter(ctx, r.logger, &r.config.AppConfig, r.opensearch, string(observe.OPENSEARCH), nil)
-		if err == nil && evtExp != nil {
-			eventExporters = append(eventExporters, evtExp)
-			metricExporters = append(metricExporters, metExp)
+	// Register one default telemetry exporter from env config (asset-store style).
+	if r.config != nil && r.config.TelemetryConfig != nil {
+		envProviderType := r.config.TelemetryConfig.Type()
+		if envProviderType != "" {
+			envOpts := r.config.TelemetryConfig.ToMap()
+			evtExp, metExp, err := observe_exporters.GetExporter(
+				ctx, r.logger, &r.config.AppConfig, r.opensearch, string(envProviderType), envOpts,
+			)
+			if err != nil {
+				r.logger.Errorf("observe: env telemetry exporter creation failed for type %s: %v", envProviderType, err)
+			} else if evtExp == nil || metExp == nil {
+				r.logger.Warnf("observe: env telemetry exporter returned nil for type %s", envProviderType)
+			} else {
+				eventExporters = append(eventExporters, evtExp)
+				metricExporters = append(metricExporters, metExp)
+			}
 		}
 	}
 
 	for _, p := range providers {
 		opts := p.GetOptions()
+		// Resolve vault credential and merge its fields into opts so that
+		// exporter config parsers (e.g. DatadogConfigFromOptions) can read
+		// api_key, headers, access_token etc. from the credential store.
+		if credIDStr, ok := opts["rapida.credential_id"]; ok {
+			credID, parseErr := utils.Option(opts).GetUint64("rapida.credential_id")
+			if parseErr != nil {
+				r.logger.Errorf("observe: invalid credential_id %q for provider %d (%s): %v", credIDStr, p.Id, p.ProviderType, parseErr)
+			} else {
+				credential, credErr := r.VaultCaller().GetCredential(ctx, r.Auth(), credID)
+				if credErr != nil {
+					r.logger.Errorf("observe: vault credential lookup failed for provider %d (%s): %v", p.Id, p.ProviderType, credErr)
+				} else if credential != nil && credential.GetValue() != nil {
+					for k, v := range credential.GetValue().AsMap() {
+						if s, ok := v.(string); ok {
+							opts[k] = s
+						}
+					}
+				}
+			}
+		}
+
 		evtExp, metExp, err := observe_exporters.GetExporter(ctx, r.logger, &r.config.AppConfig, r.opensearch, p.ProviderType, opts)
 		if err != nil {
 			r.logger.Errorf("observe: exporter creation failed for provider %d (%s): %v", p.Id, p.ProviderType, err)
 			continue
 		}
 		if evtExp == nil || metExp == nil {
-			r.logger.Errorf("observe: exporter returned nil for provider %d (%s)", p.Id, p.ProviderType)
+			endpoint := strings.TrimSpace(fmt.Sprintf("%v", opts["endpoint"]))
+			if (p.ProviderType == string(observe.OTLP_HTTP) || p.ProviderType == string(observe.OTLP_GRPC)) && endpoint == "" {
+				r.logger.Warnf("observe: skipping provider %d (%s): missing endpoint", p.Id, p.ProviderType)
+				continue
+			}
+			r.logger.Warnf("observe: exporter returned nil for provider %d (%s)", p.Id, p.ProviderType)
 			continue
 		}
 		eventExporters = append(eventExporters, evtExp)

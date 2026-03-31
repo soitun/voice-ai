@@ -8,7 +8,6 @@ package assistant_talk_api
 import (
 	"context"
 	"errors"
-	"fmt"
 
 	"github.com/rapidaai/pkg/exceptions"
 	"github.com/rapidaai/pkg/types"
@@ -25,20 +24,12 @@ func (cApi *ConversationApi) CreateMessageMetric(ctx context.Context, cer *assis
 			"Please provider valid service credentials to perfom invoke, read docs @ docs.rapida.ai",
 		)
 	}
-	mtr := make([]*types.Metric, 0)
-	for _, v := range cer.GetMetrics() {
-		mtr = append(mtr, &types.Metric{
-			Name:        fmt.Sprintf("custom.%s", v.GetName()),
-			Value:       v.GetValue(),
-			Description: v.GetDescription(),
-		})
-	}
 	val, err := cApi.assistantConversationService.ApplyMessageMetrics(
 		ctx,
 		iAuth,
 		cer.GetAssistantConversationId(),
 		cer.GetMessageId(),
-		mtr,
+		cer.GetMetrics(),
 	)
 	if err != nil {
 		return exceptions.InternalServerError[protos.CreateMessageMetricResponse](

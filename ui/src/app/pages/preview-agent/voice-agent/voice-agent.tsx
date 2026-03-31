@@ -21,7 +21,6 @@ import {
 } from '@/app/components/form/textarea';
 import { InputVarForm } from '@/app/pages/endpoint/view/try-playground/experiment-prompt/components/input-var-form';
 import { InputVarType } from '@/models/common';
-import { InputGroup } from '@/app/components/input-group';
 import { ChevronLeft, ExternalLink, Info, X } from 'lucide-react';
 import { useRapidaStore } from '@/hooks';
 import { PageTitleBlock } from '@/app/components/blocks/page-title-block';
@@ -491,7 +490,9 @@ export const VoiceAgent: FC<{
             <div className="flex-1 min-h-0 overflow-y-auto py-1">
               {filteredEvents.length === 0 ? (
                 <div className="flex items-center justify-center h-full text-gray-400 dark:text-gray-500 text-sm/6 font-mono">
-                  {events.length === 0 ? 'No events yet…' : 'No events match the selected filters.'}
+                  {events.length === 0
+                    ? 'No events yet…'
+                    : 'No events match the selected filters.'}
                 </div>
               ) : (
                 <table className="w-full table-fixed font-mono text-sm/6 border-collapse">
@@ -592,7 +593,7 @@ export const VoiceAgentDebugger: FC<{
         {tab === 'arguments' && (
           <div className="flex-1 min-h-0 overflow-y-auto">
             {variables.length > 0 ? (
-              <div className="[&_label]:!text-sm [&_label]:!leading-6 [&_label]:!py-2 [&_label]:!px-3 [&_textarea]:!text-sm [&_textarea]:!leading-6 [&_textarea]:!px-3 [&_textarea]:!py-2">
+              <div className="divide-y border-b">
                 {variables.map((x, idx) => (
                   <InputVarForm key={idx} var={x}>
                     {(x.getType() === InputVarType.stringInput ||

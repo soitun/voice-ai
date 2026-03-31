@@ -44,12 +44,12 @@ func (t *genericRequestor) Talk(_ context.Context, auth types.SimplePrinciple) e
 				// the final state is persisted.
 				completionMetrics := []*protos.Metric{
 					{
-						Name:        type_enums.STATUS.String(),
-						Value:       "completed",
+						Name:        type_enums.CONVERSATION_STATUS.String(),
+						Value:       type_enums.CONVERSATION_COMPLETE.String(),
 						Description: "Status of current conversation",
 					},
 					{
-						Name:        type_enums.TIME_TAKEN.String(),
+						Name:        type_enums.CONVERSATION_DURATION.String(),
 						Value:       fmt.Sprintf("%d", time.Since(totalTime)),
 						Description: "Time taken to complete the conversation from the first message received to the end of the conversation.",
 					},
@@ -116,11 +116,11 @@ func (t *genericRequestor) Talk(_ context.Context, auth types.SimplePrinciple) e
 			if initialized {
 				switch msg := payload.GetMessage().(type) {
 				case *protos.ConversationUserMessage_Audio:
-					if err := t.OnPacket(t.streamer.Context(), internal_type.UserAudioPacket{ContextID: t.GetID(), Audio: msg.Audio}); err != nil {
+					if err := t.OnPacket(t.streamer.Context(), internal_type.UserAudioReceivedPacket{ContextID: t.GetID(), Audio: msg.Audio}); err != nil {
 						t.logger.Errorf("error processing user audio: %v", err)
 					}
 				case *protos.ConversationUserMessage_Text:
-					if err := t.OnPacket(t.streamer.Context(), internal_type.UserTextPacket{ContextID: t.GetID(), Text: msg.Text}); err != nil {
+					if err := t.OnPacket(t.streamer.Context(), internal_type.UserTextReceivedPacket{ContextID: t.GetID(), Text: msg.Text}); err != nil {
 						t.logger.Errorf("error processing user text: %v", err)
 					}
 				default:

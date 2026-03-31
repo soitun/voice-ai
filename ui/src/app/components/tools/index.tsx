@@ -1,9 +1,7 @@
 import { Metadata } from '@rapidaai/react';
 import { FC, useCallback, useMemo } from 'react';
-import { Dropdown } from '@/app/components/dropdown';
-import { FieldSet } from '@/app/components/form/fieldset';
-import { FormLabel } from '@/app/components/form-label';
 import { cn } from '@/utils';
+import { Dropdown } from '@carbon/react';
 import { CONFIG } from '@/configs';
 import { ConfigureAPIRequest } from '@/app/components/tools/api-request';
 import {
@@ -296,18 +294,17 @@ export const BuildinTool: FC<{
   return (
     <>
       <div className="p-6">
-        <FieldSet>
-          <FormLabel>Action</FormLabel>
-          <Dropdown
-            className={cn('bg-light-background dark:bg-gray-950', inputClass)}
-            currentValue={currentTool}
-            setValue={tool => onChangeBuildinTool(tool.code)}
-            allValue={availableTools}
-            placeholder="Select provider"
-            option={renderOption}
-            label={renderOption}
-          />
-        </FieldSet>
+        <Dropdown
+          id="tool-action-select"
+          titleText="Action"
+          label="Select provider"
+          items={availableTools}
+          selectedItem={currentTool}
+          itemToString={(item: any) => item?.name || ''}
+          onChange={({ selectedItem }: any) => {
+            if (selectedItem) onChangeBuildinTool(selectedItem.code);
+          }}
+        />
       </div>
 
       <ConfigureBuildinTool

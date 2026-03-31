@@ -11,9 +11,8 @@ import {
 import { GetDefaultEOSConfig } from '@/app/components/providers/end-of-speech/provider';
 import { GetDefaultVADConfig } from '@/app/components/providers/vad/provider';
 import { VADProvider } from '@/app/components/providers/vad';
-import { ChevronDown } from 'lucide-react';
+import { ChevronDown } from '@carbon/icons-react';
 import { cn } from '@/utils';
-import { SectionDivider } from '@/app/components/blocks/section-divider';
 
 interface ConfigureAudioInputProviderProps {
   audioInputConfig: { provider: string; parameters: Metadata[] };
@@ -28,9 +27,19 @@ export const ConfigureAudioInputProvider: React.FC<
 > = ({ audioInputConfig, setAudioInputConfig }) => {
   const [showAdvanced, setShowAdvanced] = useState(false);
 
+  const keepAdvancedMicrophoneParams = (parameters: Metadata[]) =>
+    parameters.filter(p => {
+      const key = p.getKey();
+      return (
+        key.startsWith('microphone.eos.') ||
+        key.startsWith('microphone.vad.') ||
+        key.startsWith('microphone.denoising.')
+      );
+    });
+
   const onChangeAudioInputProvider = (providerName: string) => {
-    const microphoneScopedParameters = audioInputConfig.parameters.filter(
-      p => p.getKey().startsWith('microphone.'),
+    const microphoneScopedParameters = keepAdvancedMicrophoneParams(
+      audioInputConfig.parameters,
     );
     setAudioInputConfig({
       provider: providerName,
@@ -71,18 +80,18 @@ export const ConfigureAudioInputProvider: React.FC<
               className="flex items-center gap-1.5 text-xs font-medium text-gray-500 hover:text-gray-800 dark:hover:text-gray-200 transition-colors"
             >
               <ChevronDown
+                size={16}
                 className={cn(
-                  'w-4 h-4 transition-transform duration-200',
+                  'transition-transform duration-200',
                   showAdvanced && 'rotate-180',
                 )}
-                strokeWidth={2}
               />
               {showAdvanced ? 'Hide' : 'Show'} advanced settings
             </button>
 
             {showAdvanced && (
               <div className="flex flex-col gap-6 pt-6 border-t border-gray-200 dark:border-gray-800">
-                <SectionDivider label="Voice Activity Detection" />
+                <p className="text-[10px] font-semibold tracking-[0.12em] uppercase text-gray-500 dark:text-gray-400">Voice Activity Detection</p>
                 <VADProvider
                   provider={getParamValue(
                     'microphone.vad.provider',
@@ -96,7 +105,7 @@ export const ConfigureAudioInputProvider: React.FC<
                   parameters={audioInputConfig.parameters}
                   onChangeParameter={onChangeAudioInputParameter}
                 />
-                <SectionDivider label="Background Noise" />
+                <p className="text-[10px] font-semibold tracking-[0.12em] uppercase text-gray-500 dark:text-gray-400">Background Noise</p>
                 <NoiseCancellationProvider
                   noiseCancellationProvider={getParamValue(
                     'microphone.denoising.provider',
@@ -113,17 +122,19 @@ export const ConfigureAudioInputProvider: React.FC<
                     )
                   }
                 />
-                <SectionDivider label="End of Speech" />
+                <p className="text-[10px] font-semibold tracking-[0.12em] uppercase text-gray-500 dark:text-gray-400">End of Speech</p>
                 <EndOfSpeechProvider
                   provider={getParamValue(
                     'microphone.eos.provider',
-                    'silence_based_eos',
+                    'pipecat_smart_turn_eos',
                   )}
                   onChangeProvider={provider =>
                     onChangeAudioInputParameter(
                       GetDefaultEOSConfig(
                         provider,
-                        audioInputConfig.parameters,
+                        audioInputConfig.parameters.filter(
+                          p => !p.getKey().startsWith('microphone.eos.'),
+                        ),
                       ),
                     )
                   }

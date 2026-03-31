@@ -592,3 +592,53 @@ func (assistantGRPCApi *webAssistantGRPCApi) GetAllAssistantTelemetry(ctx contex
 	}
 	return assistantGRPCApi.assistantClient.GetAllAssistantTelemetry(ctx, iAuth, iRequest)
 }
+
+// CreateAssistantTelemetryProvider implements [protos.AssistantServiceServer].
+func (assistantGRPCApi *webAssistantGRPCApi) CreateAssistantTelemetryProvider(ctx context.Context, iRequest *protos.CreateAssistantTelemetryProviderRequest) (*protos.GetAssistantTelemetryProviderResponse, error) {
+	iAuth, isAuthenticated := types.GetAuthPrincipleGPRC(ctx)
+	if !isAuthenticated {
+		assistantGRPCApi.logger.Errorf("unauthenticated request to CreateAssistantTelemetryProvider")
+		return nil, errors.New("unauthenticated request")
+	}
+	return assistantGRPCApi.assistantClient.CreateAssistantTelemetryProvider(ctx, iAuth, iRequest)
+}
+
+// DeleteAssistantTelemetryProvider implements [protos.AssistantServiceServer].
+func (assistantGRPCApi *webAssistantGRPCApi) DeleteAssistantTelemetryProvider(ctx context.Context, iRequest *protos.DeleteAssistantTelemetryProviderRequest) (*protos.GetAssistantTelemetryProviderResponse, error) {
+	iAuth, isAuthenticated := types.GetAuthPrincipleGPRC(ctx)
+	if !isAuthenticated {
+		assistantGRPCApi.logger.Errorf("unauthenticated request to DeleteAssistantTelemetryProvider")
+		return nil, errors.New("unauthenticated request")
+	}
+	return assistantGRPCApi.assistantClient.DeleteAssistantTelemetryProvider(ctx, iAuth, iRequest)
+}
+
+// GetAllAssistantTelemetryProvider implements [protos.AssistantServiceServer].
+func (assistantGRPCApi *webAssistantGRPCApi) GetAllAssistantTelemetryProvider(ctx context.Context, iRequest *protos.GetAllAssistantTelemetryProviderRequest) (*protos.GetAllAssistantTelemetryProviderResponse, error) {
+	iAuth, isAuthenticated := types.GetAuthPrincipleGPRC(ctx)
+	if !isAuthenticated {
+		assistantGRPCApi.logger.Errorf("unauthenticated request to GetAllAssistantTelemetryProvider")
+		return nil, errors.New("unauthenticated request")
+	}
+	return assistantGRPCApi.assistantClient.GetAllAssistantTelemetryProvider(ctx, iAuth, iRequest)
+}
+
+// GetAssistantTelemetryProvider implements [protos.AssistantServiceServer].
+func (assistantGRPCApi *webAssistantGRPCApi) GetAssistantTelemetryProvider(ctx context.Context, iRequest *protos.GetAssistantTelemetryProviderRequest) (*protos.GetAssistantTelemetryProviderResponse, error) {
+	iAuth, isAuthenticated := types.GetAuthPrincipleGPRC(ctx)
+	if !isAuthenticated {
+		assistantGRPCApi.logger.Errorf("unauthenticated request to GetAssistantTelemetryProvider")
+		return nil, errors.New("unauthenticated request")
+	}
+	return assistantGRPCApi.assistantClient.GetAssistantTelemetryProvider(ctx, iAuth, iRequest)
+}
+
+// UpdateAssistantTelemetryProvider implements [protos.AssistantServiceServer].
+func (assistantGRPCApi *webAssistantGRPCApi) UpdateAssistantTelemetryProvider(ctx context.Context, iRequest *protos.UpdateAssistantTelemetryProviderRequest) (*protos.GetAssistantTelemetryProviderResponse, error) {
+	iAuth, isAuthenticated := types.GetAuthPrincipleGPRC(ctx)
+	if !isAuthenticated {
+		assistantGRPCApi.logger.Errorf("unauthenticated request to UpdateAssistantTelemetryProvider")
+		return nil, errors.New("unauthenticated request")
+	}
+	return assistantGRPCApi.assistantClient.UpdateAssistantTelemetryProvider(ctx, iAuth, iRequest)
+}

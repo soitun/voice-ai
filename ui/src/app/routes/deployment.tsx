@@ -23,6 +23,9 @@ import {
   DeploymentConfigureAssistantWebhookPage,
   DeploymentCreateAssistantWebhookPage,
   DeploymentUpdateAssistantWebhookPage,
+  DeploymentConfigureAssistantTelemetryPage,
+  DeploymentCreateAssistantTelemetryPage,
+  DeploymentUpdateAssistantTelemetryPage,
   DeploymentConversationDetailPage,
   DeploymentCreateAssistantAnalysisPage,
   DeploymentUpdateAssistantAnalysisPage,
@@ -101,58 +104,53 @@ export function DeploymentRoute() {
         />
 
         <Route
-          path={'assistant/:assistantId/create-new-version'}
-          element={<DeploymentCreateVersionAssistantPage />}
-        />
-
-        <Route
-          path={'assistant/:assistantId/create-websocket-version'}
-          element={<DeploymentCreateWebsocketVersionAssistantPage />}
-        />
-
-        <Route
-          path={'assistant/:assistantId/create-agentkit-version'}
-          element={<DeploymentCreateAgentKitVersionAssistantPage />}
-        />
-
-        <Route
-          key={'assistant/:assistantId/sessions/:sessionId'}
-          path={'assistant/:assistantId/sessions/:sessionId'}
-          element={<DeploymentConversationDetailPage />}
-        />
-        <Route
-          path="assistant/:assistantId"
+          path={'assistant/:assistantId'}
           element={
-            <AssistantManageLayout>
+            <AssistantViewLayout>
               <Outlet />
-            </AssistantManageLayout>
+            </AssistantViewLayout>
           }
         >
-          {/* <Route index element={<Navigate to="deployment/" replace />} /> */}
+          <Route index element={<Navigate to="overview" replace />} />
+          <Route path={':tab'} element={<DeploymentViewAssistantPage />} />
+
+          {/* Session detail */}
           <Route
-            key={'/deployment/edit-assistant'}
+            path={'sessions/:sessionId'}
+            element={<DeploymentConversationDetailPage />}
+          />
+
+          {/* Create version */}
+          <Route
+            path={'create-new-version'}
+            element={<DeploymentCreateVersionAssistantPage />}
+          />
+          <Route
+            path={'create-websocket-version'}
+            element={<DeploymentCreateWebsocketVersionAssistantPage />}
+          />
+          <Route
+            path={'create-agentkit-version'}
+            element={<DeploymentCreateAgentKitVersionAssistantPage />}
+          />
+
+          {/* Configure pages */}
+          <Route
             path={'edit-assistant/'}
             element={<DeploymentEditAssistantPage />}
           />
-
           <Route
-            key={'/deployment/analysis'}
             path={'configure-analysis/'}
             element={<DeploymentConfigureAssistantAnalysisPage />}
           />
-
           <Route
-            key={'/deployment/analysis'}
             path={'configure-analysis/create'}
             element={<DeploymentCreateAssistantAnalysisPage />}
           />
-
           <Route
-            key={'/deployment/analysis'}
             path={'configure-analysis/:analysisId'}
             element={<DeploymentUpdateAssistantAnalysisPage />}
           />
-
           <Route
             path={'configure-tool'}
             element={<DeploymentConfigureAssistantToolPage />}
@@ -165,62 +163,50 @@ export function DeploymentRoute() {
             path={'configure-tool/:assistantToolId'}
             element={<DeploymentUpdateAssistantToolPage />}
           />
-
           <Route
-            key={'/deployment/webhook'}
             path={'configure-webhook/'}
             element={<DeploymentConfigureAssistantWebhookPage />}
           />
           <Route
-            key={'/deployment/webhook'}
             path={'configure-webhook/create'}
             element={<DeploymentCreateAssistantWebhookPage />}
           />
           <Route
-            key={'/deployment/webhook'}
             path={'configure-webhook/:webhookId'}
             element={<DeploymentUpdateAssistantWebhookPage />}
           />
-
           <Route
-            key={'/deployment/assistant/deployment/:assistantId'}
+            path={'configure-telemetry/'}
+            element={<DeploymentConfigureAssistantTelemetryPage />}
+          />
+          <Route
+            path={'configure-telemetry/create'}
+            element={<DeploymentCreateAssistantTelemetryPage />}
+          />
+          <Route
+            path={'configure-telemetry/:telemetryId'}
+            element={<DeploymentUpdateAssistantTelemetryPage />}
+          />
+          <Route
             path={'deployment/'}
             element={<DeploymentConfigureAssistantDeploymentPage />}
           />
-
           <Route
-            key={'/deployment/assistant/deployment/web/:assistantId'}
             path={'deployment/web/'}
             element={<DeploymentConfigureAssistantWebDeploymentPage />}
           />
-
           <Route
-            key={'/deployment/assistant/deployment/call/:assistantId'}
             path={'deployment/call/'}
             element={<DeploymentConfigureAssistantCallDeploymentPage />}
           />
           <Route
-            key={'/deployment/assistant/deployment/api/:assistantId'}
             path={'deployment/api/'}
             element={<DeploymentConfigureAssistantApiDeploymentPage />}
           />
           <Route
-            key={'/deployment/assistant/deployment/debugger/:assistantId'}
             path={'deployment/debugger/'}
             element={<DeploymentConfigureAssistantDebuggerDeploymentPage />}
           />
-        </Route>
-
-        <Route
-          path={'assistant/:assistantId'}
-          element={
-            <AssistantViewLayout>
-              <Outlet />
-            </AssistantViewLayout>
-          }
-        >
-          <Route index element={<Navigate to="overview" replace />} />
-          <Route path={':tab'} element={<DeploymentViewAssistantPage />} />
         </Route>
         <Route
           key={'/deployment/assistant/create-assistant'}

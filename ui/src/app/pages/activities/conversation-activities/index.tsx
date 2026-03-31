@@ -1,60 +1,65 @@
 import { FC, useEffect, useState } from 'react';
-import { ScrollableResizableTable } from '@/app/components/data-table';
 import { useCredential } from '@/hooks/use-credential';
 import { useRapidaStore } from '@/hooks/use-rapida-store';
 import toast from 'react-hot-toast/headless';
-import { BluredWrapper } from '@/app/components/wrapper/blured-wrapper';
-import { SearchIconInput } from '@/app/components/form/input/IconInput';
-import { TablePagination } from '@/app/components/base/tables/table-pagination';
 import { AssistantConversationMessage, Criteria } from '@rapidaai/react';
-import { SectionLoader } from '@/app/components/loader/section-loader';
-import { YellowNoticeBlock } from '@/app/components/container/message/notice-block';
-import { IButton, ILinkBorderButton } from '@/app/components/form/button';
-import { IconActionButton } from '@/app/components/form/button/icon-action-button';
-import {
-  Download,
-  ExternalLink,
-  Eye,
-  ListFilterPlus,
-  RotateCw,
-  Telescope,
-} from 'lucide-react';
-import TooltipPlus from '@/app/components/base/tooltip-plus';
-import { AssistantTraceFilterDialog } from '@/app/components/base/modal/assistant-trace-filter-modal';
-import { useBoolean } from 'ahooks';
 import {
   formatNanoToReadableMilli,
   toDate,
+  toDateString,
   toHumanReadableDateTime,
 } from '@/utils/date';
+import { DateFilter } from '@/app/components/carbon/date-filter';
 import {
   getMetricValueOrDefault,
   getTimeTakenMetric,
   getTotalTokenMetric,
 } from '@/utils/metadata';
-import { Spinner } from '@/app/components/loader/spinner';
-import { PaginationButtonBlock } from '@/app/components/blocks/pagination-button-block';
 import { useConversationLogPageStore } from '@/hooks/use-conversation-log-page-store';
 import { Helmet } from '@/app/components/helmet';
 import { PageHeaderBlock } from '@/app/components/blocks/page-header-block';
 import { PageTitleWithCount } from '@/app/components/blocks/page-title-with-count';
-import { ActionCell } from '@/app/components/base/tables/action-cell';
 import { ConversationTelemetryDialog } from '@/app/components/base/modal/conversation-telemetry-modal';
 import { CONFIG } from '@/configs';
-import { TableCell } from '@/app/components/base/tables/table-cell';
-import { LinkCell } from '@/app/components/base/tables/link-cell';
-import { TableRow } from '@/app/components/base/tables/table-row';
-import { StatusIndicator } from '@/app/components/indicators/status';
+import { CarbonStatusIndicator } from '@/app/components/carbon/status-indicator';
 import SourceIndicator from '@/app/components/indicators/source';
 import { ConversationLogDialog } from '@/app/components/base/modal/conversation-log-modal';
+import { useGlobalNavigation } from '@/hooks/use-global-navigator';
+
+import {
+  Table,
+  TableHead,
+  TableRow,
+  TableHeader,
+  TableBody,
+  TableCell,
+  TableToolbar,
+  TableToolbarContent,
+  TableToolbarSearch,
+  Loading,
+  Tag,
+} from '@carbon/react';
+import { TableLink } from '@/app/components/carbon/table-link';
+import { Pagination } from '@/app/components/carbon/pagination';
+import { IconOnlyButton } from '@/app/components/carbon/button';
+import {
+  Download,
+  Renew,
+  View,
+  Launch,
+  DataCheck,
+  Bot,
+  User as UserIcon,
+  Chat,
+} from '@carbon/icons-react';
+import { EmptyState } from '@/app/components/carbon/empty-state';
 
 export const ListingPage: FC<{}> = () => {
   const [userId, token, projectId] = useCredential();
   const rapidaContext = useRapidaStore();
   const [downloading, setDownloading] = useState(false);
   const conversationLogAction = useConversationLogPageStore();
-  const [isFilterOpen, { setTrue: setFilterOpen, setFalse: setFilterClose }] =
-    useBoolean(false);
+  const navigation = useGlobalNavigation();
 
   const [currentActivity, setCurrentActivity] =
     useState<AssistantConversationMessage | null>(null);
@@ -64,87 +69,54 @@ export const ListingPage: FC<{}> = () => {
   const [isTelemetryDialogOpen, setTelemetryDialogOpen] = useState(false);
 
   const handleTraceClick = (trace: AssistantConversationMessage) => {
+    const stripPrefix = (id?: string): string =>
+      id?.replace(/^(user-|assistant-)/, '') || '';
+
     const convCtr = new Criteria();
     convCtr.setKey('conversationId');
     convCtr.setLogic('match');
     convCtr.setValue(trace.getAssistantconversationid());
     const msgCtr = new Criteria();
-    msgCtr.setKey('messageId');
+    msgCtr.setKey('contextId');
     msgCtr.setLogic('match');
-    msgCtr.setValue(trace.getMessageid());
+    msgCtr.setValue(stripPrefix(trace.getMessageid()));
     setCriterias([convCtr, msgCtr]);
     setTelemetryAssistantId(trace.getAssistantid());
     setTelemetryDialogOpen(true);
   };
 
-  const [filters, setFilters] = useState<{
-    search?: string;
-    dateFrom?: string;
-    dateTo?: string;
-    source?: string;
-    sessionId?: string;
-    id?: string;
-    status?: string;
-  }>({});
+  const [searchValue, setSearchValue] = useState('');
 
-  const applyFilter = (newFilter: {
-    search?: string;
-    dateFrom?: string;
-    dateTo?: string;
-    source?: string;
-    sessionId?: string;
-    id?: string;
-    status?: string;
-  }) => {
-    setFilters(newFilter);
+  const onDateSelect = (to: Date, from: Date) => {
+    conversationLogAction.setCriterias([
+      { k: 'assistant_conversation_messages.created_date', v: toDateString(from), logic: '>=' },
+      { k: 'assistant_conversation_messages.created_date', v: toDateString(to), logic: '<=' },
+    ]);
+  };
+
+  const applySearch = (value: string) => {
+    setSearchValue(value);
+    if (value === '') {
+      conversationLogAction.setCriterias([]);
+      return;
+    }
     const criterias: { k: string; v: string; logic: string }[] = [];
-    if (newFilter.dateFrom) {
-      criterias.push({
-        k: 'assistant_conversation_messages.created_date',
-        v: newFilter.dateFrom,
-        logic: '>=',
-      });
+    const filterRegex = /(id|session):(\S+)/g;
+    let match;
+    while ((match = filterRegex.exec(value)) !== null) {
+      const [, filterType, filterValue] = match;
+      switch (filterType) {
+        case 'id':
+          criterias.push({ k: 'assistant_conversation_messages.id', v: filterValue, logic: '=' });
+          break;
+        case 'session':
+          criterias.push({ k: 'assistant_conversation_messages.assistant_conversation_id', v: filterValue, logic: '=' });
+          break;
+      }
     }
-
-    if (newFilter.dateTo) {
-      criterias.push({
-        k: 'assistant_conversation_messages.created_date',
-        v: newFilter.dateTo,
-        logic: '<=',
-      });
+    if (criterias.length > 0) {
+      conversationLogAction.setCriterias(criterias);
     }
-
-    if (newFilter.source) {
-      criterias.push({
-        k: 'assistant_conversation_messages.source',
-        v: newFilter.source,
-        logic: '=',
-      });
-    }
-
-    if (newFilter.sessionId) {
-      criterias.push({
-        k: 'assistant_conversation_messages.assistant_conversation_id',
-        v: newFilter.sessionId,
-        logic: '=',
-      });
-    }
-    if (newFilter.id) {
-      criterias.push({
-        k: 'assistant_conversation_messages.id',
-        v: newFilter.id,
-        logic: '=',
-      });
-    }
-
-    if (newFilter.status) {
-      criterias.push({
-        k: 'assistant_conversation_messages.status',
-        v: newFilter.status,
-        logic: '=',
-      });
-    }
-    conversationLogAction.setCriterias(criterias);
   };
 
   useEffect(() => {
@@ -176,26 +148,17 @@ export const ListingPage: FC<{}> = () => {
     JSON.stringify(conversationLogAction.criteria),
   ]);
 
-  if (rapidaContext.loading) {
-    return (
-      <div className="h-full flex flex-col items-center justify-center">
-        <SectionLoader />
-      </div>
-    );
-  }
-
   const csvEscape = (str: string): string => {
     return `"${str.replace(/"/g, '""')}"`;
   };
+
   const onDownloadAllTraces = () => {
     setDownloading(true);
     const csvContent = [
-      // Header row using column names
       conversationLogAction.columns
         .filter(column => column.visible)
         .map(column => column.name)
         .join(','),
-      // Data rows
       ...conversationLogAction.assistantMessages.map(
         (row: AssistantConversationMessage) =>
           conversationLogAction.columns
@@ -244,6 +207,8 @@ export const ListingPage: FC<{}> = () => {
     URL.revokeObjectURL(url);
   };
 
+  const visibleColumns = conversationLogAction.columns.filter(c => c.visible);
+
   return (
     <>
       {isTelemetryDialogOpen && (
@@ -263,12 +228,6 @@ export const ListingPage: FC<{}> = () => {
         />
       )}
       <Helmet title="Conversation Logs" />
-      <AssistantTraceFilterDialog
-        modalOpen={isFilterOpen}
-        setModalOpen={setFilterClose}
-        filters={filters}
-        onFiltersChange={applyFilter}
-      />
       <PageHeaderBlock>
         <PageTitleWithCount
           count={conversationLogAction.assistantMessages.length}
@@ -277,234 +236,223 @@ export const ListingPage: FC<{}> = () => {
           Conversation Logs
         </PageTitleWithCount>
       </PageHeaderBlock>
-      <BluredWrapper className="sticky top-0 z-11">
-        <SearchIconInput
-          className="bg-light-background flex-1"
-          value={filters.search}
-          onChange={value => {
-            const newValue = value.target.value;
-            const newFilters = { ...filters };
-            const filterRegex = /(id|session):(\S+)/g;
-            let match;
-            let hasMatch = false;
-            newFilters.id = '';
-            newFilters.sessionId = '';
 
-            if (newValue === '') {
-              // Reset all filters when input is cleared
-              setFilters({ search: '', id: '', sessionId: '' });
-              applyFilter({ search: '', id: '', sessionId: '' });
-              return;
-            }
+      {/* ── Carbon Toolbar ── */}
+      <TableToolbar>
+        <TableToolbarContent>
+          <TableToolbarSearch
+            placeholder="Search by id:trace-id, session:session-id"
+            value={searchValue}
+            onChange={(e: any) => applySearch(e.target?.value || '')}
+          />
+          <DateFilter
+            onApply={(from, to) => onDateSelect(to, from)}
+            onReset={() => conversationLogAction.setCriterias([])}
+          />
+          <IconOnlyButton
+            kind="ghost"
+            size="lg"
+            renderIcon={Download}
+            iconDescription="Export as CSV"
+            isLoading={downloading}
+            onClick={() => onDownloadAllTraces()}
+          />
+          <IconOnlyButton
+            kind="ghost"
+            size="lg"
+            renderIcon={Renew}
+            iconDescription="Refresh"
+            onClick={() => get()}
+          />
+        </TableToolbarContent>
+      </TableToolbar>
 
-            while ((match = filterRegex.exec(newValue)) !== null) {
-              const [, filterType, filterValue] = match;
-              hasMatch = true;
-              switch (filterType) {
-                case 'id':
-                  newFilters.id = filterValue;
-                  break;
-                case 'session':
-                  newFilters.sessionId = filterValue;
-                  break;
-              }
-            }
-            newFilters.search = newValue;
-            setFilters(newFilters);
-            if (hasMatch) {
-              applyFilter(newFilters);
+      {/* ── Table ── */}
+      {rapidaContext.loading ? (
+        <div className="flex items-center justify-center py-16">
+          <Loading withOverlay={false} small />
+        </div>
+      ) : conversationLogAction.assistantMessages.length > 0 ? (
+        <div className="overflow-auto flex-1">
+          <Table>
+            <TableHead>
+              <TableRow>
+                {visibleColumns.map(col => (
+                  <TableHeader key={col.key}>{col.name}</TableHeader>
+                ))}
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {conversationLogAction.assistantMessages.map((row, idx) => (
+                <TableRow key={idx}>
+                  {conversationLogAction.visibleColumn('id') && (
+                    <TableCell className="!font-mono !text-xs">
+                      {row.getMessageid().split('-').pop()}
+                    </TableCell>
+                  )}
+                  {conversationLogAction.visibleColumn('version') && (
+                    <TableCell className="!text-xs">
+                      vrsn_{row.getAssistantprovidermodelid()}
+                    </TableCell>
+                  )}
+                  {conversationLogAction.visibleColumn(
+                    'assistant_conversation_id',
+                  ) && (
+                    <TableCell>
+                      <TableLink href={`/deployment/assistant/${row.getAssistantid()}/sessions/${row.getAssistantconversationid()}`}>
+                        {row.getAssistantconversationid()}
+                      </TableLink>
+                    </TableCell>
+                  )}
+                  {conversationLogAction.visibleColumn('assistant_id') && (
+                    <TableCell>
+                      <TableLink href={`/deployment/assistant/${row.getAssistantid()}`}>
+                        {row.getAssistantid()}
+                      </TableLink>
+                    </TableCell>
+                  )}
+                  {conversationLogAction.visibleColumn('source') && (
+                    <TableCell>
+                      <SourceIndicator source={row.getSource()} />
+                    </TableCell>
+                  )}
+                  {conversationLogAction.visibleColumn('role') && (
+                    <TableCell>
+                      {row.getRole() ? (
+                        <Tag size="md" type={row.getRole().toLowerCase() === 'assistant' ? 'teal' : 'cool-gray'}>
+                          <span className="inline-flex items-center gap-1.5 leading-none">
+                            {row.getRole().toLowerCase() === 'assistant' ? <Bot size={16} /> : <UserIcon size={16} />}
+                            {row.getRole().toLowerCase() === 'assistant' ? 'Assistant' : 'User'}
+                          </span>
+                        </Tag>
+                      ) : (
+                        <span className="text-gray-400 text-xs">N/A</span>
+                      )}
+                    </TableCell>
+                  )}
+                  {conversationLogAction.visibleColumn('message') && (
+                    <TableCell className="max-w-[300px]">
+                      {row.getBody() ? (
+                        <p className="line-clamp-2 text-sm">{row.getBody()}</p>
+                      ) : (
+                        <span className="text-gray-400 text-xs">N/A</span>
+                      )}
+                    </TableCell>
+                  )}
+                  {conversationLogAction.visibleColumn('created_date') && (
+                    <TableCell className="!font-mono !text-xs whitespace-nowrap">
+                      {row.getCreateddate() &&
+                        toHumanReadableDateTime(row.getCreateddate()!)}
+                    </TableCell>
+                  )}
+                  {conversationLogAction.visibleColumn('action') && (
+                    <TableCell>
+                      <div className="flex items-center gap-0">
+                        <IconOnlyButton
+                          kind="ghost"
+                          size="md"
+                          renderIcon={View}
+                          iconDescription="View detail"
+                          onClick={() => {
+                            setCurrentActivity(row);
+                            setShowLogModal(true);
+                          }}
+                        />
+                        {CONFIG.workspace.features?.telemetry !== false && (
+                          <IconOnlyButton
+                            kind="ghost"
+                            size="md"
+                            renderIcon={DataCheck}
+                            iconDescription="View telemetry"
+                            onClick={() => handleTraceClick(row)}
+                          />
+                        )}
+                        <IconOnlyButton
+                          kind="ghost"
+                          size="md"
+                          renderIcon={Launch}
+                          iconDescription="View conversation"
+                          onClick={() => {
+                            navigation.goToAssistantSession(
+                              row.getAssistantid(),
+                              row.getAssistantconversationid(),
+                            );
+                          }}
+                        />
+                      </div>
+                    </TableCell>
+                  )}
+                  {conversationLogAction.visibleColumn('status') && (
+                    <TableCell>
+                      <CarbonStatusIndicator
+                        state={
+                          row.getRole()?.toLowerCase() === 'assistant'
+                            ? getMetricValueOrDefault(row.getMetricsList(), 'assistant_turn', row.getStatus())
+                            : row.getRole()?.toLowerCase() === 'user'
+                              ? getMetricValueOrDefault(row.getMetricsList(), 'user_turn', row.getStatus())
+                              : row.getStatus()
+                        }
+                      />
+                    </TableCell>
+                  )}
+                  {conversationLogAction.visibleColumn('time_taken') && (
+                    <TableCell className="!font-mono !text-xs">
+                      {formatNanoToReadableMilli(
+                        getTimeTakenMetric(row.getMetricsList()),
+                      )}
+                    </TableCell>
+                  )}
+                  {conversationLogAction.visibleColumn('total_token') && (
+                    <TableCell className="!text-xs tabular-nums">
+                      {getTotalTokenMetric(row.getMetricsList())}
+                    </TableCell>
+                  )}
+                  {conversationLogAction.visibleColumn('user_feedback') && (
+                    <TableCell className="!text-xs">
+                      {getMetricValueOrDefault(
+                        row.getMetricsList(),
+                        'custom.feedback',
+                        '__',
+                      )}
+                    </TableCell>
+                  )}
+                  {conversationLogAction.visibleColumn('user_text_feedback') && (
+                    <TableCell className="!text-xs">
+                      {getMetricValueOrDefault(
+                        row.getMetricsList(),
+                        'custom.feedback_text',
+                        '--',
+                      )}
+                    </TableCell>
+                  )}
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+      ) : (
+        <EmptyState
+          icon={Chat}
+          title="No conversation logs found"
+          subtitle="Messages exchanged between users and your assistants will appear here as conversations take place."
+        />
+      )}
+
+      {/* ── Pagination ── */}
+      {conversationLogAction.assistantMessages.length > 0 && (
+        <Pagination
+          totalItems={conversationLogAction.totalCount}
+          page={conversationLogAction.page}
+          pageSize={conversationLogAction.pageSize}
+          pageSizes={[10, 20, 25, 50, 100]}
+          onChange={({ page: p, pageSize: ps }) => {
+            if (ps !== conversationLogAction.pageSize) {
+              conversationLogAction.setPageSize(ps);
+            } else {
+              conversationLogAction.setPage(p);
             }
           }}
-          placeholder="Search by id:trace-id, session:session-id"
         />
-        <PaginationButtonBlock>
-          <TablePagination
-            columns={conversationLogAction.columns}
-            currentPage={conversationLogAction.page}
-            onChangeCurrentPage={conversationLogAction.setPage}
-            totalItem={conversationLogAction.totalCount}
-            pageSize={conversationLogAction.pageSize}
-            onChangePageSize={conversationLogAction.setPageSize}
-            onChangeColumns={conversationLogAction.setColumns}
-          />
-          <IButton
-            type="button"
-            onClick={() => {
-              setFilterOpen();
-            }}
-          >
-            <TooltipPlus
-              className="bg-white dark:bg-gray-950 border-[0.5px] rounded-[2px] px-0 py-0"
-              popupContent={
-                <div className="px-3 py-2 text-sm text-gray-600 dark:text-gray-500">
-                  Filter
-                </div>
-              }
-            >
-              <ListFilterPlus className="w-4 h-4" strokeWidth={1.5} />
-            </TooltipPlus>
-          </IButton>
-          <IButton
-            type="button"
-            onClick={() => {
-              onDownloadAllTraces();
-            }}
-          >
-            <TooltipPlus
-              className="bg-white dark:bg-gray-950 border-[0.5px] rounded-[2px] px-0 py-0"
-              popupContent={
-                <div className="px-3 py-2 text-sm text-gray-600 dark:text-gray-500">
-                  Export as report
-                </div>
-              }
-            >
-              {downloading ? (
-                <Spinner size="sm"></Spinner>
-              ) : (
-                <Download className="w-4 h-4" strokeWidth={1.5} />
-              )}
-            </TooltipPlus>
-          </IButton>
-          <IButton
-            onClick={() => {
-              get();
-            }}
-          >
-            <RotateCw strokeWidth={1.5} className="h-4 w-4" />
-          </IButton>
-        </PaginationButtonBlock>
-      </BluredWrapper>
-      {conversationLogAction.assistantMessages.length > 0 ? (
-        <ScrollableResizableTable
-          isExpandable={false}
-          isActionable={false}
-          clms={conversationLogAction.columns.filter(x => x.visible)}
-        >
-          {conversationLogAction.assistantMessages.map((row, idx) => (
-            <TableRow key={idx} data-id={row.getId()}>
-              {conversationLogAction.visibleColumn('id') && (
-                <TableCell>{row.getMessageid().split('-')[0]}</TableCell>
-              )}
-              {conversationLogAction.visibleColumn('version') && (
-                <TableCell>vrsn_{row.getAssistantprovidermodelid()}</TableCell>
-              )}
-              {conversationLogAction.visibleColumn(
-                'assistant_conversation_id',
-              ) && (
-                <LinkCell to={`/deployment/assistant/${row.getAssistantid()}/sessions/${row.getAssistantconversationid()}`}>
-                  {row.getAssistantconversationid()}
-                </LinkCell>
-              )}
-              {conversationLogAction.visibleColumn('assistant_id') && (
-                <LinkCell to={`/deployment/assistant/${row.getAssistantid()}`}>
-                  {row.getAssistantid()}
-                </LinkCell>
-              )}
-              {conversationLogAction.visibleColumn('source') && (
-                <TableCell>
-                  <SourceIndicator source={row.getSource()} />
-                </TableCell>
-              )}
-
-              {conversationLogAction.visibleColumn('role') && (
-                <TableCell>
-                  {row.getRole() ? (
-                    <p className="line-clamp-2 uppercase">{row.getRole()}</p>
-                  ) : (
-                    <p className="line-clamp-2 opacity-65">Not available</p>
-                  )}
-                </TableCell>
-              )}
-              {conversationLogAction.visibleColumn('message') && (
-                <TableCell>
-                  {row.getBody() ? (
-                    <p className="line-clamp-2">{row.getBody()}</p>
-                  ) : (
-                    <p className="line-clamp-2 opacity-65">Not available</p>
-                  )}
-                </TableCell>
-              )}
-              {conversationLogAction.visibleColumn('created_date') && (
-                <TableCell>
-                  {row.getCreateddate() &&
-                    toHumanReadableDateTime(row.getCreateddate()!)}
-                </TableCell>
-              )}
-              <ActionCell>
-                <IconActionButton
-                  tooltip="View detail"
-                  icon={<Eye strokeWidth={1.5} className="h-4 w-4" />}
-                  onClick={() => {
-                    setCurrentActivity(row);
-                    setShowLogModal(true);
-                  }}
-                />
-                {CONFIG.workspace.features?.telemetry !== false && (
-                  <IconActionButton
-                    tooltip="View telemetry"
-                    icon={<Telescope strokeWidth={1.5} className="h-4 w-4" />}
-                    onClick={() => handleTraceClick(row)}
-                  />
-                )}
-                <ILinkBorderButton
-                  className="rounded-none border-0"
-                  href={`/deployment/assistant/${row.getAssistantid()}/sessions/${row.getAssistantconversationid()}`}
-                >
-                  <TooltipPlus
-                    className="bg-white dark:bg-gray-950 border-[0.5px] rounded-[2px] px-0 py-0"
-                    popupContent={
-                      <div className="px-3 py-2 text-sm text-gray-600 dark:text-gray-500">
-                        View conversation
-                      </div>
-                    }
-                  >
-                    <ExternalLink strokeWidth={1.5} className="h-4 w-4" />
-                  </TooltipPlus>
-                </ILinkBorderButton>
-              </ActionCell>
-              {conversationLogAction.visibleColumn('status') && (
-                <TableCell>
-                  <StatusIndicator state={row.getStatus()} />
-                </TableCell>
-              )}
-              {conversationLogAction.visibleColumn('time_taken') && (
-                <TableCell>
-                  {formatNanoToReadableMilli(
-                    getTimeTakenMetric(row.getMetricsList()),
-                  )}
-                </TableCell>
-              )}
-              {conversationLogAction.visibleColumn('total_token') && (
-                <TableCell>
-                  {getTotalTokenMetric(row.getMetricsList())}
-                </TableCell>
-              )}
-              {conversationLogAction.visibleColumn('user_feedback') && (
-                <TableCell>
-                  {getMetricValueOrDefault(
-                    row.getMetricsList(),
-                    'custom.feedback',
-                    '__',
-                  )}
-                </TableCell>
-              )}
-              {conversationLogAction.visibleColumn('user_text_feedback') && (
-                <TableCell>
-                  {getMetricValueOrDefault(
-                    row.getMetricsList(),
-                    'custom.feedback_text',
-                    '--',
-                  )}
-                </TableCell>
-              )}
-            </TableRow>
-          ))}
-        </ScrollableResizableTable>
-      ) : (
-        <YellowNoticeBlock>
-          <span className="font-semibold">No activities found</span>, Any
-          activities performed by the assistant will be listed here.
-        </YellowNoticeBlock>
       )}
     </>
   );

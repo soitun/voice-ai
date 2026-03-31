@@ -1,8 +1,5 @@
 import { Metadata } from '@rapidaai/react';
-import { FormLabel } from '@/app/components/form-label';
-import { FieldSet } from '@/app/components/form/fieldset';
-import { Input } from '@/app/components/form/input';
-import { InputHelper } from '@/app/components/input-helper';
+import { TextInput } from '@/app/components/carbon/form';
 
 export const ValidateAsteriskTelephonyOptions = (
   options: Metadata[],
@@ -10,36 +7,13 @@ export const ValidateAsteriskTelephonyOptions = (
   const credentialID = options.find(
     opt => opt.getKey() === 'rapida.credential_id',
   );
-  if (
-    !credentialID ||
-    !credentialID.getValue() ||
-    credentialID.getValue().length === 0
-  ) {
-    return false;
-  }
-
-  // Validate context
+  if (!credentialID?.getValue()) return false;
   const context = options.find(opt => opt.getKey() === 'context');
-  if (!context || !context.getValue() || context.getValue().length === 0) {
-    return false;
-  }
-
-  // Validate extension
+  if (!context?.getValue()) return false;
   const extension = options.find(opt => opt.getKey() === 'extension');
-  if (
-    !extension ||
-    !extension.getValue() ||
-    extension.getValue().length === 0
-  ) {
-    return false;
-  }
-
-  // Validate caller ID
+  if (!extension?.getValue()) return false;
   const callerId = options.find(opt => opt.getKey() === 'phone');
-  if (!callerId || !callerId.getValue() || callerId.getValue().length === 0) {
-    return false;
-  }
-
+  if (!callerId?.getValue()) return false;
   return true;
 };
 
@@ -66,44 +40,36 @@ export const ConfigureAsteriskTelephony: React.FC<{
 
   return (
     <>
-      <FieldSet className="col-span-1">
-        <FormLabel>Context</FormLabel>
-        <Input
-          className="bg-light-background"
+      <div className="col-span-1">
+        <TextInput
+          id="asterisk-context"
+          labelText="Context"
           value={getParamValue('context')}
-          onChange={v => {
-            updateParameter('context', v.target.value);
-          }}
+          onChange={e => updateParameter('context', e.target.value)}
           placeholder="e.g., internal"
+          helperText="Dialplan context for routing calls."
         />
-        <InputHelper>Dialplan context for routing calls.</InputHelper>
-      </FieldSet>
-
-      <FieldSet className="col-span-1">
-        <FormLabel>Extension</FormLabel>
-        <Input
-          className="bg-light-background"
+      </div>
+      <div className="col-span-1">
+        <TextInput
+          id="asterisk-extension"
+          labelText="Extension"
           value={getParamValue('extension')}
-          onChange={v => {
-            updateParameter('extension', v.target.value);
-          }}
+          onChange={e => updateParameter('extension', e.target.value)}
           placeholder="e.g., 1002"
+          helperText="Extension number for this assistant."
         />
-        <InputHelper>Extension number for this assistant.</InputHelper>
-      </FieldSet>
-
-      <FieldSet className="col-span-1">
-        <FormLabel>Caller ID</FormLabel>
-        <Input
-          className="bg-light-background"
+      </div>
+      <div className="col-span-1">
+        <TextInput
+          id="asterisk-caller-id"
+          labelText="Caller ID"
           value={getParamValue('phone')}
-          onChange={v => {
-            updateParameter('phone', v.target.value);
-          }}
+          onChange={e => updateParameter('phone', e.target.value)}
           placeholder="e.g., +15559876543"
+          helperText="Caller ID for outbound calls."
         />
-        <InputHelper>Caller ID for outbound calls.</InputHelper>
-      </FieldSet>
+      </div>
     </>
   );
 };

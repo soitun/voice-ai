@@ -7,12 +7,12 @@ package observe_exporters
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/rapidaai/api/assistant-api/internal/observe"
 	"github.com/rapidaai/config"
 	"github.com/rapidaai/pkg/commons"
 	"github.com/rapidaai/pkg/connectors"
+	"github.com/rapidaai/pkg/telemetry/providers"
 	"github.com/rapidaai/pkg/utils"
 )
 
@@ -26,51 +26,21 @@ func GetExporter(
 	provider string,
 	opts utils.Option,
 ) (observe.EventExporter, observe.MetricExporter, error) {
-	switch observe.ExporterType(provider) {
-	case observe.OTLP_HTTP, observe.OTLP_GRPC:
-		otlpCfg := OTLPConfigFromOptions(opts, provider)
-		if otlpCfg.Endpoint == "" {
-			return nil, nil, nil
-		}
-		exp, err := NewOTLPExporter(ctx, otlpCfg)
-		if err != nil {
-			return nil, nil, err
-		}
-		return exp, exp, nil
-	case observe.XRAY:
-		exp, err := NewXRayExporter(ctx, opts)
-		if err != nil {
-			return nil, nil, err
-		}
-		return exp, exp, nil
-	case observe.GOOGLE_TRACE:
-		exp, err := NewGoogleTraceExporter(ctx, opts)
-		if err != nil {
-			return nil, nil, err
-		}
-		return exp, exp, nil
-	case observe.AZURE_MONITOR:
-		exp, err := NewAzureMonitorExporter(ctx, opts)
-		if err != nil {
-			return nil, nil, err
-		}
-		return exp, exp, nil
-	case observe.DATADOG:
-		exp, err := NewDatadogExporter(ctx, opts)
-		if err != nil {
-			return nil, nil, err
-		}
-		return exp, exp, nil
-	case observe.LOGGING:
-		exp := NewLoggingExporter(logger)
-		return exp, exp, nil
-	case observe.OPENSEARCH:
-		if opensearch == nil {
-			return nil, nil, fmt.Errorf("observe: opensearch connector is not available")
-		}
-		exp := NewOpenSearchExporter(logger, cfg, opensearch)
-		return exp, exp, nil
-	default:
-		return nil, nil, fmt.Errorf("observe: unknown exporter type %q", provider)
+	exp, err := providers.NewExporterFromOptions(
+		ctx,
+		provider,
+		map[string]interface{}(opts),
+		providers.FactoryDependencies{
+			Logger:     logger,
+			AppConfig:  cfg,
+			OpenSearch: opensearch,
+		},
+	)
+	if err != nil {
+		return nil, nil, err
 	}
+	if exp == nil {
+		return nil, nil, nil
+	}
+	return exp, exp, nil
 }

@@ -1,7 +1,10 @@
 import { useState } from 'react';
 import { UpdateProjectDialog } from '@/app/components/base/modal/update-project-modal';
 import { Project } from '@rapidaai/react';
-import { CardOptionMenu } from '@/app/components/menu';
+import {
+  OverflowMenu,
+  OverflowMenuItem,
+} from '@/app/components/carbon/overflow-menu';
 
 export const ProjectOption = (props: {
   project: Project.AsObject;
@@ -10,6 +13,7 @@ export const ProjectOption = (props: {
 }) => {
   const [projectUpdateModalOpen, setProjectUpdateModalOpen] =
     useState<boolean>(false);
+  const [menuOpen, setMenuOpen] = useState(false);
 
   return (
     <>
@@ -18,17 +22,32 @@ export const ProjectOption = (props: {
         modalOpen={projectUpdateModalOpen}
         setModalOpen={setProjectUpdateModalOpen}
         afterUpdateProject={props.afterUpdateProject}
-      ></UpdateProjectDialog>
-      <CardOptionMenu
-        options={[
-          {
-            option: 'Update project details',
-            onActionClick: () => {
-              setProjectUpdateModalOpen(!projectUpdateModalOpen);
-            },
-          },
-        ]}
       />
+      <OverflowMenu
+        size="md"
+        flipped
+        iconDescription="Project actions"
+        open={menuOpen}
+        onOpen={() => setMenuOpen(true)}
+        onClose={() => setMenuOpen(false)}
+      >
+        <OverflowMenuItem
+          itemText="Update project details"
+          onClick={() => {
+            setMenuOpen(false);
+            setProjectUpdateModalOpen(true);
+          }}
+        />
+        <OverflowMenuItem
+          itemText="Delete project"
+          isDelete
+          hasDivider
+          onClick={() => {
+            setMenuOpen(false);
+            props.onDelete();
+          }}
+        />
+      </OverflowMenu>
     </>
   );
 };

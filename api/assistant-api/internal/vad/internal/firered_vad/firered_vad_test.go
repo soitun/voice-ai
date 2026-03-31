@@ -45,26 +45,26 @@ func newFireRedOrSkip(t *testing.T, threshold float64, cb func(ctx context.Conte
 	return fr
 }
 
-func generateSilence(samples int) internal_type.UserAudioPacket {
-	return internal_type.UserAudioPacket{Audio: make([]byte, samples*2)}
+func generateSilence(samples int) internal_type.UserAudioReceivedPacket {
+	return internal_type.UserAudioReceivedPacket{Audio: make([]byte, samples*2)}
 }
 
-func generateSineWave(samples int, frequency, amplitude float64) internal_type.UserAudioPacket {
+func generateSineWave(samples int, frequency, amplitude float64) internal_type.UserAudioReceivedPacket {
 	data := make([]byte, samples*2)
 	for i := 0; i < samples; i++ {
 		sample := int16(amplitude * 32767 * math.Sin(2*math.Pi*float64(i)*frequency/16000))
 		binary.LittleEndian.PutUint16(data[i*2:i*2+2], uint16(sample))
 	}
-	return internal_type.UserAudioPacket{Audio: data}
+	return internal_type.UserAudioReceivedPacket{Audio: data}
 }
 
-func generateNoise(samples int) internal_type.UserAudioPacket {
+func generateNoise(samples int) internal_type.UserAudioReceivedPacket {
 	data := make([]byte, samples*2)
 	for i := 0; i < samples; i++ {
 		sample := int16((i*7919)%65536 - 32768)
 		binary.LittleEndian.PutUint16(data[i*2:i*2+2], uint16(sample))
 	}
-	return internal_type.UserAudioPacket{Audio: data}
+	return internal_type.UserAudioReceivedPacket{Audio: data}
 }
 
 // Core functionality tests
@@ -91,7 +91,7 @@ func TestFireRedVAD_Process_Silence_NoCallback(t *testing.T) {
 	detectionFired := false
 	callback := func(_ context.Context, pkts ...internal_type.Packet) error {
 		for _, p := range pkts {
-			if _, ok := p.(internal_type.InterruptionPacket); ok {
+			if _, ok := p.(internal_type.InterruptionDetectedPacket); ok {
 				detectionFired = true
 			}
 		}
@@ -106,10 +106,10 @@ func TestFireRedVAD_Process_Silence_NoCallback(t *testing.T) {
 }
 
 func TestFireRedVAD_Process_Speech_AllowsCallback(t *testing.T) {
-	var result internal_type.InterruptionPacket
+	var result internal_type.InterruptionDetectedPacket
 	callback := func(ctx context.Context, pkt ...internal_type.Packet) error {
 		for _, p := range pkt {
-			if interruption, ok := p.(internal_type.InterruptionPacket); ok {
+			if interruption, ok := p.(internal_type.InterruptionDetectedPacket); ok {
 				result = interruption
 			}
 		}
@@ -129,7 +129,7 @@ func TestFireRedVAD_Process_CorruptedData(t *testing.T) {
 	vad := newFireRedOrSkip(t, 0.5, callback)
 
 	corrupted := make([]byte, 999)
-	err := vad.Process(context.Background(), internal_type.UserAudioPacket{Audio: corrupted})
+	err := vad.Process(context.Background(), internal_type.UserAudioReceivedPacket{Audio: corrupted})
 	_ = err
 }
 
@@ -209,7 +209,7 @@ func TestFireRedVAD_Process_MaxAmplitude(t *testing.T) {
 		binary.LittleEndian.PutUint16(data[i*2:i*2+2], uint16(val))
 	}
 
-	err := vad.Process(context.Background(), internal_type.UserAudioPacket{Audio: data})
+	err := vad.Process(context.Background(), internal_type.UserAudioReceivedPacket{Audio: data})
 	require.NoError(t, err)
 }
 

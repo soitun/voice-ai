@@ -1,29 +1,39 @@
-import { FC, useEffect } from 'react';
+import React, { FC, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { useGlobalNavigation } from '@/hooks/use-global-navigator';
 import { toHumanReadableDateTime } from '@/utils/date';
-import { cn } from '@/utils';
-import { Plus, RotateCw } from 'lucide-react';
+import { Add, Renew } from '@carbon/icons-react';
 import { useCurrentCredential } from '@/hooks/use-credential';
 import { useRapidaStore } from '@/hooks';
 import { SectionLoader } from '@/app/components/loader/section-loader';
-import { BluredWrapper } from '@/app/components/wrapper/blured-wrapper';
-import { SearchIconInput } from '@/app/components/form/input/IconInput';
-import { TablePagination } from '@/app/components/base/tables/table-pagination';
-import { TableSection } from '@/app/components/sections/table-section';
-import { ScrollableResizableTable } from '@/app/components/data-table';
-import { TableRow } from '@/app/components/base/tables/table-row';
-import { TableCell } from '@/app/components/base/tables/table-cell';
-import { StatusIndicator } from '@/app/components/indicators/status';
-import { IButton } from '@/app/components/form/button';
 import toast from 'react-hot-toast/headless';
-import { CardOptionMenu } from '@/app/components/menu';
 import { ActionableEmptyMessage } from '@/app/components/container/message/actionable-empty-message';
 import { CreateAssistantAnalysis } from '@/app/pages/assistant/actions/configure-assistant-analysis/create-assistant-analysis';
 import { useAssistantAnalysisPageStore } from '@/app/pages/assistant/actions/store/use-analysis-page-store';
 import { UpdateAssistantAnalysis } from '@/app/pages/assistant/actions/configure-assistant-analysis/update-assistant-analysis';
-import { PaginationButtonBlock } from '@/app/components/blocks/pagination-button-block';
-import { LinkCell } from '@/app/components/base/tables/link-cell';
+import { CarbonStatusIndicator } from '@/app/components/carbon/status-indicator';
+import { PrimaryButton } from '@/app/components/carbon/button';
+import { Pagination } from '@/app/components/carbon/pagination';
+import {
+  OverflowMenu,
+  OverflowMenuItem,
+} from '@/app/components/carbon/overflow-menu';
+import {
+  Breadcrumb,
+  BreadcrumbItem,
+  Button,
+  Table,
+  TableHead,
+  TableRow,
+  TableHeader,
+  TableBody,
+  TableCell,
+  TableToolbar,
+  TableToolbarContent,
+  TableToolbarSearch,
+} from '@carbon/react';
+import { TableSection } from '@/app/components/sections/table-section';
+import { CustomLink } from '@/app/components/custom-link';
 
 export function ConfigureAssistantAnalysisPage() {
   const { assistantId } = useParams();
@@ -59,19 +69,12 @@ const ConfigureAssistantAnalysis: FC<{ assistantId: string }> = ({
   const get = () => {
     showLoader('block');
     axtion.getAssistantAnalysis(
-      assistantId,
-      projectId,
-      token,
-      authId,
-      e => {
-        toast.error(e);
-        hideLoader();
-      },
-      v => {
-        hideLoader();
-      },
+      assistantId, projectId, token, authId,
+      e => { toast.error(e); hideLoader(); },
+      () => { hideLoader(); },
     );
   };
+
   useEffect(() => {
     get();
   }, []);
@@ -79,20 +82,12 @@ const ConfigureAssistantAnalysis: FC<{ assistantId: string }> = ({
   const deleteAssistantAnalysis = (assistantId: string, analysisId: string) => {
     showLoader('block');
     axtion.deleteAssistantAnalysis(
-      assistantId,
-      analysisId,
-      projectId,
-      token,
-      authId,
-      e => {
-        toast.error(e);
-        hideLoader();
-      },
-      v => {
-        get();
-      },
+      assistantId, analysisId, projectId, token, authId,
+      e => { toast.error(e); hideLoader(); },
+      () => { get(); },
     );
   };
+
   if (loading) {
     return (
       <div className="h-full w-full flex flex-col items-center justify-center">
@@ -100,121 +95,126 @@ const ConfigureAssistantAnalysis: FC<{ assistantId: string }> = ({
       </div>
     );
   }
+
   return (
-    <div className="h-full flex flex-col flex-1 bg-white dark:bg-gray-900">
-      <BluredWrapper className="border-t-0 p-0">
-        <div className="flex space-x-2">
-          <SearchIconInput className="bg-light-background" />
+    <div className="h-full flex flex-col flex-1">
+      {/* Page header */}
+      <div className="px-4 pt-4 pb-6 border-b border-gray-200 dark:border-gray-800">
+        <div className="flex items-start justify-between">
+          <div>
+            <Breadcrumb noTrailingSlash className="mb-2">
+              <BreadcrumbItem href={`/deployment/assistant/${assistantId}/overview`}>
+                Assistant
+              </BreadcrumbItem>
+            </Breadcrumb>
+            <h1 className="text-2xl font-light tracking-tight">Analysis</h1>
+          </div>
         </div>
-        <PaginationButtonBlock>
-          <TablePagination
-            className="py-0"
-            columns={axtion.columns}
-            currentPage={axtion.page}
-            onChangeCurrentPage={axtion.setPage}
-            totalItem={axtion.totalCount}
-            pageSize={axtion.pageSize}
-            onChangePageSize={axtion.setPageSize}
-            onChangeColumns={axtion.setColumns}
+      </div>
+
+      {/* Toolbar */}
+      <TableToolbar>
+        <TableToolbarContent>
+          <TableToolbarSearch placeholder="Search analysis..." />
+          <Button
+            hasIconOnly
+            renderIcon={Renew}
+            iconDescription="Refresh"
+            kind="ghost"
+            onClick={get}
+            tooltipPosition="bottom"
           />
-          <IButton onClick={get}>
-            <RotateCw className="w-4 h-4" strokeWidth={1.5} />
-          </IButton>
-          <button
-            type="button"
+          <PrimaryButton
+            size="md"
+            renderIcon={Add}
             onClick={() => navigation.goToCreateAssistantAnalysis(assistantId)}
-            className="flex items-center gap-2 px-4 text-sm text-white bg-primary hover:bg-primary/90 transition-colors whitespace-nowrap"
           >
-            Create new analysis
-            <Plus className="w-4 h-4" strokeWidth={1.5} />
-          </button>
-        </PaginationButtonBlock>
-      </BluredWrapper>
+            Create analysis
+          </PrimaryButton>
+        </TableToolbarContent>
+      </TableToolbar>
+
+      {/* Content */}
       <TableSection>
         {axtion.analysises.length > 0 ? (
-          <ScrollableResizableTable
-            isActionable={false}
-            isOptionable={true}
-            clms={axtion.columns.filter(x => x.visible)}
-          >
-            {axtion.analysises.map((row, idx) => (
-              <TableRow key={idx} data-id={row.getId()}>
-                {axtion.visibleColumn('id') && (
-                  <TableCell className="">{row.getId()}</TableCell>
-                )}
-
-                {axtion.visibleColumn('name') && (
-                  <TableCell className="truncate text-blue-600 hover:underline">
-                    {row.getName()}
-                  </TableCell>
-                )}
-                {axtion.visibleColumn('endpointId') && (
-                  <LinkCell to={`/deployment/endpoint/${row.getEndpointid()}`}>
-                    {row.getEndpointid()}
-                  </LinkCell>
-                )}
-                {axtion.visibleColumn('endpointVersion') && (
-                  <TableCell className="">{row.getEndpointversion()}</TableCell>
-                )}
-                {axtion.visibleColumn('executionPriority') && (
-                  <TableCell className="">
-                    {row.getExecutionpriority()}
-                  </TableCell>
-                )}
-                {axtion.visibleColumn('status') && (
-                  <TableCell className="">
-                    <StatusIndicator state={row.getStatus()} />
-                  </TableCell>
-                )}
-                {axtion.visibleColumn('created_date') && (
-                  <TableCell>
-                    {row.getCreateddate() &&
-                      toHumanReadableDateTime(row.getCreateddate()!)}
-                  </TableCell>
-                )}
-                <TableCell>
-                  <CardOptionMenu
-                    classNames={cn('w-9 h-9')}
-                    options={[
-                      {
-                        option: (
-                          <div className="flex items-center text-sm">
-                            Update analysis
-                          </div>
-                        ),
-                        onActionClick: () => {
-                          navigation.goToEditAssistantAnalysis(
-                            assistantId,
-                            row.getId(),
-                          );
-                        },
-                      },
-                      {
-                        option: (
-                          <div className="flex items-center text-sm">
-                            Delete analysis
-                          </div>
-                        ),
-                        onActionClick: () => {
-                          deleteAssistantAnalysis(assistantId, row.getId());
-                        },
-                      },
-                    ]}
-                  />
-                </TableCell>
-              </TableRow>
-            ))}
-          </ScrollableResizableTable>
+          <>
+            <Table>
+              <TableHead>
+                <TableRow>
+                  <TableHeader>Name</TableHeader>
+                  <TableHeader>Endpoint</TableHeader>
+                  <TableHeader>Version</TableHeader>
+                  <TableHeader>Priority</TableHeader>
+                  <TableHeader>Status</TableHeader>
+                  <TableHeader>Created</TableHeader>
+                  <TableHeader />
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {axtion.analysises.map((row, idx) => (
+                  <TableRow key={idx}>
+                    <TableCell>
+                      <CustomLink
+                        to={`/deployment/assistant/${assistantId}/configure-analysis/${row.getId()}`}
+                        className="text-primary hover:underline"
+                      >
+                        {row.getName()}
+                      </CustomLink>
+                    </TableCell>
+                    <TableCell>
+                      <CustomLink
+                        to={`/deployment/endpoint/${row.getEndpointid()}`}
+                        className="text-primary hover:underline font-mono text-xs"
+                      >
+                        {row.getEndpointid()}
+                      </CustomLink>
+                    </TableCell>
+                    <TableCell>{row.getEndpointversion()}</TableCell>
+                    <TableCell>{row.getExecutionpriority()}</TableCell>
+                    <TableCell>
+                      <CarbonStatusIndicator state={row.getStatus()} />
+                    </TableCell>
+                    <TableCell>
+                      {row.getCreateddate() && toHumanReadableDateTime(row.getCreateddate()!)}
+                    </TableCell>
+                    <TableCell>
+                      <OverflowMenu size="sm" flipped iconDescription="Actions">
+                        <OverflowMenuItem
+                          itemText="Edit"
+                          onClick={() => navigation.goToEditAssistantAnalysis(assistantId, row.getId())}
+                        />
+                        <OverflowMenuItem
+                          itemText="Delete"
+                          isDelete
+                          hasDivider
+                          onClick={() => deleteAssistantAnalysis(assistantId, row.getId())}
+                        />
+                      </OverflowMenu>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+            <Pagination
+              totalItems={axtion.totalCount}
+              page={axtion.page}
+              pageSize={axtion.pageSize}
+              pageSizes={[10, 20, 50]}
+              onChange={({ page, pageSize }) => {
+                if (pageSize !== axtion.pageSize) axtion.setPageSize(pageSize);
+                else axtion.setPage(page);
+              }}
+            />
+          </>
         ) : (
-          <ActionableEmptyMessage
-            centered
-            title="No Analysis"
-            subtitle="There are no assistant analysis."
-            action="Create new analysis"
-            onActionClick={() =>
-              navigation.goToCreateAssistantAnalysis(assistantId)
-            }
-          />
+          <div className="flex flex-1 items-center justify-center">
+            <ActionableEmptyMessage
+              title="No Analysis"
+              subtitle="There are no assistant analysis."
+              action="Create new analysis"
+              onActionClick={() => navigation.goToCreateAssistantAnalysis(assistantId)}
+            />
+          </div>
         )}
       </TableSection>
     </div>

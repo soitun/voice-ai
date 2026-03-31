@@ -21,9 +21,14 @@ import (
 const (
 	eosName = "pipecatSmartTurnEndOfSpeech"
 
-	optPctThreshold      = "microphone.eos.threshold"
-	optPctSilenceTimeout = "microphone.eos.silence_timeout"
-	optPctQuickTimeout   = "microphone.eos.quick_timeout"
+	optPctThreshold       = "microphone.eos.threshold"
+	optPctExtendedTimeout = "microphone.eos.extended_timeout"
+	optPctQuickTimeout    = "microphone.eos.quick_timeout"
+	optPctFallbackTimeout = "microphone.eos.fallback_timeout"
+
+	// Backward-compatible aliases.
+	optPctLegacySilenceTimeout = "microphone.eos.silence_timeout"
+	optPctLegacyTimeout        = "microphone.eos.timeout"
 
 	defaultPctThreshold      = 0.5
 	defaultPctQuickTimeout   = 250.0
@@ -38,7 +43,7 @@ type SpeechSegment struct {
 	ContextID string
 	Text      string
 	Timestamp time.Time
-	Language  string
+	Chunks    []internal_type.SpeechToTextPacket
 }
 
 type command struct {
@@ -61,6 +66,9 @@ type PipecatEOS struct {
 	callback func(context.Context, ...internal_type.Packet) error
 
 	detector *PipecatDetector
+	// Optional test seam for deterministic timing tests.
+	// When set, predictEOU uses this callback instead of detector.Predict.
+	predictor func([]float32) (float64, error)
 
 	// Configuration
 	threshold      float64
@@ -114,13 +122,17 @@ func NewPipecatEndOfSpeech(
 	if v, err := opts.GetFloat64(optPctThreshold); err == nil {
 		eos.threshold = v
 	}
-	if v, err := opts.GetFloat64(optPctSilenceTimeout); err == nil {
+	if v, err := opts.GetFloat64(optPctExtendedTimeout); err == nil {
+		eos.silenceTimeout = time.Duration(v) * time.Millisecond
+	} else if v, err := opts.GetFloat64(optPctLegacySilenceTimeout); err == nil {
 		eos.silenceTimeout = time.Duration(v) * time.Millisecond
 	}
 	if v, err := opts.GetFloat64(optPctQuickTimeout); err == nil {
 		eos.quickTimeout = time.Duration(v) * time.Millisecond
 	}
-	if v, err := opts.GetFloat64("microphone.eos.timeout"); err == nil {
+	if v, err := opts.GetFloat64(optPctFallbackTimeout); err == nil {
+		eos.fallbackMs = time.Duration(v) * time.Millisecond
+	} else if v, err := opts.GetFloat64(optPctLegacyTimeout); err == nil {
 		eos.fallbackMs = time.Duration(v) * time.Millisecond
 	}
 
@@ -151,10 +163,10 @@ func (eos *PipecatEOS) Name() string {
 // in a rolling buffer for model inference.
 func (eos *PipecatEOS) Analyze(ctx context.Context, pkt internal_type.Packet) error {
 	switch p := pkt.(type) {
-	case internal_type.UserAudioPacket:
+	case internal_type.UserAudioReceivedPacket:
 		eos.appendAudio(p.Audio)
 
-	case internal_type.UserTextPacket:
+	case internal_type.UserTextReceivedPacket:
 		if p.Text == "" {
 			return nil
 		}
@@ -169,7 +181,7 @@ func (eos *PipecatEOS) Analyze(ctx context.Context, pkt internal_type.Packet) er
 		)
 		eos.send(command{ctx: ctx, segment: seg, fireNow: true})
 
-	case internal_type.InterruptionPacket:
+	case internal_type.InterruptionDetectedPacket:
 		eos.mu.RLock()
 		seg := eos.state.segment
 		eos.mu.RUnlock()
@@ -196,16 +208,14 @@ func (eos *PipecatEOS) Analyze(ctx context.Context, pkt internal_type.Packet) er
 			ContextID: p.ContextId(),
 			Timestamp: time.Now(),
 			Text:      eos.state.segment.Text,
-			Language:  eos.state.segment.Language,
+			Chunks:    append([]internal_type.SpeechToTextPacket(nil), eos.state.segment.Chunks...),
 		}
 		if newSeg.Text != "" {
 			newSeg.Text = fmt.Sprintf("%s %s", newSeg.Text, p.Script)
 		} else {
 			newSeg.Text = p.Script
 		}
-		if p.Language != "" {
-			newSeg.Language = p.Language
-		}
+		newSeg.Chunks = append(newSeg.Chunks, p)
 		eos.state.segment = newSeg
 		eos.mu.Unlock()
 
@@ -221,11 +231,15 @@ func (eos *PipecatEOS) Analyze(ctx context.Context, pkt internal_type.Packet) er
 
 		// Run audio model inference.
 		// YES (prob >= threshold) → quick_timeout buffer, then fire.
-		// NO  (prob <  threshold) → keep accumulating, safety timer as fallback.
+		// NO  (0 <= prob < threshold) → keep accumulating with silence_timeout.
+		// FAIL (prob < 0) → fallback timeout (microphone.eos.fallback_timeout).
 		prob := eos.predictEOU()
-		if prob >= eos.threshold {
+		switch {
+		case prob < 0:
+			eos.send(command{ctx: ctx, segment: newSeg, timeout: eos.fallbackMs})
+		case prob >= eos.threshold:
 			eos.send(command{ctx: ctx, segment: newSeg, timeout: eos.quickTimeout})
-		} else {
+		default:
 			eos.send(command{ctx: ctx, segment: newSeg, timeout: eos.silenceTimeout})
 		}
 	}
@@ -264,10 +278,28 @@ func (eos *PipecatEOS) predictEOU() float64 {
 	eos.mu.RUnlock()
 
 	if len(audio) == 0 {
+		if eos.logger != nil {
+			eos.logger.Debugf("pipecat_eos: inference skipped: empty audio buffer")
+		}
 		return -1
 	}
 
-	prob, err := eos.detector.Predict(audio)
+	if eos.predictor == nil && eos.detector == nil {
+		if eos.logger != nil {
+			eos.logger.Debugf("pipecat_eos: inference skipped: detector unavailable")
+		}
+		return -1
+	}
+
+	var (
+		prob float64
+		err  error
+	)
+	if eos.predictor != nil {
+		prob, err = eos.predictor(audio)
+	} else {
+		prob, err = eos.detector.Predict(audio)
+	}
 	if err != nil {
 		if eos.logger != nil {
 			eos.logger.Debugf("pipecat_eos: inference failed: %v", err)
@@ -284,9 +316,20 @@ func (eos *PipecatEOS) predictEOU() float64 {
 
 func (eos *PipecatEOS) send(cmd command) {
 	select {
+	case <-eos.stopCh:
+		return
+	default:
+	}
+
+	select {
 	case eos.cmdCh <- cmd:
 	default:
-		go func() { eos.cmdCh <- cmd }()
+		go func() {
+			select {
+			case eos.cmdCh <- cmd:
+			case <-eos.stopCh:
+			}
+		}()
 	}
 }
 
@@ -380,7 +423,11 @@ func (eos *PipecatEOS) fire(ctx context.Context, seg SpeechSegment) {
 	wordCount := len(strings.Fields(seg.Text))
 	triggerAt := time.Now()
 	_ = eos.callback(ctx,
-		internal_type.EndOfSpeechPacket{Speech: seg.Text, ContextID: seg.ContextID, Language: seg.Language},
+		internal_type.EndOfSpeechPacket{
+			Speech:    seg.Text,
+			ContextID: seg.ContextID,
+			Speechs:   append([]internal_type.SpeechToTextPacket(nil), seg.Chunks...),
+		},
 		internal_type.ConversationEventPacket{
 			Name: "eos",
 			Data: map[string]string{

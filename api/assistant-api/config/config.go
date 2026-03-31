@@ -44,6 +44,7 @@ type AssistantConfig struct {
 	PostgresConfig      configs.PostgresConfig    `mapstructure:"postgres" validate:"required"`
 	RedisConfig         configs.RedisConfig       `mapstructure:"redis" validate:"required"`
 	OpenSearchConfig    *configs.OpenSearchConfig `mapstructure:"opensearch"`
+	TelemetryConfig     *configs.TelemetryConfig  `mapstructure:"telemetry"`
 	WeaviateConfig      configs.WeaviateConfig    `mapstructure:"weaviate"`
 	AssetStoreConfig    configs.AssetStoreConfig  `mapstructure:"asset_store" validate:"required"`
 	PublicAssistantHost string                    `mapstructure:"public_assistant_host" validate:"required"`

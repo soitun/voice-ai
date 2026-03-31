@@ -19,11 +19,12 @@ import (
 )
 
 type openaiSpeechToText struct {
-	logger   commons.Logger
-	client   openai.Client
-	ctx      context.Context
-	cancel   context.CancelFunc
-	onPacket func(pkt ...internal_type.Packet) error
+	logger    commons.Logger
+	client    openai.Client
+	ctx       context.Context
+	cancel    context.CancelFunc
+	onPacket  func(pkt ...internal_type.Packet) error
+	contextId string
 }
 
 func (o *openaiSpeechToText) Initialize() error {
@@ -32,7 +33,8 @@ func (o *openaiSpeechToText) Initialize() error {
 	o.client = openai.NewClient(option.WithAPIKey("YOUR_API_KEY"))
 
 	o.onPacket(internal_type.ConversationEventPacket{
-		Name: "stt",
+		ContextID: o.contextId,
+		Name:      "stt",
 		Data: map[string]string{
 			"type":     "initialized",
 			"provider": o.Name(),
@@ -56,8 +58,20 @@ func (o *openaiSpeechToText) Name() string {
 }
 
 // Transform receives a stream of bytes (audioStream) and prints transcribed text in realtime.
-func (o *openaiSpeechToText) Transform(ctx context.Context, byt internal_type.UserAudioPacket) error {
-	return nil
+func (o *openaiSpeechToText) Transform(ctx context.Context, byt internal_type.Packet) error {
+	switch byt.(type) {
+	case internal_type.TurnChangePacket:
+		if pkt, ok := byt.(internal_type.TurnChangePacket); ok {
+			o.contextId = pkt.ContextID
+		}
+		return nil
+	case internal_type.InterruptionDetectedPacket:
+		return nil
+	case internal_type.UserAudioReceivedPacket:
+		return nil
+	default:
+		return nil
+	}
 }
 
 func NewOpenaiSpeechToText(

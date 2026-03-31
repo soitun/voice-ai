@@ -1,15 +1,10 @@
 import { Knowledge } from '@rapidaai/react';
-import { Dropdown } from '@/app/components/dropdown';
-import { FormLabel } from '@/app/components/form-label';
-import { IButton, ILinkBorderButton } from '@/app/components/form/button';
-import { FieldSet } from '@/app/components/form/fieldset';
 import { useCredential } from '@/hooks/use-credential';
 import { useKnowledgePageStore } from '@/hooks/use-knowledge-page-store';
-import { cn } from '@/utils';
-
-import { ExternalLink, RotateCcw } from 'lucide-react';
+import { Renew, Launch } from '@carbon/icons-react';
 import { FC, useCallback, useEffect, useState } from 'react';
 import toast from 'react-hot-toast/headless';
+import { Dropdown, Button } from '@carbon/react';
 
 interface KnowledgeDropdownProps {
   className?: string;
@@ -33,23 +28,12 @@ export const KnowledgeDropdown: FC<KnowledgeDropdownProps> = props => {
   const onSuccess = useCallback((data: Knowledge[]) => {
     hideLoader();
   }, []);
-  /**
-   * call the api
-   */
+
   const getKnowledges = useCallback((projectId, token, userId) => {
     showLoader();
-    knowledgeActions.getAllKnowledge(
-      projectId,
-      token,
-      userId,
-      onError,
-      onSuccess,
-    );
+    knowledgeActions.getAllKnowledge(projectId, token, userId, onError, onSuccess);
   }, []);
 
-  /**
-   *
-   */
   useEffect(() => {
     if (props.currentKnowledge) {
       knowledgeActions.addCriteria('id', props.currentKnowledge, 'or');
@@ -63,90 +47,51 @@ export const KnowledgeDropdown: FC<KnowledgeDropdownProps> = props => {
     props.currentKnowledge,
   ]);
 
+  const selectedItem = knowledgeActions.knowledgeBases.find(
+    x => x.getId() === props.currentKnowledge,
+  ) || null;
+
   return (
-    <FieldSet>
-      <FormLabel>Knowledge</FormLabel>
-      <div
-        className={cn(
-          'flex relative',
-          'bg-light-background dark:bg-gray-950',
-          'border-b border-gray-300 dark:border-gray-700',
-          'focus-within:border-primary',
-          'transition-colors duration-100',
-          'divide-x divide-gray-200 dark:divide-gray-700',
-          // ::after overlay — renders above children so focus ring is fully visible
-          'after:content-[""] after:absolute after:inset-0 after:pointer-events-none after:z-[1] after:border-0!',
-          'after:outline-solid after:outline-[1.5px] after:outline-transparent after:outline-offset-[-1.5px]',
-          'focus-within:after:outline-primary',
-          props.className,
-        )}
-      >
-        <div className="w-full relative">
+    <div>
+      <p className="text-xs font-medium mb-1">Knowledge</p>
+      <div className="flex">
+        <div className="flex-1 [&_.cds--dropdown]:!rounded-none [&_.cds--list-box]:!rounded-none">
           <Dropdown
-            searchable
-            className=" max-w-full dark:bg-gray-950 focus-within:border-none! focus-within:outline-hidden! border-none! outline-hidden"
-            currentValue={knowledgeActions.knowledgeBases.find(
-              x => x.getId() === props.currentKnowledge,
-            )}
-            setValue={(c: Knowledge) => {
-              if (props.onChangeKnowledge) props.onChangeKnowledge(c);
-            }}
-            onSearching={q => {
-              if (q.target.value && q.target.value.trim() !== '') {
-                knowledgeActions.addCriteria('name', q.target.value, 'like');
-              } else {
-                knowledgeActions.removeCriteria('name');
+            id="knowledge-dropdown"
+            titleText=""
+            hideLabel
+            label="Select knowledge"
+            items={knowledgeActions.knowledgeBases}
+            selectedItem={selectedItem}
+            itemToString={(item: Knowledge | null) =>
+              item ? `${item.getName()} [${item.getId()}]` : ''
+            }
+            onChange={({ selectedItem }: any) => {
+              if (selectedItem && props.onChangeKnowledge) {
+                props.onChangeKnowledge(selectedItem);
               }
-            }}
-            allValue={knowledgeActions.knowledgeBases}
-            placeholder="Select knowledge"
-            option={(c: Knowledge) => {
-              return (
-                <div className="relative overflow-hidden flex-1 flex flex-row space-x-3">
-                  <div className="flex ">
-                    <span className="opacity-70">Knowledge</span>
-                    <span className="opacity-70 px-1">/</span>
-                    <span className="font-medium text-[14px]">
-                      {c.getName()}
-                    </span>
-                    <span className="font-medium text-[14px] ml-4">
-                      [{c.getId()}]
-                    </span>
-                  </div>
-                </div>
-              );
-            }}
-            label={c => {
-              return (
-                <div className="relative overflow-hidden flex-1 flex flex-row space-x-3">
-                  <div className="flex">
-                    <span className="opacity-70">Knowledge</span>
-                    <span className="opacity-70 px-1">/</span>
-                    <span className="font-medium text-[14px]">
-                      {c.getName()}
-                    </span>
-                  </div>
-                </div>
-              );
             }}
           />
         </div>
-        <IButton
-          className="h-10"
-          onClick={() => {
-            getKnowledges(projectId, token, userId);
-          }}
-        >
-          <RotateCcw className={cn('w-4 h-4')} strokeWidth={1.5} />
-        </IButton>
-        <ILinkBorderButton
-          className="h-10"
-          href="/knowledge/create-knowledge"
-          target="_blank"
-        >
-          <ExternalLink className={cn('w-4 h-4')} strokeWidth={1.5} />
-        </ILinkBorderButton>
+        <Button
+          hasIconOnly
+          renderIcon={Renew}
+          iconDescription="Refresh"
+          kind="ghost"
+          size="md"
+          onClick={() => getKnowledges(projectId, token, userId)}
+          className="!rounded-none !border !border-l-0 !border-gray-200 dark:!border-gray-700"
+        />
+        <Button
+          hasIconOnly
+          renderIcon={Launch}
+          iconDescription="Create knowledge"
+          kind="ghost"
+          size="md"
+          onClick={() => window.open('/knowledge/create-knowledge', '_blank')}
+          className="!rounded-none !border !border-l-0 !border-gray-200 dark:!border-gray-700"
+        />
       </div>
-    </FieldSet>
+    </div>
   );
 };

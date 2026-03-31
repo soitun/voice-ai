@@ -9,19 +9,24 @@ import { CreateProjectDialog } from '@/app/components/base/modal/create-project-
 import { GetAllProject, DeleteProject } from '@rapidaai/react';
 import { useCredential } from '@/hooks/use-credential';
 import toast from 'react-hot-toast/headless';
-import { SearchIconInput } from '@/app/components/form/input/IconInput';
-import { TablePagination } from '@/app/components/base/tables/table-pagination';
 import { useRapidaStore } from '@/hooks';
-import { BluredWrapper } from '@/app/components/wrapper/blured-wrapper';
 import { ServiceError } from '@rapidaai/react';
-import { IButton } from '@/app/components/form/button';
-import { Plus, RotateCw } from 'lucide-react';
-import { PaginationButtonBlock } from '@/app/components/blocks/pagination-button-block';
-import { Table } from '@/app/components/base/tables/table';
-import { TableHead } from '@/app/components/base/tables/table-head';
-import { TableBody } from '@/app/components/base/tables/table-body';
-import { TableRow } from '@/app/components/base/tables/table-row';
-import { TableCell } from '@/app/components/base/tables/table-cell';
+import { PrimaryButton } from '@/app/components/carbon/button';
+import { Pagination } from '@/app/components/carbon/pagination';
+import { Add, Renew } from '@carbon/icons-react';
+import IconIndicator from '@carbon/react/es/components/IconIndicator';
+import {
+  Table,
+  TableHead,
+  TableRow,
+  TableHeader,
+  TableBody,
+  TableCell,
+  TableToolbar,
+  TableToolbarContent,
+  TableToolbarSearch,
+  Button,
+} from '@carbon/react';
 import { ProjectUserGroupAvatar } from '@/app/components/avatar/project-user-group-avatar';
 import { toHumanReadableDate } from '@/utils/date';
 import { RoleIndicator } from '@/app/components/indicators/role';
@@ -30,43 +35,49 @@ import { PageHeaderBlock } from '@/app/components/blocks/page-header-block';
 import { PageTitleWithCount } from '@/app/components/blocks/page-title-with-count';
 import { TableSection } from '@/app/components/sections/table-section';
 import { connectionConfig } from '@/configs';
+
+const statusMap: Record<string, { kind: string; label: string }> = {
+  ACTIVE: { kind: 'succeeded', label: 'Active' },
+  active: { kind: 'succeeded', label: 'Active' },
+  DISABLED: { kind: 'failed', label: 'Disabled' },
+  disabled: { kind: 'failed', label: 'Disabled' },
+  INACTIVE: { kind: 'incomplete', label: 'Inactive' },
+  inactive: { kind: 'incomplete', label: 'Inactive' },
+  PENDING: { kind: 'pending', label: 'Pending' },
+  pending: { kind: 'pending', label: 'Pending' },
+  ARCHIVED: { kind: 'undefined', label: 'Archived' },
+  archived: { kind: 'undefined', label: 'Archived' },
+};
+
+const defaultStatus = { kind: 'normal', label: 'Active' };
+
+function getStatusKind(status?: string) {
+  return (statusMap[status || ''] || defaultStatus).kind as any;
+}
+
+function getStatusLabel(status?: string) {
+  return (statusMap[status || ''] || defaultStatus).label;
+}
+
+const headers = [
+  { key: 'name', header: 'Name' },
+  { key: 'createdDate', header: 'Date Created' },
+  { key: 'role', header: 'Your Role' },
+  { key: 'collaborators', header: 'Collaborators' },
+  { key: 'status', header: 'Status' },
+  { key: 'actions', header: '' },
+];
+
 export function ProjectPage() {
-  /**
-   *
-   */
   const [createProjectModalOpen, setCreateProjectModalOpen] = useState(false);
-
-  /**
-   * loading context
-   */
-  const { showLoader, hideLoader } = useRapidaStore();
-
-  /**
-   * Credentials
-   */
+  const { loading, showLoader, hideLoader } = useRapidaStore();
   const [userId, token] = useCredential();
-
-  /**
-   * List of projects
-   */
   const [projects, setProjects] = useState<Project[]>([]);
-
-  /**
-   * pagination and search capabilities
-   */
-
   const [page, setPage] = useState<number>(1);
   const [pageSize, setPageSize] = useState(10);
   const [totalCount, setTotalCount] = useState(0);
-
-  /**
-   * filter apply
-   */
   const [criteria] = useState<{ key: string; value: string }[]>([]);
 
-  /**
-   *
-   */
   const afterGettingProject = useCallback(
     (err: ServiceError | null, alpr: GetAllProjectResponse | null) => {
       hideLoader();
@@ -85,13 +96,6 @@ export function ProjectPage() {
     [],
   );
 
-  /**
-   *
-   * @param page
-   * @param pageSize
-   * @param criteria
-   * @returns
-   */
   const getAllProject = (
     page: number,
     pageSize: number,
@@ -111,17 +115,10 @@ export function ProjectPage() {
     );
   };
 
-  /**
-   *
-   */
   useEffect(() => {
     getAllProject(page, pageSize, criteria);
   }, [page, pageSize, criteria]);
 
-  /**
-   *
-   * @param projectId
-   */
   const onDeleteProject = (projectId: string) => {
     DeleteProject(
       connectionConfig,
@@ -149,44 +146,38 @@ export function ProjectPage() {
         <PageTitleWithCount count={projects.length} total={totalCount}>
           Projects
         </PageTitleWithCount>
-        <div className="flex items-stretch h-12 border-l border-gray-200 dark:border-gray-800">
-          <button
-            type="button"
+      </PageHeaderBlock>
+      <TableToolbar>
+        <TableToolbarContent>
+          <TableToolbarSearch placeholder="Search projects..." />
+          <Button
+            hasIconOnly
+            renderIcon={Renew}
+            iconDescription="Refresh"
+            kind="ghost"
+            onClick={() => getAllProject(page, pageSize, criteria)}
+            tooltipPosition="bottom"
+          />
+          <PrimaryButton
+            size="md"
+            renderIcon={Add}
+            isLoading={loading}
             onClick={() => setCreateProjectModalOpen(true)}
-            className="flex items-center gap-2 px-4 text-sm text-white bg-primary hover:bg-primary/90 transition-colors whitespace-nowrap"
           >
             Create new project
-            <Plus strokeWidth={1.5} className="w-4 h-4" />
-          </button>
-        </div>
-      </PageHeaderBlock>
-      <BluredWrapper className="sticky top-0 z-11">
-        <SearchIconInput className="bg-light-background flex-1" />
-        <PaginationButtonBlock className="shrink-0">
-          <TablePagination
-            currentPage={page}
-            onChangeCurrentPage={setPage}
-            totalItem={totalCount}
-            pageSize={pageSize}
-            onChangePageSize={setPageSize}
-          />
-          <IButton onClick={() => getAllProject(page, pageSize, criteria)}>
-            <RotateCw strokeWidth={1.5} className="h-4 w-4" />
-          </IButton>
-        </PaginationButtonBlock>
-      </BluredWrapper>
+          </PrimaryButton>
+        </TableToolbarContent>
+      </TableToolbar>
       <TableSection>
-        <Table className="bg-white dark:bg-gray-900">
-          <TableHead
-            isActionable
-            columns={[
-              { name: 'Name', key: 'name' },
-              { name: 'Date Created', key: 'createdDate' },
-              { name: 'Your Role', key: 'role' },
-              { name: 'Collaborators', key: 'collaborators' },
-            ]}
-          ></TableHead>
-          <TableBody className="">
+        <Table>
+          <TableHead>
+            <TableRow>
+              {headers.map(h => (
+                <TableHeader key={h.key}>{h.header}</TableHeader>
+              ))}
+            </TableRow>
+          </TableHead>
+          <TableBody>
             {projects.map(project => (
               <TableRow key={project.getId()}>
                 <TableCell>{project.getName()}</TableCell>
@@ -207,26 +198,43 @@ export function ProjectPage() {
                   />
                 </TableCell>
                 <TableCell>
+                  <IconIndicator
+                    kind={getStatusKind(project.getStatus?.())}
+                    label={getStatusLabel(project.getStatus?.())}
+                    size={16}
+                  />
+                </TableCell>
+                <TableCell>
                   <ProjectOption
                     project={project.toObject()}
                     afterUpdateProject={() => {
                       getAllProject(page, pageSize, criteria);
                     }}
                     onDelete={() => onDeleteProject(project.getId())}
-                  ></ProjectOption>
+                  />
                 </TableCell>
               </TableRow>
             ))}
           </TableBody>
         </Table>
-        <CreateProjectDialog
-          modalOpen={createProjectModalOpen}
-          setModalOpen={setCreateProjectModalOpen}
-          afterCreateProject={() => {
-            getAllProject(page, pageSize, criteria);
+        <Pagination
+          totalItems={totalCount}
+          page={page}
+          pageSize={pageSize}
+          pageSizes={[10, 20, 50]}
+          onChange={({ page: newPage, pageSize: newSize }) => {
+            setPage(newPage);
+            setPageSize(newSize);
           }}
         />
       </TableSection>
+      <CreateProjectDialog
+        modalOpen={createProjectModalOpen}
+        setModalOpen={setCreateProjectModalOpen}
+        afterCreateProject={() => {
+          getAllProject(page, pageSize, criteria);
+        }}
+      />
     </>
   );
 }

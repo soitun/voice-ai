@@ -9,6 +9,8 @@ import {
   Cable,
   LoaderCircle,
   CircleCheck,
+  Bot,
+  User,
 } from 'lucide-react';
 
 export const StatusIndicator = ({ state, size = 'medium' }) => {

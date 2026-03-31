@@ -1,0 +1,24 @@
+{
+  "parameters": [
+    {
+      "key": "endpoint",
+      "label": "Endpoint",
+      "type": "input",
+      "required": true,
+      "placeholder": "e.g. localhost:4317",
+      "errorMessage": "Endpoint is required for Datadog."
+    },
+    {
+      "key": "insecure",
+      "label": "Insecure",
+      "type": "select",
+      "required": false,
+      "default": "false",
+      "choices": [
+        { "label": "No", "value": "false" },
+        { "label": "Yes", "value": "true" }
+      ],
+      "helpText": "Skip TLS verification."
+    }
+  ]
+}

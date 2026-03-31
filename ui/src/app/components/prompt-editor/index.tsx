@@ -2,6 +2,10 @@ import { useEffect, useRef } from 'react';
 import Editor, { OnChange, OnMount } from '@monaco-editor/react';
 import { useDarkMode } from '@/context/dark-mode-context';
 import * as monaco from 'monaco-editor/esm/vs/editor/editor.api';
+import {
+  extractPromptVariableQuery,
+  getPromptVariableSuggestions,
+} from '@/app/components/prompt-editor/suggestions';
 
 export type PromptEditorProps = {
   value?: string;
@@ -12,6 +16,7 @@ export type PromptEditorProps = {
   height?: string;
   className?: string;
   placeholder?: string;
+  enableReservedVariableSuggestions?: boolean;
 };
 
 const PromptEditor = ({
@@ -22,12 +27,59 @@ const PromptEditor = ({
   editable = true,
   className,
   placeholder = '',
+  enableReservedVariableSuggestions = false,
 }: PromptEditorProps) => {
   const { isDarkMode } = useDarkMode();
   const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null);
+  const completionProviderRef = useRef<monaco.IDisposable | null>(null);
 
   const handleEditorDidMount: OnMount = (editor, monaco) => {
     editorRef.current = editor;
+
+    completionProviderRef.current?.dispose();
+    completionProviderRef.current = null;
+    if (enableReservedVariableSuggestions) {
+      completionProviderRef.current = monaco.languages.registerCompletionItemProvider(
+        'twig',
+        {
+          triggerCharacters: ['{', '.'],
+          provideCompletionItems(model, position) {
+            const linePrefix = model
+              .getLineContent(position.lineNumber)
+              .slice(0, position.column - 1);
+            const query = extractPromptVariableQuery(linePrefix);
+
+            if (query === null) {
+              return { suggestions: [] };
+            }
+
+            const startColumn = position.column - query.length;
+            const range = new monaco.Range(
+              position.lineNumber,
+              startColumn,
+              position.lineNumber,
+              position.column,
+            );
+
+            const suggestions = getPromptVariableSuggestions(linePrefix).map(
+              (item, idx) => ({
+                label: item.label,
+                kind: monaco.languages.CompletionItemKind.Variable,
+                insertText: item.insertText,
+                detail: 'Rapida reserved variable',
+                documentation: {
+                  value: item.description,
+                },
+                range,
+                sortText: `0${idx}`,
+              }),
+            );
+
+            return { suggestions };
+          },
+        },
+      );
+    }
 
     if (placeholder && editor.getValue() === '') {
       new PlaceholderContentWidget(placeholder, editor, monaco);
@@ -35,6 +87,21 @@ const PromptEditor = ({
 
     editor.onDidFocusEditorWidget(() => onFocus?.());
     editor.onDidBlurEditorWidget(() => onBlur?.());
+    editor.onDidChangeModelContent(() => {
+      if (!enableReservedVariableSuggestions) return;
+      const position = editor.getPosition();
+      if (!position) return;
+
+      const linePrefix = editor
+        .getModel()
+        ?.getLineContent(position.lineNumber)
+        .slice(0, position.column - 1);
+      if (!linePrefix) return;
+
+      if (linePrefix.endsWith('{{')) {
+        editor.trigger('prompt-editor', 'editor.action.triggerSuggest', {});
+      }
+    });
 
     if (value) {
       editor.setValue(value);
@@ -46,10 +113,15 @@ const PromptEditor = ({
       const currentValue = editorRef.current.getValue();
       if (currentValue !== value) {
         editorRef.current.setValue(value);
-        console.log('Value updated in effect:', value);
       }
     }
   }, [value]);
+
+  useEffect(() => {
+    return () => {
+      completionProviderRef.current?.dispose();
+    };
+  }, []);
 
   const handleChange: OnChange = newValue => {
     if (onChange && newValue !== undefined) {

@@ -82,7 +82,7 @@ export const DocumentSegments: FC<{
             />
           </BluredWrapper>
 
-          <div className="grid content-start grid-cols-1 sm:grid-cols-2 md:grid-cols-3 grow shrink-0 m-4">
+          <div className="grid content-start grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 grow shrink-0 m-4">
             {knowledgeDocumentActions.knowledgeDocumentSegments.map(
               (segment, index) => (
                 <BaseCard

@@ -89,6 +89,30 @@ export const DeploymentUpdateAssistantWebhookPage = lazyLoad(
   },
 );
 
+export const DeploymentConfigureAssistantTelemetryPage = lazyLoad(
+  () => import('./actions/configure-assistant-telemetry'),
+  module => module.ConfigureAssistantTelemetryPage,
+  {
+    fallback: <PageLoader />,
+  },
+);
+
+export const DeploymentCreateAssistantTelemetryPage = lazyLoad(
+  () => import('./actions/configure-assistant-telemetry'),
+  module => module.CreateAssistantTelemetryPage,
+  {
+    fallback: <PageLoader />,
+  },
+);
+
+export const DeploymentUpdateAssistantTelemetryPage = lazyLoad(
+  () => import('./actions/configure-assistant-telemetry'),
+  module => module.UpdateAssistantTelemetryPage,
+  {
+    fallback: <PageLoader />,
+  },
+);
+
 export const DeploymentConfigureAssistantWebDeploymentPage = lazyLoad(
   () => import('./actions/create-deployment/web-plugin'),
   module => module.ConfigureAssistantWebDeploymentPage,

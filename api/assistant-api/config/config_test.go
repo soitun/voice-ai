@@ -153,3 +153,61 @@ func TestGetApplicationConfig(t *testing.T) {
 		t.Errorf("Expected AssetStoreConfig.StorageType to be 'local', but got %v", appConfig.AssetStoreConfig.StorageType)
 	}
 }
+
+func TestGetApplicationConfig_TelemetryEnvParsing(t *testing.T) {
+	vConfig := viper.NewWithOptions(viper.KeyDelimiter("__"))
+	vConfig.Set("SERVICE_NAME", "workflow-api")
+	vConfig.Set("HOST", "0.0.0.0")
+	vConfig.Set("PORT", 9007)
+	vConfig.Set("LOG_LEVEL", "debug")
+	vConfig.Set("SECRET", "rpd_pks")
+	vConfig.Set("ENV", "development")
+
+	vConfig.Set("POSTGRES__HOST", "localhost")
+	vConfig.Set("POSTGRES__DB_NAME", "assistant_db")
+	vConfig.Set("POSTGRES__AUTH__USER", "rapida_user")
+	vConfig.Set("POSTGRES__AUTH__PASSWORD", "rapida_db_password")
+	vConfig.Set("POSTGRES__PORT", 5432)
+	vConfig.Set("POSTGRES__MAX_OPEN_CONNECTION", 50)
+	vConfig.Set("POSTGRES__MAX_IDEAL_CONNECTION", 25)
+	vConfig.Set("POSTGRES__SSL_MODE", "disable")
+
+	vConfig.Set("REDIS__HOST", "127.0.0.1")
+	vConfig.Set("REDIS__PORT", 6379)
+	vConfig.Set("REDIS__MAX_CONNECTION", 10)
+	vConfig.Set("REDIS__MAX_DB", 0)
+
+	vConfig.Set("ASSET_STORE__STORAGE_TYPE", "local")
+	vConfig.Set("ASSET_STORE__STORAGE_PATH_PREFIX", os.Getenv("HOME")+"/rapida-data/assets/workflow")
+
+	vConfig.Set("INTEGRATION_HOST", "localhost:9004")
+	vConfig.Set("ENDPOINT_HOST", "localhost:9005")
+	vConfig.Set("ASSISTANT_HOST", "localhost:9007")
+	vConfig.Set("WEB_HOST", "localhost:9001")
+	vConfig.Set("DOCUMENT_HOST", "http://localhost:9010")
+	vConfig.Set("UI_HOST", "http://localhost:3000")
+	vConfig.Set("PUBLIC_ASSISTANT_HOST", "integral-presently-cub.ngrok-free.app")
+
+	vConfig.Set("TELEMETRY__TYPE", "otlp_http")
+	vConfig.Set("TELEMETRY__OTLP_HTTP__ENDPOINT", "otel-collector:4318")
+	vConfig.Set("TELEMETRY__OTLP_HTTP__PROTOCOL", "http/protobuf")
+	vConfig.Set("TELEMETRY__OTLP_HTTP__HEADERS", "Authorization=Bearer test-token")
+	vConfig.Set("TELEMETRY__OTLP_HTTP__INSECURE", true)
+
+	appConfig, err := GetApplicationConfig(vConfig)
+	if err != nil {
+		t.Fatalf("GetApplicationConfig returned an error: %v", err)
+	}
+	if appConfig == nil || appConfig.TelemetryConfig == nil {
+		t.Fatalf("telemetry config is nil")
+	}
+	if got := string(appConfig.TelemetryConfig.Type()); got != "otlp_http" {
+		t.Fatalf("TelemetryConfig.Type() = %v, want otlp_http", got)
+	}
+	if appConfig.TelemetryConfig.OTLPHTTP == nil {
+		t.Fatalf("TelemetryConfig.OTLPHTTP is nil")
+	}
+	if appConfig.TelemetryConfig.OTLPHTTP.Endpoint != "otel-collector:4318" {
+		t.Fatalf("TelemetryConfig.OTLPHTTP.Endpoint = %q, want %q", appConfig.TelemetryConfig.OTLPHTTP.Endpoint, "otel-collector:4318")
+	}
+}

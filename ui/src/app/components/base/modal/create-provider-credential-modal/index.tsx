@@ -5,52 +5,34 @@ import {
 } from '@rapidaai/react';
 import { useCurrentCredential } from '@/hooks/use-credential';
 import { CreateProviderKey } from '@rapidaai/react';
-import { Input } from '@/app/components/form/input';
-import { ProviderDropdown } from '@/app/components/dropdown/provider-dropdown';
 import { ErrorMessage } from '@/app/components/form/error-message';
 import { useRapidaStore } from '@/hooks';
 import toast from 'react-hot-toast/headless';
-import { GenericModal, ModalProps } from '@/app/components/base/modal';
-import { FieldSet } from '@/app/components/form/fieldset';
+import { ModalProps } from '@/app/components/base/modal';
 import {
-  IBlueBGArrowButton,
-  ICancelButton,
-} from '@/app/components/form/button';
-import { ModalFooter } from '@/app/components/base/modal/modal-footer';
-import { ModalBody } from '@/app/components/base/modal/modal-body';
-import { FormLabel } from '@/app/components/form-label';
-import { ModalHeader } from '@/app/components/base/modal/modal-header';
-import { ModalTitleBlock } from '@/app/components/blocks/modal-title-block';
+  Modal,
+  ModalHeader,
+  ModalBody,
+  ModalFooter,
+} from '@/app/components/carbon/modal';
+import { PrimaryButton, SecondaryButton } from '@/app/components/carbon/button';
+import { Stack, TextInput, TextArea } from '@/app/components/carbon/form';
+import { Dropdown } from '@carbon/react';
 import { connectionConfig } from '@/configs';
 import { useProviderContext } from '@/context/provider-context';
-import { Textarea } from '@/app/components/form/textarea';
 import { Struct } from 'google-protobuf/google/protobuf/struct_pb';
 import { INTEGRATION_PROVIDER, RapidaProvider } from '@/providers';
-import { ModalFitHeightBlock } from '@/app/components/blocks/modal-fit-height-block';
 
-/**
- * creation provider key dialog props that gives ability for opening and closing modal props
- */
 interface CreateProviderCredentialDialogProps extends ModalProps {
-  /**
-   * exiting provider if there
-   */
   currentProvider?: string | null;
 }
-/**
- *
- * to create a provider key for given model
- * @param props
- * @returns
- */
 
 export function CreateProviderCredentialDialog(
   props: CreateProviderCredentialDialogProps,
 ) {
   const { authId, projectId, token } = useCurrentCredential();
-  const [provider, setProvider] = useState<RapidaProvider | null>();
+  const [provider, setProvider] = useState<RapidaProvider | null>(null);
   const providerCtx = useProviderContext();
-
   const { loading, showLoader, hideLoader } = useRapidaStore();
   const [error, setError] = useState('');
   const [keyName, setKeyName] = useState('');
@@ -60,44 +42,26 @@ export function CreateProviderCredentialDialog(
     setProvider(
       INTEGRATION_PROVIDER.slice()
         .reverse()
-        .find(x => x.code === props.currentProvider),
+        .find(x => x.code === props.currentProvider) || null,
     );
   }, [props.currentProvider]);
 
-  const handleInputChange = (
-    event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>,
-  ) => {
-    const { name, value } = event.target;
-    if (name.startsWith('config.')) {
-      setConfig(prev => ({
-        ...prev,
-        [name.replace('config.', '')]: value,
-      }));
-    } else if (name === 'keyName') {
-      setKeyName(value);
-    }
+  const handleConfigChange = (name: string, value: string) => {
+    setConfig(prev => ({ ...prev, [name]: value }));
   };
 
   const validateAndSubmit = () => {
-    if (!props.currentProvider) {
-      setError('Please select the provider which you want to create the key.');
-      return;
-    }
-
     if (!provider) {
       setError('Please select the provider which you want to create the key.');
       return;
     }
-
     if (!keyName.trim()) {
       setError('Please provide a valid key name for the credential.');
       return;
     }
-
     const missingFields = provider.configurations?.filter(
       configOption => !config[configOption.name]?.trim(),
     );
-
     if (missingFields && missingFields.length > 0) {
       setError(
         `Please fill out the following fields: ${missingFields
@@ -107,7 +71,6 @@ export function CreateProviderCredentialDialog(
       return;
     }
 
-    // Proceed with creating the provider key
     showLoader();
     const requestObject = new CreateProviderCredentialRequest();
     requestObject.setProvider(provider.code);
@@ -151,81 +114,77 @@ export function CreateProviderCredentialDialog(
   };
 
   return (
-    <GenericModal modalOpen={props.modalOpen} setModalOpen={props.setModalOpen}>
-      <ModalFitHeightBlock>
-        <ModalHeader
-          onClose={() => {
-            props.setModalOpen(false);
-          }}
-        >
-          <ModalTitleBlock>Create provider credential</ModalTitleBlock>
-        </ModalHeader>
-        <ModalBody>
-          <FieldSet>
-            <FormLabel>Select your provider</FormLabel>
-            <ProviderDropdown
-              currentProvider={provider ? provider : undefined}
-              setCurrentProvider={p => {
-                setError('');
-                setKeyName('');
-                setConfig({});
-                setProvider(p);
-              }}
-            />
-          </FieldSet>
-
-          <FieldSet>
-            <FormLabel>Key Name</FormLabel>
-            <Input
-              type="text"
-              name="keyName"
-              value={keyName}
-              required
-              placeholder="Assign a unique name to this provider key for easy identification."
-              onChange={handleInputChange}
-            />
-          </FieldSet>
-
-          {provider &&
-            provider.configurations?.map((x, idx) => (
-              <FieldSet key={idx}>
-                <FormLabel htmlFor={`config.${x.name}`}>{x.label}</FormLabel>
-                {x.type === 'text' ? (
-                  <Textarea
-                    required
-                    name={`config.${x.name}`}
-                    placeholder={x.label}
-                    value={config[x.name] || ''}
-                    onChange={handleInputChange}
-                  />
-                ) : (
-                  <Input
-                    type="text"
-                    required
-                    name={`config.${x.name}`}
-                    placeholder={x.label}
-                    value={config[x.name] || ''}
-                    onChange={handleInputChange}
-                  />
-                )}
-              </FieldSet>
-            ))}
-
-          <ErrorMessage message={error} />
-        </ModalBody>
-        <ModalFooter>
-          <ICancelButton
-            onClick={() => {
-              props.setModalOpen(false);
+    <Modal
+      open={props.modalOpen}
+      onClose={() => props.setModalOpen(false)}
+      size="sm"
+      selectorPrimaryFocus="#credential-key-name"
+      preventCloseOnClickOutside
+    >
+      <ModalHeader
+        label="Credentials"
+        title="Create provider credential"
+        onClose={() => props.setModalOpen(false)}
+      />
+      <ModalBody hasForm>
+        <Stack gap={6}>
+          <Dropdown
+            id="credential-provider"
+            titleText="Select your provider"
+            label="Select the provider"
+            items={INTEGRATION_PROVIDER}
+            selectedItem={provider}
+            itemToString={(item: RapidaProvider | null) => item?.name || ''}
+            onChange={({ selectedItem }) => {
+              setError('');
+              setKeyName('');
+              setConfig({});
+              setProvider(selectedItem || null);
             }}
-          >
-            Cancel
-          </ICancelButton>
-          <IBlueBGArrowButton onClick={validateAndSubmit} isLoading={loading}>
-            Configure
-          </IBlueBGArrowButton>
-        </ModalFooter>
-      </ModalFitHeightBlock>
-    </GenericModal>
+          />
+          <TextInput
+            id="credential-key-name"
+            labelText="Key Name"
+            placeholder="Assign a unique name to this provider key"
+            value={keyName}
+            required
+            onChange={e => setKeyName(e.target.value)}
+          />
+          {provider &&
+            provider.configurations?.map((x, idx) =>
+              x.type === 'text' ? (
+                <TextArea
+                  key={idx}
+                  id={`config-${x.name}`}
+                  labelText={x.label}
+                  placeholder={x.label}
+                  value={config[x.name] || ''}
+                  required
+                  onChange={e => handleConfigChange(x.name, e.target.value)}
+                />
+              ) : (
+                <TextInput
+                  key={idx}
+                  id={`config-${x.name}`}
+                  labelText={x.label}
+                  placeholder={x.label}
+                  value={config[x.name] || ''}
+                  required
+                  onChange={e => handleConfigChange(x.name, e.target.value)}
+                />
+              ),
+            )}
+          <ErrorMessage message={error} />
+        </Stack>
+      </ModalBody>
+      <ModalFooter>
+        <SecondaryButton size="lg" onClick={() => props.setModalOpen(false)}>
+          Cancel
+        </SecondaryButton>
+        <PrimaryButton size="lg" onClick={validateAndSubmit} isLoading={loading}>
+          Configure
+        </PrimaryButton>
+      </ModalFooter>
+    </Modal>
   );
 }

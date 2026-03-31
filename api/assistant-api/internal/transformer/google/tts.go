@@ -17,6 +17,7 @@ import (
 	"cloud.google.com/go/texttospeech/apiv1/texttospeechpb"
 	internal_type "github.com/rapidaai/api/assistant-api/internal/type"
 	"github.com/rapidaai/pkg/commons"
+	type_enums "github.com/rapidaai/pkg/types/enums"
 	"github.com/rapidaai/pkg/utils"
 	"github.com/rapidaai/protos"
 )
@@ -29,12 +30,13 @@ type googleTextToSpeech struct {
 	ctx       context.Context
 	ctxCancel context.CancelFunc
 
-	contextId    string                                                // Tracks context ID for audio synthesis.
-	logger       commons.Logger                                        // Logger for debugging and error reporting.
-	client       *texttospeech.Client                                  // Google TTS client.
-	streamClient texttospeechpb.TextToSpeech_StreamingSynthesizeClient // Streaming client for real-time TTS.
-	onPacket     func(pkt ...internal_type.Packet) error               // Callback for handling audio packets.
-	normalizer   internal_type.TextNormalizer                          // Text normalizer for preprocessing.
+	contextId      string // Tracks context ID for audio synthesis.
+	ttsConnectedAt time.Time
+	logger         commons.Logger                                        // Logger for debugging and error reporting.
+	client         *texttospeech.Client                                  // Google TTS client.
+	streamClient   texttospeechpb.TextToSpeech_StreamingSynthesizeClient // Streaming client for real-time TTS.
+	onPacket       func(pkt ...internal_type.Packet) error               // Callback for handling audio packets.
+	normalizer     internal_type.TextNormalizer                          // Text normalizer for preprocessing.
 
 	// TTS latency tracking
 	ttsStartedAt  time.Time
@@ -102,6 +104,9 @@ func (google *googleTextToSpeech) Initialize() error {
 		_ = google.streamClient.CloseSend()
 	}
 	google.streamClient = stream
+	if google.ttsConnectedAt.IsZero() {
+		google.ttsConnectedAt = time.Now()
+	}
 	currentContextId := google.contextId
 	google.mu.Unlock()
 
@@ -141,7 +146,7 @@ func (google *googleTextToSpeech) Transform(ctx context.Context, in internal_typ
 	}
 
 	switch input := in.(type) {
-	case internal_type.InterruptionPacket:
+	case internal_type.InterruptionDetectedPacket:
 		if currentCtx != "" {
 			google.mu.Lock()
 			google.ttsStartedAt = time.Time{}
@@ -279,7 +284,7 @@ func (g *googleTextToSpeech) recvLoop(streamClient texttospeechpb.TextToSpeech_S
 		}
 		g.mu.Unlock()
 		if !metricSent && !startedAt.IsZero() {
-			g.onPacket(internal_type.MessageMetricPacket{
+			g.onPacket(internal_type.AssistantMessageMetricPacket{
 				ContextID: effectiveContextId,
 				Metrics: []*protos.Metric{{
 					Name:  "tts_latency_ms",
@@ -298,7 +303,9 @@ func (g *googleTextToSpeech) Close(ctx context.Context) error {
 	g.ctxCancel()
 
 	g.mu.Lock()
-	defer g.mu.Unlock()
+	ctxID := g.contextId
+	connectedAt := g.ttsConnectedAt
+	g.ttsConnectedAt = time.Time{}
 	var combinedErr error
 	if g.streamClient != nil {
 		// Attempt to close the streaming client.
@@ -316,6 +323,29 @@ func (g *googleTextToSpeech) Close(ctx context.Context) error {
 			combinedErr = fmt.Errorf("error closing Client: %v", err)
 			g.logger.Errorf(combinedErr.Error())
 		}
+	}
+	g.mu.Unlock()
+
+	if !connectedAt.IsZero() {
+		g.onPacket(
+			internal_type.ConversationEventPacket{
+				ContextID: ctxID,
+				Name:      "tts",
+				Data: map[string]string{
+					"type":     "closed",
+					"provider": g.Name(),
+				},
+				Time: time.Now(),
+			},
+			internal_type.ConversationMetricPacket{
+				ContextID: 0,
+				Metrics: []*protos.Metric{{
+					Name:        type_enums.CONVERSATION_TTS_DURATION.String(),
+					Value:       fmt.Sprintf("%d", time.Since(connectedAt).Nanoseconds()),
+					Description: "Total TTS connection duration in nanoseconds",
+				}},
+			},
+		)
 	}
 	return combinedErr
 }

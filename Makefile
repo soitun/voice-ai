@@ -1,7 +1,11 @@
 .PHONY: help up down build rebuild logs clean restart ps shell db-shell \
         up-all up-all-with-knowledge up-web up-integration up-endpoint up-db up-redis up-opensearch deps deps-knowledge \
+        up-all-safe up-all-with-knowledge-safe \
+        up-all-fast up-all-with-knowledge-fast \
         down-all down-web down-integration down-endpoint down-db down-redis down-opensearch \
         build-all build-all-with-knowledge build-web build-integration build-endpoint \
+        build-all-safe build-all-with-knowledge-safe \
+        build-all-fast build-all-with-knowledge-fast \
         rebuild-all rebuild-all-with-knowledge rebuild-web rebuild-integration rebuild-endpoint \
         logs-all logs-web logs-integration logs-endpoint logs-db logs-redis logs-opensearch \
         restart-all restart-web restart-integration restart-endpoint \
@@ -9,7 +13,8 @@
         push-base-images \
         push-rapida-golang-bookworm push-rapida-golang-alpine push-rapida-alpine \
         push-rapida-debian-slim push-rapida-node-alpine push-rapida-python \
-        test-tts-integration test-stt-integration test-transformer-integration
+        test-tts-integration test-stt-integration test-transformer-integration \
+        doctor
 
 COMPOSE           := DOCKER_BUILDKIT=1 COMPOSE_DOCKER_CLI_BUILD=1 DOCKER_DEFAULT_PLATFORM=linux/amd64 docker compose -f docker-compose.yml
 COMPOSE_KNOWLEDGE := DOCKER_BUILDKIT=1 COMPOSE_DOCKER_CLI_BUILD=1 DOCKER_DEFAULT_PLATFORM=linux/amd64 docker compose -f docker-compose.yml -f docker-compose.knowledge.yml
@@ -21,8 +26,12 @@ help:
 	@echo "╚════════════════════════════════════════════════════════════════╝"
 	@echo ""
 	@echo "STARTUP COMMANDS:"
-	@echo "  make up-all                    - Start all services (no opensearch/document-api)"
+	@echo "  make up-all                    - Start all services (sequential low-memory build; default)"
+	@echo "  make up-all-safe               - Start all services with sequential low-memory build"
+	@echo "  make up-all-fast               - Start all services with parallel build"
 	@echo "  make up-all-with-knowledge     - Start all services including opensearch and document-api"
+	@echo "  make up-all-with-knowledge-safe- Start all services + knowledge with sequential low-memory build"
+	@echo "  make up-all-with-knowledge-fast- Start all services + knowledge with parallel build"
 	@echo "  make up-web                    - Start web-api only"
 	@echo "  make up-integration            - Start integration-api only"
 	@echo "  make up-endpoint               - Start endpoint-api only"
@@ -48,7 +57,9 @@ help:
 	@echo "  make down-nginx       	  - Stop nginx only"
 	@echo ""
 	@echo "BUILD COMMANDS:"
-	@echo "  make build-all                 - Build all services (pulls rapida-* base images from Docker Hub)"
+	@echo "  make build-all                 - Build all services sequentially (default)"
+	@echo "  make build-all-safe            - Build all services sequentially (low-memory)"
+	@echo "  make build-all-fast            - Build all services in parallel"
 	@echo "  make push-base-images          - Build + push all rapida-* base images (run when versions change)"
 	@echo "  make push-rapida-golang-bookworm - Rebuild + push rapidaai/rapida-golang:1.25.7-bookworm"
 	@echo "  make push-rapida-golang-alpine   - Rebuild + push rapidaai/rapida-golang:1.25.7-alpine"
@@ -57,6 +68,8 @@ help:
 	@echo "  make push-rapida-node-alpine     - Rebuild + push rapidaai/rapida-node:22-alpine"
 	@echo "  make push-rapida-python          - Rebuild + push rapidaai/rapida-python:3.11"
 	@echo "  make build-all-with-knowledge  - Build all services including document-api"
+	@echo "  make build-all-with-knowledge-safe - Build all services + knowledge sequentially (low-memory)"
+	@echo "  make build-all-with-knowledge-fast - Build all services + knowledge in parallel"
 	@echo "  make build-web                 - Build web-api image"
 	@echo "  make build-integration         - Build integration-api image"
 	@echo "  make build-endpoint            - Build endpoint-api image"
@@ -92,9 +105,10 @@ help:
 	@echo "  make clean               - Stop and remove containers, volumes, images"
 	@echo "  make clean-volumes       - Remove only volumes"
 	@echo "  make status              - Show container status and ports"
+	@echo "  make doctor              - Run preflight checks before build/start"
 	@echo ""
 	@echo "SETUP:"
-	@echo "  make setup-local         - Create directories and set permissions (sudo required)"
+	@echo "  make setup-local         - Create directories and set local permissions"
 	@echo ""
 
 # ============================================================================
@@ -106,23 +120,154 @@ setup-local:
 	mkdir -p ${HOME}/rapida-data/assets/opensearch
 	mkdir -p ${HOME}/rapida-data/assets/db
 	mkdir -p ${HOME}/rapida-data/assets/redis
-	@echo "Setting permissions (sudo required)..."
-	sudo setfacl -m g:docker:rwx ${HOME}/rapida-data/
-	sudo chown -R 1000:1000 ${HOME}/rapida-data/assets/opensearch
+	@echo "Applying best-effort directory permissions..."
+	chmod u+rwx ${HOME}/rapida-data ${HOME}/rapida-data/assets \
+		${HOME}/rapida-data/assets/opensearch ${HOME}/rapida-data/assets/db ${HOME}/rapida-data/assets/redis 2>/dev/null || true
 	@echo "✓ Setup complete. You can now run 'make up-all'"
+
+doctor:
+	@echo "Running Docker preflight checks..."
+	@set -e; \
+	errors=0; \
+	if ! command -v docker >/dev/null 2>&1; then \
+		echo "✗ docker CLI not found. Install Docker Desktop / Docker Engine."; \
+		errors=$$((errors + 1)); \
+	else \
+		echo "✓ docker CLI found"; \
+	fi; \
+	if ! docker info >/dev/null 2>&1; then \
+		echo "✗ Docker daemon is not reachable. Start Docker and retry."; \
+		errors=$$((errors + 1)); \
+	else \
+		echo "✓ docker daemon reachable"; \
+	fi; \
+	if ! docker compose version >/dev/null 2>&1; then \
+		echo "✗ docker compose plugin not found."; \
+		errors=$$((errors + 1)); \
+	else \
+		echo "✓ docker compose available"; \
+	fi; \
+	free_kb=$$(df -Pk "$$HOME" | awk 'NR==2 {print $$4}'); \
+	min_kb=$$((20 * 1024 * 1024)); \
+	if [ -z "$$free_kb" ]; then \
+		echo "✗ Unable to detect free disk space under $$HOME."; \
+		errors=$$((errors + 1)); \
+	elif [ "$$free_kb" -lt "$$min_kb" ]; then \
+		free_gb=$$(awk "BEGIN {printf \"%.1f\", $$free_kb/1024/1024}"); \
+		echo "✗ Low disk space: $${free_gb}GB free, at least 20GB required for first Docker build."; \
+		errors=$$((errors + 1)); \
+	else \
+		free_gb=$$(awk "BEGIN {printf \"%.1f\", $$free_kb/1024/1024}"); \
+		echo "✓ disk space looks good ($${free_gb}GB free)"; \
+	fi; \
+	if [ "$${DOCTOR_SKIP_CACHE_CHECK:-0}" != "1" ]; then \
+		build_cache_mb=$$(docker system df --format '{{.Type}} {{.Size}}' 2>/dev/null | awk '$$1=="Build" && $$2=="Cache" {size=$$3} END { \
+			if (size ~ /kB$$/) {sub(/kB$$/, "", size); mb=size/1024} \
+			else if (size ~ /MB$$/) {sub(/MB$$/, "", size); mb=size} \
+			else if (size ~ /GB$$/) {sub(/GB$$/, "", size); mb=size*1024} \
+			else if (size ~ /TB$$/) {sub(/TB$$/, "", size); mb=size*1024*1024} \
+			else if (size ~ /B$$/) {sub(/B$$/, "", size); mb=size/(1024*1024)} \
+			else {mb=-1} \
+			if (mb >= 0) printf "%.0f", mb; \
+		}'); \
+		if [ -n "$$build_cache_mb" ] && [ "$$build_cache_mb" -gt 12288 ]; then \
+			build_cache_gb=$$(awk "BEGIN {printf \"%.1f\", $$build_cache_mb/1024}"); \
+			echo "! Build cache is large (~$${build_cache_gb}GB)."; \
+			echo "  Run: docker builder prune -af"; \
+			echo "  (Set DOCTOR_SKIP_CACHE_CHECK=1 to bypass this check.)"; \
+		else \
+			echo "✓ build cache usage is within preflight limit"; \
+		fi; \
+	fi; \
+	for d in "$$HOME/rapida-data/assets" "$$HOME/rapida-data/assets/db" "$$HOME/rapida-data/assets/redis"; do \
+		mkdir -p "$$d"; \
+		if [ ! -w "$$d" ]; then \
+			echo "✗ Directory is not writable: $$d"; \
+			errors=$$((errors + 1)); \
+		else \
+			touch "$$d/.doctor-write-test" 2>/dev/null || true; \
+			rm -f "$$d/.doctor-write-test" 2>/dev/null || true; \
+			echo "✓ writable directory: $$d"; \
+		fi; \
+	done; \
+	if command -v lsof >/dev/null 2>&1; then \
+		for p in 3000 8080 9004 9005 9007 4573; do \
+			owner=$$(lsof -nP -iTCP:$$p -sTCP:LISTEN 2>/dev/null | awk 'NR==2 {print $$1}'); \
+			if [ -z "$$owner" ]; then \
+				echo "✓ TCP port $$p is free"; \
+			elif echo "$$owner" | grep -Eq '^(com\.docke|docker-proxy|docker)$$'; then \
+				echo "! TCP port $$p is in use by Docker ($$owner); continuing."; \
+			else \
+				echo "✗ TCP port $$p is already in use by $$owner."; \
+				errors=$$((errors + 1)); \
+			fi; \
+		done; \
+		udp_owner=$$(lsof -nP -iUDP:5090 2>/dev/null | awk 'NR==2 {print $$1}'); \
+		if [ -z "$$udp_owner" ]; then \
+			echo "✓ UDP port 5090 is free"; \
+		elif echo "$$udp_owner" | grep -Eq '^(com\.docke|docker-proxy|docker)$$'; then \
+			echo "! UDP port 5090 is in use by Docker ($$udp_owner); continuing."; \
+		else \
+			echo "✗ UDP port 5090 is already in use by $$udp_owner."; \
+			errors=$$((errors + 1)); \
+		fi; \
+	else \
+		echo "! lsof not found, skipping port checks."; \
+	fi; \
+	if [ $$errors -gt 0 ]; then \
+		echo ""; \
+		echo "Preflight failed with $$errors issue(s). Fix the above and rerun."; \
+		exit 1; \
+	fi; \
+	echo "✓ Preflight checks passed."
 
 
 up-all:
+	@$(MAKE) up-all-safe
+
+up-all-fast:
+	@$(MAKE) doctor
 	@echo "Starting all services (without opensearch/document-api)..."
 	$(COMPOSE) up -d
 	@echo "✓ All services started"
 	@echo "  Run 'make up-all-with-knowledge' to include opensearch + document-api"
+	@echo "  If your machine is memory-constrained, run 'make up-all-safe'"
+	@$(MAKE) status
+
+up-all-safe:
+	@$(MAKE) doctor
+	@echo "Building all services sequentially (low-memory mode)..."
+	@for service in ui web-api integration-api endpoint-api assistant-api; do \
+		echo "  -> building $$service"; \
+		$(COMPOSE) build $$service || exit 1; \
+	done
+	@echo "Starting all services (without opensearch/document-api)..."
+	$(COMPOSE) up -d --no-build
+	@echo "✓ All services started (low-memory mode)"
+	@echo "  Run 'make up-all-with-knowledge-safe' to include opensearch + document-api"
 	@$(MAKE) status
 
 up-all-with-knowledge:
+	@$(MAKE) up-all-with-knowledge-safe
+
+up-all-with-knowledge-fast:
+	@$(MAKE) doctor
 	@echo "Starting all services including knowledge base..."
 	$(COMPOSE_KNOWLEDGE) up -d
 	@echo "✓ All services started (with knowledge base)"
+	@echo "  If your machine is memory-constrained, run 'make up-all-with-knowledge-safe'"
+	@$(MAKE) status
+
+up-all-with-knowledge-safe:
+	@$(MAKE) doctor
+	@echo "Building all services sequentially (low-memory mode, with knowledge)..."
+	@for service in ui web-api integration-api endpoint-api assistant-api document-api; do \
+		echo "  -> building $$service"; \
+		$(COMPOSE_KNOWLEDGE) build $$service || exit 1; \
+	done
+	@echo "Starting all services including knowledge base..."
+	$(COMPOSE_KNOWLEDGE) up -d --no-build
+	@echo "✓ All services started (low-memory mode, with knowledge base)"
 	@$(MAKE) status
 
 up-ui:
@@ -284,14 +429,40 @@ push-base-images: push-rapida-golang-bookworm push-rapida-golang-alpine push-rap
 	@echo "✓ All base images pushed to Docker Hub"
 
 build-all:
+	@$(MAKE) build-all-safe
+
+build-all-fast:
+	@$(MAKE) doctor
 	@echo "Building all services (without document-api/opensearch)..."
 	$(COMPOSE) build ui web-api integration-api endpoint-api assistant-api
 	@echo "✓ All services built"
 
+build-all-safe:
+	@$(MAKE) doctor
+	@echo "Building all services sequentially (low-memory mode)..."
+	@for service in ui web-api integration-api endpoint-api assistant-api; do \
+		echo "  -> building $$service"; \
+		$(COMPOSE) build $$service || exit 1; \
+	done
+	@echo "✓ All services built (low-memory mode)"
+
 build-all-with-knowledge:
+	@$(MAKE) build-all-with-knowledge-safe
+
+build-all-with-knowledge-fast:
+	@$(MAKE) doctor
 	@echo "Building all services including document-api..."
 	$(COMPOSE_KNOWLEDGE) build ui web-api integration-api endpoint-api assistant-api document-api
 	@echo "✓ All services built (with knowledge base)"
+
+build-all-with-knowledge-safe:
+	@$(MAKE) doctor
+	@echo "Building all services including document-api sequentially (low-memory mode)..."
+	@for service in ui web-api integration-api endpoint-api assistant-api document-api; do \
+		echo "  -> building $$service"; \
+		$(COMPOSE_KNOWLEDGE) build $$service || exit 1; \
+	done
+	@echo "✓ All services built (low-memory mode, with knowledge base)"
 
 build-ui:
 	@echo "Building ui..."
@@ -324,11 +495,13 @@ build-endpoint:
 	@echo "✓ endpoint-api built"
 
 rebuild-all:
+	@$(MAKE) doctor
 	@echo "Rebuilding all services (no cache, without document-api/opensearch)..."
 	$(COMPOSE) build --no-cache ui web-api integration-api endpoint-api assistant-api
 	@echo "✓ All services rebuilt"
 
 rebuild-all-with-knowledge:
+	@$(MAKE) doctor
 	@echo "Rebuilding all services including document-api (no cache)..."
 	$(COMPOSE_KNOWLEDGE) build --no-cache ui web-api integration-api endpoint-api assistant-api document-api
 	@echo "✓ All services rebuilt (with knowledge base)"
@@ -475,14 +648,16 @@ status: ps-all
 	@echo "Service Ports:"
 	@echo "=============="
 	@echo "  UI:               http://localhost:3000"
-	@echo "  Web-API:          http://localhost:9001"
+	@echo "  API Gateway:      http://localhost:8080"
+	@echo "  Web-API:          internal only (no host port)"
 	@echo "  Integration-API:  http://localhost:9004"
 	@echo "  Endpoint-API:     http://localhost:9005"
 	@echo "  Assistant-API:    http://localhost:9007"
 	@echo "  SIP:              udp://localhost:5090"
 	@echo "  PostgreSQL:       internal only (no host port)"
 	@echo "  Redis:            internal only (no host port)"
-	@echo "  OpenSearch:       internal only (no host port)"
+	@echo "  OpenSearch:       internal only (run make up-all-with-knowledge)"
+	@echo "  Document-API:     internal only (run make up-all-with-knowledge)"
 	@echo ""
 
 ps: ps-all

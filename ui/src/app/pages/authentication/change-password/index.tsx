@@ -1,41 +1,30 @@
 import React, { useCallback, useState } from 'react';
-import { DescriptiveHeading } from '@/app/components/heading/descriptive-heading';
 import { Helmet } from '@/app/components/helmet';
-import { Input } from '@/app/components/form/input';
-import { Label } from '@/app/components/form/label';
 import { useNavigate, useParams } from 'react-router-dom';
 import { CreatePassword } from '@rapidaai/react';
 import { CreatePasswordResponse } from '@rapidaai/react';
 import { useForm } from 'react-hook-form';
-import { IBlueBGArrowButton } from '@/app/components/form/button';
-import { ErrorMessage } from '@/app/components/form/error-message';
 import { ServiceError } from '@rapidaai/react';
 import { connectionConfig } from '@/configs';
 import { useRapidaStore } from '@/hooks';
-import { FieldSet } from '@/app/components/form/fieldset';
+import { Stack, TextInput } from '@/app/components/carbon/form';
+import { PrimaryButton } from '@/app/components/carbon/button';
+import { Notification } from '@/app/components/carbon/notification';
+import { ArrowRight } from '@carbon/icons-react';
+import { PasswordInput } from '@carbon/react';
 
-/**
- *
- * @returns
- */
 export function ChangePasswordPage() {
-  /**
-   * Form handling
-   */
   const { register, handleSubmit } = useForm();
   const [error, setError] = useState('');
   const navigate = useNavigate();
   const { token } = useParams();
   const { loading, showLoader, hideLoader } = useRapidaStore();
 
-  /**
-   * after changing the password
-   */
   const afterCreatePassword = useCallback(
     (err: ServiceError | null, cpr: CreatePasswordResponse | null) => {
       hideLoader();
       if (err) {
-        setError('unable to process your request. please try again later.');
+        setError('Unable to process your request. Please try again later.');
         return;
       }
       if (cpr?.getSuccess()) {
@@ -43,23 +32,16 @@ export function ChangePasswordPage() {
       } else {
         let errorMessage = cpr?.getError();
         if (errorMessage) setError(errorMessage.getHumanmessage());
-        else
-          setError('Unable to process your request. please try again later.');
+        else setError('Unable to process your request. Please try again later.');
         return;
       }
     },
     [],
   );
-  /**
-   *
-   * @param data
-   * @returns
-   */
+
   const onCreatePassword = data => {
     if (!token) {
-      setError(
-        'The password token is expired, please request again for reset password token.',
-      );
+      setError('The password token is expired, please request again for reset password token.');
       return;
     }
     if (data.password !== data.confirmPassword) {
@@ -72,41 +54,42 @@ export function ChangePasswordPage() {
 
   return (
     <>
-      <Helmet title="Forgot your password"></Helmet>
-      <DescriptiveHeading
-        heading="Change Password"
-        subheading="You’ve requested to change your password. Please enter your new password below to secure your account. Once updated, you can use your new password to sign in."
-      ></DescriptiveHeading>
-      <form
-        className="flex flex-col gap-4 mt-6"
-        onSubmit={handleSubmit(onCreatePassword)}
-      >
-        <FieldSet>
-          <Label for="password" text="Password"></Label>
-          <Input
+      <Helmet title="Change your password" />
+      <h2 className="text-2xl font-light tracking-tight">Change Password</h2>
+      <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">
+        You've requested to change your password. Please enter your new password
+        below to secure your account.
+      </p>
+
+      <form className="mt-6" onSubmit={handleSubmit(onCreatePassword)}>
+        <Stack gap={5}>
+          <PasswordInput
+            id="new-password"
+            labelText="Password"
             required
+            placeholder="********"
             {...register('password')}
-            type="password"
-            placeholder="********"
-          ></Input>
-        </FieldSet>
-        <FieldSet>
-          <Label for="password" text="Confirm Password"></Label>
-          <Input
+          />
+          <PasswordInput
+            id="confirm-password"
+            labelText="Confirm Password"
             required
-            {...register('confirmPassword')}
-            type="password"
             placeholder="********"
-          ></Input>
-        </FieldSet>
-        <ErrorMessage message={error} />
-        <IBlueBGArrowButton
-          type="submit"
-          className="w-full justify-between h-11"
-          isLoading={loading}
-        >
-          Change Password
-        </IBlueBGArrowButton>
+            {...register('confirmPassword')}
+          />
+          {error && (
+            <Notification kind="error" title="Error" subtitle={error} />
+          )}
+          <PrimaryButton
+            size="lg"
+            renderIcon={ArrowRight}
+            type="submit"
+            isLoading={loading}
+            className="!w-full !max-w-none !justify-between"
+          >
+            Change Password
+          </PrimaryButton>
+        </Stack>
       </form>
     </>
   );

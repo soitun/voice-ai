@@ -37,10 +37,13 @@ import { AssistantWebwidgetDeploymentDialog } from '@/app/components/base/modal/
 import { TabForm } from '@/app/components/form/tab-form';
 import { useConfirmDialog } from '@/app/pages/assistant/actions/hooks/use-confirmation';
 import {
-  IBlueBGArrowButton,
-  ICancelButton,
-  ISecondaryButton,
-} from '@/app/components/form/button';
+  PrimaryButton,
+  SecondaryButton,
+} from '@/app/components/carbon/button';
+import { InputCheckbox } from '@/app/components/form/checkbox';
+import { InputHelper } from '@/app/components/input-helper';
+import { BaseCard } from '@/app/components/base/cards';
+import { ButtonSet } from '@carbon/react';
 
 const STEPS = [
   {
@@ -78,17 +81,18 @@ const ConfigureAssistantWebDeployment: FC<{ assistantId: string }> = ({
   assistantId,
 }) => {
   const { goToDeploymentAssistant } = useGlobalNavigation();
-  const { loading, showLoader, hideLoader } = useRapidaStore();
+  const { showLoader, hideLoader } = useRapidaStore();
   const { providerCredentials } = useAllProviderCredentials();
   const { authId, projectId, token } = useCurrentCredential();
   const { showDialog, ConfirmDialogComponent } = useConfirmDialog({});
 
   const [activeTab, setActiveTab] = useState('experience');
   const [errorMessage, setErrorMessage] = useState('');
+  const [isDeploying, setIsDeploying] = useState(false);
   const [showInstruction, setShowInstruction] = useState(false);
   const [deploymentId, setDeploymentId] = useState<string | null>(null);
   const [voiceInputEnable, setVoiceInputEnable] = useState(false);
-  const [voiceOutputEnable, setVoiceOutputEnable] = useState(false);
+  const [voiceOutputEnable, setVoiceOutputEnable] = useState(true);
 
   const [experienceConfig, setExperienceConfig] =
     useState<WebWidgetExperienceConfig>({
@@ -220,20 +224,21 @@ const ConfigureAssistantWebDeployment: FC<{ assistantId: string }> = ({
     }
 
     if (activeTab === 'voice-input') {
-      if (!audioInputConfig.provider) {
-        setErrorMessage('Please select a speech-to-text provider.');
-        return;
+      if (voiceInputEnable) {
+        if (!audioInputConfig.provider) {
+          setErrorMessage('Please select a speech-to-text provider.');
+          return;
+        }
+        const err = ValidateSpeechToTextIfInvalid(
+          audioInputConfig.provider,
+          audioInputConfig.parameters,
+          getProviderCredentialIds(audioInputConfig.provider),
+        );
+        if (err) {
+          setErrorMessage(err);
+          return;
+        }
       }
-      const err = ValidateSpeechToTextIfInvalid(
-        audioInputConfig.provider,
-        audioInputConfig.parameters,
-        getProviderCredentialIds(audioInputConfig.provider),
-      );
-      if (err) {
-        setErrorMessage(err);
-        return;
-      }
-      setVoiceInputEnable(true);
     }
 
     if (idx < STEPS.length - 1) {
@@ -241,31 +246,19 @@ const ConfigureAssistantWebDeployment: FC<{ assistantId: string }> = ({
     }
   };
 
-  const handleSkipVoiceInput = () => {
-    setErrorMessage('');
-    setVoiceInputEnable(false);
-    setActiveTab('voice-output');
-  };
-
-  const handleSkipVoiceOutput = () => {
-    setErrorMessage('');
-    setVoiceOutputEnable(false);
-    handleDeployWebPlugin(false);
-  };
-
-  const handleDeployWebPlugin = (includeVoiceOutput = true) => {
-    showLoader('block');
+  const handleDeployWebPlugin = () => {
+    setIsDeploying(true);
     setErrorMessage('');
 
     if (!experienceConfig.greeting) {
-      hideLoader();
+      setIsDeploying(false);
       setErrorMessage('Please provide a greeting for the assistant.');
       return;
     }
 
     if (voiceInputEnable) {
       if (!audioInputConfig.provider) {
-        hideLoader();
+        setIsDeploying(false);
         setErrorMessage(
           'Please provide a provider for interpreting input audio.',
         );
@@ -277,15 +270,15 @@ const ConfigureAssistantWebDeployment: FC<{ assistantId: string }> = ({
         getProviderCredentialIds(audioInputConfig.provider),
       );
       if (err) {
-        hideLoader();
+        setIsDeploying(false);
         setErrorMessage(err);
         return;
       }
     }
 
-    if (includeVoiceOutput) {
+    if (voiceOutputEnable) {
       if (!audioOutputConfig.provider) {
-        hideLoader();
+        setIsDeploying(false);
         setErrorMessage(
           'Please provide a provider for interpreting output audio.',
         );
@@ -297,7 +290,7 @@ const ConfigureAssistantWebDeployment: FC<{ assistantId: string }> = ({
         getProviderCredentialIds(audioOutputConfig.provider),
       );
       if (err) {
-        hideLoader();
+        setIsDeploying(false);
         setErrorMessage(err);
         return;
       }
@@ -334,7 +327,7 @@ const ConfigureAssistantWebDeployment: FC<{ assistantId: string }> = ({
       webDeployment.setInputaudio(inputAudio);
     }
 
-    if (includeVoiceOutput) {
+    if (voiceOutputEnable) {
       const outputAudio = new DeploymentAudioProvider();
       outputAudio.setAudioprovider(audioOutputConfig.provider);
       outputAudio.setAudiooptionsList(audioOutputConfig.parameters);
@@ -352,7 +345,6 @@ const ConfigureAssistantWebDeployment: FC<{ assistantId: string }> = ({
       }),
     )
       .then(response => {
-        hideLoader();
         if (response?.getData() && response.getSuccess()) {
           if (deploymentId) {
             toast.success('Web widget deployment updated successfully.');
@@ -368,10 +360,12 @@ const ConfigureAssistantWebDeployment: FC<{ assistantId: string }> = ({
         }
       })
       .catch(err => {
-        hideLoader();
         setErrorMessage(
           err?.message || 'Error deploying web widget. Please try again.',
         );
+      })
+      .finally(() => {
+        setIsDeploying(false);
       });
   };
 
@@ -417,21 +411,23 @@ const ConfigureAssistantWebDeployment: FC<{ assistantId: string }> = ({
                 />
               ),
               actions: [
-                <ICancelButton
-                  className="w-full h-full"
-                  onClick={() =>
-                    showDialog(() => goToDeploymentAssistant(assistantId))
-                  }
-                >
-                  Cancel
-                </ICancelButton>,
-                <IBlueBGArrowButton
-                  type="button"
-                  className="w-full h-full"
-                  onClick={handleNext}
-                >
-                  Next
-                </IBlueBGArrowButton>,
+                <ButtonSet className="!w-full [&>button]:!flex-1 [&>button]:!max-w-none">
+                  <SecondaryButton size="lg"
+                    className="w-full h-full"
+                    onClick={() =>
+                      showDialog(() => goToDeploymentAssistant(assistantId))
+                    }
+                  >
+                    Cancel
+                  </SecondaryButton>
+                  <PrimaryButton size="lg"
+                    type="button"
+                    className="w-full h-full"
+                    onClick={handleNext}
+                  >
+                    Next
+                  </PrimaryButton>
+                </ButtonSet>,
               ],
             },
             {
@@ -440,33 +436,48 @@ const ConfigureAssistantWebDeployment: FC<{ assistantId: string }> = ({
               description:
                 'Configure the speech-to-text provider for capturing user audio.',
               body: (
-                <ConfigureAudioInputProvider
-                  audioInputConfig={audioInputConfig}
-                  setAudioInputConfig={setAudioInputConfig}
-                />
+                <div>
+                  <div className="px-6 pt-6 pb-4">
+                    <BaseCard className="p-4 gap-2">
+                      <InputCheckbox
+                        checked={voiceInputEnable}
+                        onChange={e => setVoiceInputEnable(e.target.checked)}
+                      >
+                        Enable voice input (Speech-to-Text)
+                      </InputCheckbox>
+                      <InputHelper>
+                        {voiceInputEnable
+                          ? 'Voice input is currently enabled.'
+                          : 'Voice input is disabled. This deployment will not transcribe user speech, and existing STT settings will be removed when you save.'}
+                      </InputHelper>
+                    </BaseCard>
+                  </div>
+                  {voiceInputEnable && (
+                    <ConfigureAudioInputProvider
+                      audioInputConfig={audioInputConfig}
+                      setAudioInputConfig={setAudioInputConfig}
+                    />
+                  )}
+                </div>
               ),
               actions: [
-                <ICancelButton
-                  className="w-full h-full"
-                  onClick={() =>
-                    showDialog(() => goToDeploymentAssistant(assistantId))
-                  }
-                >
-                  Cancel
-                </ICancelButton>,
-                <ISecondaryButton
-                  className="w-full h-full"
-                  onClick={handleSkipVoiceInput}
-                >
-                  Skip
-                </ISecondaryButton>,
-                <IBlueBGArrowButton
-                  type="button"
-                  className="w-full h-full"
-                  onClick={handleNext}
-                >
-                  Next
-                </IBlueBGArrowButton>,
+                <ButtonSet className="!w-full [&>button]:!flex-1 [&>button]:!max-w-none">
+                  <SecondaryButton size="lg"
+                    className="w-full h-full"
+                    onClick={() =>
+                      showDialog(() => goToDeploymentAssistant(assistantId))
+                    }
+                  >
+                    Cancel
+                  </SecondaryButton>
+                  <PrimaryButton size="lg"
+                    type="button"
+                    className="w-full h-full"
+                    onClick={handleNext}
+                  >
+                    Next
+                  </PrimaryButton>
+                </ButtonSet>,
               ],
             },
             {
@@ -475,35 +486,50 @@ const ConfigureAssistantWebDeployment: FC<{ assistantId: string }> = ({
               description:
                 'Configure the text-to-speech provider for audio responses.',
               body: (
-                <ConfigureAudioOutputProvider
-                  audioOutputConfig={audioOutputConfig}
-                  setAudioOutputConfig={setAudioOutputConfig}
-                />
+                <div>
+                  <div className="px-6 pt-6 pb-4">
+                    <BaseCard className="p-4 gap-2">
+                      <InputCheckbox
+                        checked={voiceOutputEnable}
+                        onChange={e => setVoiceOutputEnable(e.target.checked)}
+                      >
+                        Enable voice output (Text-to-Speech)
+                      </InputCheckbox>
+                      <InputHelper>
+                        {voiceOutputEnable
+                          ? 'Voice output is currently enabled.'
+                          : 'Voice output is disabled. Assistant responses will be text only.'}
+                      </InputHelper>
+                    </BaseCard>
+                  </div>
+                  {voiceOutputEnable && (
+                    <ConfigureAudioOutputProvider
+                      audioOutputConfig={audioOutputConfig}
+                      setAudioOutputConfig={setAudioOutputConfig}
+                    />
+                  )}
+                </div>
               ),
               actions: [
-                <ICancelButton
-                  className="w-full h-full"
-                  onClick={() =>
-                    showDialog(() => goToDeploymentAssistant(assistantId))
-                  }
-                >
-                  Cancel
-                </ICancelButton>,
-                <ISecondaryButton
-                  className="w-full h-full"
-                  isLoading={loading}
-                  onClick={handleSkipVoiceOutput}
-                >
-                  Deploy without voice output
-                </ISecondaryButton>,
-                <IBlueBGArrowButton
-                  type="button"
-                  className="w-full h-full"
-                  isLoading={loading}
-                  onClick={() => handleDeployWebPlugin(true)}
-                >
-                  Deploy with voice output
-                </IBlueBGArrowButton>,
+                <ButtonSet className="!w-full [&>button]:!flex-1 [&>button]:!max-w-none">
+                  <SecondaryButton size="lg"
+                    className="w-full h-full"
+                    onClick={() =>
+                      showDialog(() => goToDeploymentAssistant(assistantId))
+                    }
+                  >
+                    Cancel
+                  </SecondaryButton>
+                  <PrimaryButton size="lg"
+                    type="button"
+                    className="w-full h-full"
+                    isLoading={isDeploying}
+                    disabled={isDeploying}
+                    onClick={handleDeployWebPlugin}
+                  >
+                    Deploy Web Widget
+                  </PrimaryButton>
+                </ButtonSet>,
               ],
             },
           ]}

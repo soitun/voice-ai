@@ -1,78 +1,22 @@
-import { CheckCircle, XCircle, AlertTriangle } from 'lucide-react'; // Import necessary icons
+import { FC } from 'react';
+import { unstable__ShapeIndicator as ShapeIndicatorModule } from '@carbon/react';
 
-// Status configurations with SVG icons and appropriate colors
-const statusConfig = {
-  SUCCESS: {
-    bgColor: 'bg-green-100 dark:bg-green-900/30',
-    textColor: 'text-green-700 dark:text-green-500',
-    iconColor: 'text-green-500 dark:text-green-400',
-    ringColor: 'ring-green-200/10 dark:ring-green-700/10',
-    Icon: CheckCircle,
-    display: 'Success',
-  },
-  CLIENT_ERROR: {
-    bgColor: 'bg-yellow-100 dark:bg-yellow-900/30',
-    textColor: 'text-yellow-700 dark:text-yellow-500',
-    iconColor: 'text-yellow-500 dark:text-yellow-400',
-    ringColor: 'ring-yellow-200/10 dark:ring-yellow-700/10',
-    Icon: AlertTriangle,
-    display: 'Client Error',
-  },
-  SERVER_ERROR: {
-    bgColor: 'bg-red-100 dark:bg-red-900/30',
-    textColor: 'text-red-700 dark:text-red-500',
-    iconColor: 'text-red-500 dark:text-red-400',
-    ringColor: 'ring-red-200/10 dark:ring-red-700/10',
-    Icon: XCircle,
-    display: 'Server Error',
-  },
+const ShapeIndicator =
+  (ShapeIndicatorModule as unknown as { default?: FC<any> }).default ||
+  (ShapeIndicatorModule as unknown as FC<any>);
+
+const getStatusKind = (status: number): { kind: string; label: string } => {
+  if (status >= 200 && status < 300) return { kind: 'stable', label: `${status} OK` };
+  if (status >= 300 && status < 400) return { kind: 'informative', label: `${status} Redirect` };
+  if (status >= 400 && status < 500) return { kind: 'cautious', label: `${status} Client Error` };
+  if (status >= 500) return { kind: 'failed', label: `${status} Server Error` };
+  return { kind: 'undefined', label: `${status}` };
 };
 
-// Size variants
-const sizeClasses = {
-  small: {
-    container: 'text-xs px-2 py-0.5 gap-1',
-    icon: 12,
-  },
-  medium: {
-    container: 'text-sm px-2.5 py-1 gap-1.5',
-    icon: 16,
-  },
-  large: {
-    container: 'text-base px-3 py-1.5 gap-2',
-    icon: 18,
-  },
-};
-
-export const HttpStatusSpanIndicator = ({
-  status,
-  size = 'medium',
-}: {
+export const HttpStatusSpanIndicator: FC<{
   status: number;
-  size?: 'small' | 'medium' | 'large';
-}) => {
-  const getStatusType = (status: number) => {
-    if (status >= 200 && status < 300) return 'SUCCESS';
-    if (status >= 400 && status < 500) return 'CLIENT_ERROR';
-    if (status >= 500) return 'SERVER_ERROR';
-    return 'CLIENT_ERROR'; // Default to CLIENT_ERROR for unknown status codes
-  };
-
-  const statusType = getStatusType(status);
-  const config = statusConfig[statusType];
-  const { Icon } = config;
-  const sizeClass = sizeClasses[size] || sizeClasses.medium;
-
-  return (
-    <span
-      className={`shrink-0 inline-flex items-center ${config.bgColor} ${config.textColor} font-medium ${sizeClass.container} ring-none ring-inset ${config.ringColor}`}
-    >
-      <Icon
-        className={`${config.iconColor}`}
-        size={sizeClass.icon}
-        strokeWidth={1.5}
-      />
-      HTTP Status: {status}
-    </span>
-  );
+  textSize?: 12 | 14;
+}> = ({ status, textSize = 12 }) => {
+  const { kind, label } = getStatusKind(status);
+  return <ShapeIndicator kind={kind as any} label={label} textSize={textSize} />;
 };

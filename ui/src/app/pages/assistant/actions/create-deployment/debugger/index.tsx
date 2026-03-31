@@ -37,10 +37,12 @@ import { useConfirmDialog } from '@/app/pages/assistant/actions/hooks/use-confir
 import { DebuggerDeploymentSuccessDialog } from '@/app/components/base/modal/debugger-deployment-success-modal';
 import { TabForm } from '@/app/components/form/tab-form';
 import {
-  IBlueBGArrowButton,
-  ICancelButton,
-  ISecondaryButton,
-} from '@/app/components/form/button';
+  PrimaryButton,
+  SecondaryButton,
+  GhostButton,
+} from '@/app/components/carbon/button';
+import { ButtonSet, Checkbox } from '@carbon/react';
+import { CornerBorderOverlay } from '@/app/components/base/corner-border';
 
 const STEPS = [
   {
@@ -77,13 +79,15 @@ const ConfigureAssistantDebuggerDeployment: FC<{ assistantId: string }> = ({
   assistantId,
 }) => {
   const { goToDeploymentAssistant } = useGlobalNavigation();
-  const { loading, showLoader, hideLoader } = useRapidaStore();
+  const { showLoader, hideLoader } = useRapidaStore();
   const { providerCredentials } = useAllProviderCredentials();
   const { authId, projectId, token } = useCurrentCredential();
 
   const [activeTab, setActiveTab] = useState('experience');
   const [errorMessage, setErrorMessage] = useState('');
-  const [voiceInputEnable, setVoiceInputEnable] = useState(false);
+  const [isDeploying, setIsDeploying] = useState(false);
+  const [voiceInputEnable, setVoiceInputEnable] = useState(true);
+  const [voiceOutputEnable, setVoiceOutputEnable] = useState(true);
   const [success, setSuccess] = useState(false);
 
   const [experienceConfig, setExperienceConfig] = useState<ExperienceConfig>({
@@ -165,6 +169,7 @@ const ConfigureAssistantDebuggerDeployment: FC<{ assistantId: string }> = ({
 
         if (deployment.getOutputaudio()) {
           const provider = deployment.getOutputaudio()!;
+          setVoiceOutputEnable(true);
           setAudioOutputConfig({
             provider: provider.getAudioprovider() || 'cartesia',
             parameters: GetDefaultTextToSpeechIfInvalid(
@@ -172,6 +177,8 @@ const ConfigureAssistantDebuggerDeployment: FC<{ assistantId: string }> = ({
               GetDefaultSpeakerConfig(provider.getAudiooptionsList() || []),
             ),
           });
+        } else {
+          setVoiceOutputEnable(false);
         }
       })
       .catch(() => {
@@ -196,25 +203,32 @@ const ConfigureAssistantDebuggerDeployment: FC<{ assistantId: string }> = ({
     }
   };
 
+  const handlePrevious = () => {
+    setErrorMessage('');
+    const idx = STEPS.findIndex(s => s.code === activeTab);
+    if (idx > 0) setActiveTab(STEPS[idx - 1].code);
+  };
+
   const handleNext = () => {
     setErrorMessage('');
     const idx = STEPS.findIndex(s => s.code === activeTab);
 
     if (activeTab === 'voice-input') {
-      if (!audioInputConfig.provider) {
-        setErrorMessage('Please select a speech-to-text provider.');
-        return;
+      if (voiceInputEnable) {
+        if (!audioInputConfig.provider) {
+          setErrorMessage('Please select a speech-to-text provider.');
+          return;
+        }
+        const err = ValidateSpeechToTextIfInvalid(
+          audioInputConfig.provider,
+          audioInputConfig.parameters,
+          getProviderCredentialIds(audioInputConfig.provider),
+        );
+        if (err) {
+          setErrorMessage(err);
+          return;
+        }
       }
-      const err = ValidateSpeechToTextIfInvalid(
-        audioInputConfig.provider,
-        audioInputConfig.parameters,
-        getProviderCredentialIds(audioInputConfig.provider),
-      );
-      if (err) {
-        setErrorMessage(err);
-        return;
-      }
-      setVoiceInputEnable(true);
     }
 
     if (idx < STEPS.length - 1) {
@@ -222,21 +236,13 @@ const ConfigureAssistantDebuggerDeployment: FC<{ assistantId: string }> = ({
     }
   };
 
-  const handleSkipVoiceInput = () => {
-    setErrorMessage('');
-    setVoiceInputEnable(false);
-    setActiveTab('voice-output');
-  };
-
-  // includeVoiceOutput is passed directly to avoid React state timing issues
-  // on the last step where Skip and Deploy are on the same step.
-  const handleDeployDebugger = (includeVoiceOutput: boolean) => {
-    showLoader('block');
+  const handleDeployDebugger = () => {
+    setIsDeploying(true);
     setErrorMessage('');
 
     if (voiceInputEnable) {
       if (!audioInputConfig.provider) {
-        hideLoader();
+        setIsDeploying(false);
         setErrorMessage(
           'Please select a speech-to-text provider for voice input.',
         );
@@ -248,15 +254,15 @@ const ConfigureAssistantDebuggerDeployment: FC<{ assistantId: string }> = ({
         getProviderCredentialIds(audioInputConfig.provider),
       );
       if (inputError) {
-        hideLoader();
+        setIsDeploying(false);
         setErrorMessage(inputError);
         return;
       }
     }
 
-    if (includeVoiceOutput) {
+    if (voiceOutputEnable) {
       if (!audioOutputConfig.provider) {
-        hideLoader();
+        setIsDeploying(false);
         setErrorMessage(
           'Please select a text-to-speech provider for voice output.',
         );
@@ -268,7 +274,7 @@ const ConfigureAssistantDebuggerDeployment: FC<{ assistantId: string }> = ({
         getProviderCredentialIds(audioOutputConfig.provider),
       );
       if (outputError) {
-        hideLoader();
+        setIsDeploying(false);
         setErrorMessage(outputError);
         return;
       }
@@ -298,7 +304,7 @@ const ConfigureAssistantDebuggerDeployment: FC<{ assistantId: string }> = ({
       deployment.setInputaudio(inputAudio);
     }
 
-    if (includeVoiceOutput) {
+    if (voiceOutputEnable) {
       const outputAudio = new DeploymentAudioProvider();
       outputAudio.setAudioprovider(audioOutputConfig.provider);
       outputAudio.setAudiooptionsList(audioOutputConfig.parameters);
@@ -318,7 +324,6 @@ const ConfigureAssistantDebuggerDeployment: FC<{ assistantId: string }> = ({
       }),
     )
       .then(response => {
-        hideLoader();
         if (response?.getData() && response.getSuccess()) {
           toast.success('Debugger deployment updated successfully.');
           setSuccess(true);
@@ -330,10 +335,12 @@ const ConfigureAssistantDebuggerDeployment: FC<{ assistantId: string }> = ({
         }
       })
       .catch(() => {
-        hideLoader();
         setErrorMessage(
           'Error deploying as debugger. Please check and try again.',
         );
+      })
+      .finally(() => {
+        setIsDeploying(false);
       });
   };
 
@@ -379,21 +386,18 @@ const ConfigureAssistantDebuggerDeployment: FC<{ assistantId: string }> = ({
                 />
               ),
               actions: [
-                <ICancelButton
-                  className="w-full h-full"
-                  onClick={() =>
-                    showDialog(() => goToDeploymentAssistant(assistantId))
-                  }
-                >
-                  Cancel
-                </ICancelButton>,
-                <IBlueBGArrowButton
-                  type="button"
-                  className="w-full h-full"
-                  onClick={handleNext}
-                >
-                  Next
-                </IBlueBGArrowButton>,
+                <ButtonSet className="!w-full [&>button]:!flex-1 [&>button]:!max-w-none">
+                  <SecondaryButton size="lg"
+                    onClick={() =>
+                      showDialog(() => goToDeploymentAssistant(assistantId))
+                    }
+                  >
+                    Cancel
+                  </SecondaryButton>
+                  <PrimaryButton size="lg" onClick={handleNext}>
+                    Next
+                  </PrimaryButton>
+                </ButtonSet>,
               ],
             },
             {
@@ -402,33 +406,53 @@ const ConfigureAssistantDebuggerDeployment: FC<{ assistantId: string }> = ({
               description:
                 'Configure the speech-to-text provider for capturing user audio.',
               body: (
-                <ConfigureAudioInputProvider
-                  audioInputConfig={audioInputConfig}
-                  setAudioInputConfig={setAudioInputConfig}
-                />
+                <div>
+                  <div className="px-6 pt-6 pb-4">
+                    <button
+                      type="button"
+                      onClick={() => setVoiceInputEnable(!voiceInputEnable)}
+                      className="relative group w-full text-left p-4 border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-950/50 hover:bg-gray-50 dark:hover:bg-gray-900/60 transition-colors"
+                    >
+                      <CornerBorderOverlay className={voiceInputEnable ? 'opacity-100' : undefined} />
+                      <div onClick={e => e.stopPropagation()}>
+                        <Checkbox
+                          id="voice-input-toggle"
+                          labelText="Enable voice input (Speech-to-Text)"
+                          checked={voiceInputEnable}
+                          onChange={(_, { checked }) => setVoiceInputEnable(checked)}
+                        />
+                      </div>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 ml-6">
+                        {voiceInputEnable
+                          ? 'Voice input is currently enabled.'
+                          : 'Voice input is disabled. This deployment will not transcribe user speech.'}
+                      </p>
+                    </button>
+                  </div>
+                  {voiceInputEnable && (
+                    <ConfigureAudioInputProvider
+                      audioInputConfig={audioInputConfig}
+                      setAudioInputConfig={setAudioInputConfig}
+                    />
+                  )}
+                </div>
               ),
               actions: [
-                <ICancelButton
-                  className="w-full h-full"
-                  onClick={() =>
-                    showDialog(() => goToDeploymentAssistant(assistantId))
-                  }
-                >
-                  Cancel
-                </ICancelButton>,
-                <ISecondaryButton
-                  className="w-full h-full"
-                  onClick={handleSkipVoiceInput}
-                >
-                  Skip
-                </ISecondaryButton>,
-                <IBlueBGArrowButton
-                  type="button"
-                  className="w-full h-full"
-                  onClick={handleNext}
-                >
-                  Next
-                </IBlueBGArrowButton>,
+                <ButtonSet className="!w-full [&>button]:!flex-1 [&>button]:!max-w-none">
+                  <GhostButton size="lg" onClick={handlePrevious}>
+                    Previous
+                  </GhostButton>
+                  <SecondaryButton size="lg"
+                    onClick={() =>
+                      showDialog(() => goToDeploymentAssistant(assistantId))
+                    }
+                  >
+                    Cancel
+                  </SecondaryButton>
+                  <PrimaryButton size="lg" onClick={handleNext}>
+                    Next
+                  </PrimaryButton>
+                </ButtonSet>,
               ],
             },
             {
@@ -437,35 +461,57 @@ const ConfigureAssistantDebuggerDeployment: FC<{ assistantId: string }> = ({
               description:
                 'Configure the text-to-speech provider for audio responses.',
               body: (
-                <ConfigureAudioOutputProvider
-                  audioOutputConfig={audioOutputConfig}
-                  setAudioOutputConfig={setAudioOutputConfig}
-                />
+                <div>
+                  <div className="px-6 pt-6 pb-4">
+                    <button
+                      type="button"
+                      onClick={() => setVoiceOutputEnable(!voiceOutputEnable)}
+                      className="relative group w-full text-left p-4 border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-950/50 hover:bg-gray-50 dark:hover:bg-gray-900/60 transition-colors"
+                    >
+                      <CornerBorderOverlay className={voiceOutputEnable ? 'opacity-100' : undefined} />
+                      <div onClick={e => e.stopPropagation()}>
+                        <Checkbox
+                          id="voice-output-toggle"
+                          labelText="Enable voice output (Text-to-Speech)"
+                          checked={voiceOutputEnable}
+                          onChange={(_, { checked }) => setVoiceOutputEnable(checked)}
+                        />
+                      </div>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 ml-6">
+                        {voiceOutputEnable
+                          ? 'Voice output is currently enabled.'
+                          : 'Voice output is disabled. Assistant responses will be text only.'}
+                      </p>
+                    </button>
+                  </div>
+                  {voiceOutputEnable && (
+                    <ConfigureAudioOutputProvider
+                      audioOutputConfig={audioOutputConfig}
+                      setAudioOutputConfig={setAudioOutputConfig}
+                    />
+                  )}
+                </div>
               ),
               actions: [
-                <ICancelButton
-                  className="w-full h-full"
-                  onClick={() =>
-                    showDialog(() => goToDeploymentAssistant(assistantId))
-                  }
-                >
-                  Cancel
-                </ICancelButton>,
-                <ISecondaryButton
-                  className="w-full h-full"
-                  isLoading={loading}
-                  onClick={() => handleDeployDebugger(false)}
-                >
-                  Deploy without voice output
-                </ISecondaryButton>,
-                <IBlueBGArrowButton
-                  type="button"
-                  className="w-full h-full"
-                  isLoading={loading}
-                  onClick={() => handleDeployDebugger(true)}
-                >
-                  Deploy with voice output
-                </IBlueBGArrowButton>,
+                <ButtonSet className="!w-full [&>button]:!flex-1 [&>button]:!max-w-none">
+                  <GhostButton size="lg" onClick={handlePrevious}>
+                    Previous
+                  </GhostButton>
+                  <SecondaryButton size="lg"
+                    onClick={() =>
+                      showDialog(() => goToDeploymentAssistant(assistantId))
+                    }
+                  >
+                    Cancel
+                  </SecondaryButton>
+                  <PrimaryButton size="lg"
+                    isLoading={isDeploying}
+                    disabled={isDeploying}
+                    onClick={handleDeployDebugger}
+                  >
+                    Deploy Debugger
+                  </PrimaryButton>
+                </ButtonSet>,
               ],
             },
           ]}

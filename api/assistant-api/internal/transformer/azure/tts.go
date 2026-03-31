@@ -17,6 +17,7 @@ import (
 	"github.com/Microsoft/cognitive-services-speech-sdk-go/speech"
 	internal_type "github.com/rapidaai/api/assistant-api/internal/type"
 	"github.com/rapidaai/pkg/commons"
+	type_enums "github.com/rapidaai/pkg/types/enums"
 	"github.com/rapidaai/pkg/utils"
 	"github.com/rapidaai/protos"
 )
@@ -28,7 +29,8 @@ type azureTextToSpeech struct {
 	ctx       context.Context
 	ctxCancel context.CancelFunc
 
-	contextId string
+	contextId      string
+	ttsConnectedAt time.Time
 
 	// TTS latency tracking
 	ttsStartedAt  time.Time
@@ -68,7 +70,9 @@ func (azure *azureTextToSpeech) Name() string {
 func (azure *azureTextToSpeech) Close(ctx context.Context) error {
 	azure.ctxCancel()
 	azure.mu.Lock()
-	defer azure.mu.Unlock()
+	ctxID := azure.contextId
+	connectedAt := azure.ttsConnectedAt
+	azure.ttsConnectedAt = time.Time{}
 
 	if azure.client != nil {
 		// Stop any ongoing synthesis before closing
@@ -83,6 +87,29 @@ func (azure *azureTextToSpeech) Close(ctx context.Context) error {
 	if azure.stream != nil {
 		azure.stream.Close()
 		azure.stream = nil
+	}
+	azure.mu.Unlock()
+
+	if !connectedAt.IsZero() {
+		azure.onPacket(
+			internal_type.ConversationEventPacket{
+				ContextID: ctxID,
+				Name:      "tts",
+				Data: map[string]string{
+					"type":     "closed",
+					"provider": azure.Name(),
+				},
+				Time: time.Now(),
+			},
+			internal_type.ConversationMetricPacket{
+				ContextID: 0,
+				Metrics: []*protos.Metric{{
+					Name:        type_enums.CONVERSATION_TTS_DURATION.String(),
+					Value:       fmt.Sprintf("%d", time.Since(connectedAt).Nanoseconds()),
+					Description: "Total TTS connection duration in nanoseconds",
+				}},
+			},
+		)
 	}
 	return nil
 }
@@ -123,6 +150,9 @@ func (azure *azureTextToSpeech) Initialize() (err error) {
 	azure.stream = stream
 	azure.client = client
 	azure.audioConfig = audioConfig
+	if azure.ttsConnectedAt.IsZero() {
+		azure.ttsConnectedAt = time.Now()
+	}
 	azure.mu.Unlock()
 
 	azure.client.SynthesisStarted(azure.OnStart)
@@ -157,7 +187,7 @@ func (azure *azureTextToSpeech) Transform(ctx context.Context, in internal_type.
 	}
 
 	switch input := in.(type) {
-	case internal_type.InterruptionPacket:
+	case internal_type.InterruptionDetectedPacket:
 		if currentCtx != "" {
 			<-cl.StopSpeakingAsync()
 			azure.mu.Lock()
@@ -213,7 +243,7 @@ func (azCallback *azureTextToSpeech) OnSpeech(event speech.SpeechSynthesisEventA
 	}
 	azCallback.mu.Unlock()
 	if !metricSent && !startedAt.IsZero() {
-		azCallback.onPacket(internal_type.MessageMetricPacket{
+		azCallback.onPacket(internal_type.AssistantMessageMetricPacket{
 			ContextID: ctxId,
 			Metrics: []*protos.Metric{{
 				Name:  "tts_latency_ms",

@@ -10,7 +10,7 @@ services:
   opensearch:
     image: opensearchproject/opensearch:2.11.1
     platform: linux/amd64
-    container_name: opensearch
+    container_name: rapida__opensearch
     ports:
       - "9200:9200"
     environment:
@@ -45,7 +45,7 @@ services:
     build:
       context: .
       dockerfile: docker/document-api/Dockerfile
-    container_name: document-api
+    container_name: rapida__document-api
     ports:
       - "9010:9010"
     depends_on:

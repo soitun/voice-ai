@@ -108,7 +108,7 @@ func (v *FireRedVAD) Name() string {
 
 // Process analyses an audio packet for voice activity.
 // The packet must contain 16 kHz LINEAR16 mono audio.
-func (v *FireRedVAD) Process(ctx context.Context, pkt internal_type.UserAudioPacket) error {
+func (v *FireRedVAD) Process(ctx context.Context, pkt internal_type.UserAudioReceivedPacket) error {
 	if !v.isActive() {
 		return nil
 	}
@@ -170,7 +170,7 @@ func (v *FireRedVAD) Process(ctx context.Context, pkt internal_type.UserAudioPac
 	}
 	v.mu.Unlock()
 
-	// Emit InterruptionPacket only on confirmed speech onset — this is the
+	// Emit InterruptionDetectedPacket only on confirmed speech onset — this is the
 	// signal to interrupt assistant TTS/LLM. Speech end and sustained speech
 	// don't need interruption; the heartbeat handles EOS extension.
 	if speechStartAt > 0 {
@@ -270,7 +270,7 @@ func (v *FireRedVAD) notifyActivity(ctx context.Context, startAt, endAt float64)
 	}
 
 	v.onPacket(ctx,
-		internal_type.InterruptionPacket{
+		internal_type.InterruptionDetectedPacket{
 			Source:  internal_type.InterruptionSourceVad,
 			StartAt: startAt,
 			EndAt:   endAt,

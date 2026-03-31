@@ -1,6 +1,7 @@
 import React, { FC } from 'react';
 import { Assistant } from '@rapidaai/react';
 import {
+  toDate,
   toHumanReadableDate,
   toHumanReadableDateFromDate,
   toHumanReadableRelativeDay,
@@ -9,7 +10,7 @@ import TooltipPlus from '@/app/components/base/tooltip-plus';
 import SourceIndicator from '@/app/components/indicators/source';
 import { useGlobalNavigation } from '@/hooks/use-global-navigator';
 import { AssistantConversation } from '@rapidaai/react';
-import { ArrowRight } from 'lucide-react';
+import { ArrowRight } from '@carbon/icons-react';
 import { ActionCard } from '@/app/components/base/cards';
 
 const SingleAssistant: FC<{ assistant: Assistant }> = ({ assistant }) => {
@@ -94,15 +95,15 @@ const SingleAssistant: FC<{ assistant: Assistant }> = ({ assistant }) => {
               }}
             >
               Set up deployment
-              <ArrowRight className="w-3 h-3" strokeWidth={1.5} />
+              <ArrowRight size={12} />
             </button>
           )}
         </div>
 
         {/* Carbon clickable-tile arrow — communicates the card is navigable */}
         <ArrowRight
-          className="shrink-0 w-4 h-4 text-gray-300 dark:text-gray-600 group-hover:text-primary transition-colors mt-0.5"
-          strokeWidth={1.5}
+          size={16}
+          className="shrink-0 text-gray-300 dark:text-gray-600 group-hover:text-primary transition-colors mt-0.5"
         />
       </div>
     </ActionCard>
@@ -112,18 +113,8 @@ const SingleAssistant: FC<{ assistant: Assistant }> = ({ assistant }) => {
 /** Deployment badge with tooltip */
 const DeploymentBadge: FC<{ source: string; tooltip: string }> = ({
   source,
-  tooltip,
 }) => (
-  <TooltipPlus
-    className="bg-white dark:bg-gray-950 border rounded-none px-0 py-0"
-    popupContent={
-      <div className="px-3 py-2 text-xs text-gray-600 dark:text-gray-400">
-        {tooltip}
-      </div>
-    }
-  >
-    <SourceIndicator source={source} withLabel={false} />
-  </TooltipPlus>
+  <SourceIndicator source={source} withLabel={false} />
 );
 
 const ConversationChart: FC<{
@@ -142,11 +133,27 @@ const ConversationChart: FC<{
     {} as Record<string, { activeUsers: Set<string>; totalSessions: number }>,
   );
 
-  const last30Days = Array.from({ length: 30 }, (_, i) => {
-    const date = new Date();
-    date.setDate(date.getDate() - i);
+  // Compute range: from earliest conversation (or 30 days ago, whichever is earlier) to today
+  const today = new Date();
+  const thirtyDaysAgo = new Date();
+  thirtyDaysAgo.setDate(today.getDate() - 30);
+
+  let earliest = thirtyDaysAgo;
+  conversations.forEach(c => {
+    const d = toDate(c.getCreateddate()!);
+    if (d < earliest) earliest = d;
+  });
+
+  const dayCount = Math.max(
+    Math.ceil((today.getTime() - earliest.getTime()) / (1000 * 60 * 60 * 24)) + 1,
+    30,
+  );
+
+  const last30Days = Array.from({ length: dayCount }, (_, i) => {
+    const date = new Date(today);
+    date.setDate(today.getDate() - (dayCount - 1 - i));
     return toHumanReadableDateFromDate(date);
-  }).reverse();
+  });
 
   const dataArray = last30Days.map(date => ({
     date,

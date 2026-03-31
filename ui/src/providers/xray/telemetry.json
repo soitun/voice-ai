@@ -1,0 +1,32 @@
+{
+  "parameters": [
+    {
+      "key": "endpoint",
+      "label": "Endpoint",
+      "type": "input",
+      "required": true,
+      "placeholder": "e.g. localhost:4318",
+      "errorMessage": "Endpoint is required for AWS X-Ray."
+    },
+    {
+      "key": "region",
+      "label": "AWS Region",
+      "type": "input",
+      "required": false,
+      "placeholder": "e.g. us-east-1",
+      "helpText": "AWS region for the ADOT Collector."
+    },
+    {
+      "key": "insecure",
+      "label": "Insecure",
+      "type": "select",
+      "required": false,
+      "default": "false",
+      "choices": [
+        { "label": "No", "value": "false" },
+        { "label": "Yes", "value": "true" }
+      ],
+      "helpText": "Skip TLS verification."
+    }
+  ]
+}

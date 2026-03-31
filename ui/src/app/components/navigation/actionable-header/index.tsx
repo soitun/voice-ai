@@ -1,20 +1,23 @@
 import { useState, useContext, useEffect, FC } from 'react';
-import { HelpPopover } from '@/app/components/popover/help-popover';
-import { ProjectSelectorDropdown } from '@/app/components/dropdown/project-dropdown';
+import { ProjectRole } from '@rapidaai/react';
 import { cn } from '@/utils';
-import { ProfilePopover } from '@/app/components/popover/profile-popover';
-import { IButton } from '@/app/components/form/button';
 import { useLocation } from 'react-router-dom';
 import { CustomLink } from '@/app/components/custom-link';
 import { useDarkMode } from '@/context/dark-mode-context';
 import { AuthContext } from '@/context/auth-context';
-import { TextImage } from '@/app/components/text-image';
-import { HelpCircle, Moon, Sun } from 'lucide-react';
-/**
- *
- * @param props
- * @returns
- */
+import { Moon, Sun, UserAvatar } from '@carbon/icons-react';
+import { Label } from '../../form/label/index';
+import {
+  Breadcrumb,
+  BreadcrumbItem,
+  HeaderGlobalAction,
+  HeaderGlobalBar,
+  HeaderPanel,
+  Dropdown,
+  Switcher,
+  SwitcherItem,
+} from '@carbon/react';
+
 export function ActionableHeader(props: { reload?: boolean }) {
   const location = useLocation();
   const { pathname } = location;
@@ -37,8 +40,8 @@ export function ActionableHeader(props: { reload?: boolean }) {
       }) || [],
     );
   }, [pathname]);
+
   return (
-    // Carbon UI Shell header: h-12, white bg, bottom border
     <header
       className={cn(
         'h-12 flex items-center justify-between',
@@ -47,41 +50,23 @@ export function ActionableHeader(props: { reload?: boolean }) {
         'shrink-0',
       )}
     >
-      <ol className="flex items-center pl-4 truncate">
-        {breadcrumbs.map((x, idx) => {
-          return <BreadcrumbElement label={x} key={idx} />;
-        })}
-      </ol>
+      <Breadcrumb noTrailingSlash className="pl-4">
+        {breadcrumbs.map((x, idx) => (
+          <BreadcrumbItem key={idx}>
+            <CustomLink className="capitalize" to={x.href}>
+              {x.label}
+            </CustomLink>
+          </BreadcrumbItem>
+        ))}
+      </Breadcrumb>
       <CustomerOptions />
     </header>
-  );
-}
-
-function BreadcrumbElement(props: { label: { href: string; label: string } }) {
-  return (
-    <>
-      <li>
-        <CustomLink
-          className="capitalize text-sm text-gray-500 dark:text-gray-400 hover:text-primary dark:hover:text-primary transition-colors"
-          to={props.label.href}
-        >
-          {props.label.label}
-        </CustomLink>
-      </li>
-      {/* Carbon breadcrumb uses "/" as separator */}
-      <li className="px-1.5 last:hidden text-gray-400 dark:text-gray-600 text-sm select-none">
-        /
-      </li>
-    </>
   );
 }
 
 export const CustomerOptions: FC<{ placement?: 'top' | 'bottom' }> = ({
   placement,
 }) => {
-  /**
-   * Current authentication information
-   */
   const {
     currentUser,
     projectRoles,
@@ -90,77 +75,84 @@ export const CustomerOptions: FC<{ placement?: 'top' | 'bottom' }> = ({
   } = useContext(AuthContext);
 
   const [accountDropdownOpen, setAccountDropdownOpen] = useState(false);
-  const [helpDropdownOpen, setHelpDropdownOpen] = useState(false);
   const { isDarkMode, toggleDarkMode } = useDarkMode();
 
   return (
-    <>
-      <div className={cn('flex items-center')}>
-        <div className="border-l border-r">
-          {projectRoles && setCurrentProjectRole && (
-            <ProjectSelectorDropdown
-              projects={projectRoles}
-              project={currentProjectRole}
-              setProject={setCurrentProjectRole}
-              placement={placement}
-            />
-          )}
-        </div>
+    <HeaderGlobalBar>
+      {/* Project selector — Carbon Dropdown */}
+      {projectRoles && setCurrentProjectRole && (
+        <Dropdown
+          id="project-selector"
+          titleText=""
+          hideLabel
+          label="Select a Project"
+          size="sm"
+          direction="bottom"
+          items={projectRoles}
+          selectedItem={currentProjectRole}
+          itemToString={(item: ProjectRole.AsObject | null) =>
+            item?.projectname || ''
+          }
+          onChange={({ selectedItem }) => {
+            if (selectedItem) setCurrentProjectRole(selectedItem);
+          }}
+          className="project-selector-dropdown"
+        />
+      )}
 
-        <div className="relative inline-flex">
-          <IButton
-            className={cn(
-              'h-12 w-12 border-r',
-              helpDropdownOpen && 'bg-gray-200 dark:bg-gray-800',
-            )}
-            onClick={() => setHelpDropdownOpen(!helpDropdownOpen)}
+      {/* Dark/Light toggle */}
+      <HeaderGlobalAction
+        aria-label={`Switch to ${isDarkMode ? 'light' : 'dark'} mode`}
+        onClick={toggleDarkMode}
+        tooltipAlignment="end"
+      >
+        {isDarkMode ? <Sun size={20} /> : <Moon size={20} />}
+      </HeaderGlobalAction>
+
+      {/* Profile avatar */}
+      <HeaderGlobalAction
+        aria-label="Account"
+        isActive={accountDropdownOpen}
+        onClick={() => setAccountDropdownOpen(!accountDropdownOpen)}
+        tooltipAlignment="end"
+      >
+        <UserAvatar size={20} />
+      </HeaderGlobalAction>
+
+      {/* Account panel — Carbon Switcher */}
+      <HeaderPanel expanded={accountDropdownOpen}>
+        <Switcher aria-label="Account" expanded={accountDropdownOpen}>
+          <li className="cds--switcher__item--divider">
+            <span>Account</span>
+          </li>
+          <SwitcherItem aria-label="Account Settings" href="/account">
+            Account Settings
+          </SwitcherItem>
+          <li className="cds--switcher__item--divider">
+            <span>Resources</span>
+          </li>
+          <SwitcherItem
+            aria-label="Documentation"
+            href="https://doc.rapida.ai"
+            target="_blank"
+            rel="noopener noreferrer"
           >
-            <span className="sr-only">Need help?</span>
-            <HelpCircle strokeWidth={1.5} />
-          </IButton>
-          <HelpPopover
-            align={placement ? placement : 'bottom-end'}
-            open={helpDropdownOpen}
-            setOpen={setHelpDropdownOpen}
-          />
-        </div>
-
-        {/* when will impliment the dark and light theme */}
-        <IButton className={'h-12 w-12 border-r'} onClick={toggleDarkMode}>
-          <Sun
-            className={cn(isDarkMode ? 'hidden' : 'block')}
-            strokeWidth={1.5}
-          />
-          <Moon
-            className={cn(!isDarkMode ? 'hidden' : 'block')}
-            strokeWidth={1.5}
-          />
-          <span className="sr-only">
-            Switch to {isDarkMode ? 'light' : 'dark'} mode
-          </span>
-        </IButton>
-
-        <div className="relative inline-flex">
-          <IButton
-            className={cn(
-              'h-12 w-12 border-r',
-              accountDropdownOpen && 'bg-gray-200 dark:bg-gray-800',
-            )}
-            aria-haspopup="true"
-            onClick={() => setAccountDropdownOpen(!accountDropdownOpen)}
-            aria-expanded={accountDropdownOpen}
+            Documentation
+          </SwitcherItem>
+          <SwitcherItem
+            aria-label="Contact us"
+            href="mailto:prashant@rapida.ai"
           >
-            <span className="sr-only">Account</span>
-            <TextImage name={currentUser?.name!} size={8} />
-          </IButton>
-          <ProfilePopover
-            align={placement ? `${placement}-start` : 'bottom-end'}
-            open={accountDropdownOpen}
-            setOpen={setAccountDropdownOpen}
-            account={{ email: currentUser ? currentUser.email : '' }}
-          />
-        </div>
-      </div>
-    </>
+            Contact us
+          </SwitcherItem>
+          <li className="cds--switcher__item--divider">
+            <span>Session</span>
+          </li>
+          <SwitcherItem aria-label="Sign out" href="/auth/signin">
+            Sign out
+          </SwitcherItem>
+        </Switcher>
+      </HeaderPanel>
+    </HeaderGlobalBar>
   );
 };

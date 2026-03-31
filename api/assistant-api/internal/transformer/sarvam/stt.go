@@ -18,6 +18,7 @@ import (
 	sarvam_internal "github.com/rapidaai/api/assistant-api/internal/transformer/sarvam/internal"
 	internal_type "github.com/rapidaai/api/assistant-api/internal/type"
 	"github.com/rapidaai/pkg/commons"
+	type_enums "github.com/rapidaai/pkg/types/enums"
 	"github.com/rapidaai/pkg/utils"
 	"github.com/rapidaai/protos"
 )
@@ -28,9 +29,11 @@ type sarvamSpeechToText struct {
 	ctx       context.Context
 	ctxCancel context.CancelFunc
 
-	mu         sync.Mutex
-	connection *websocket.Conn
-	startedAt  time.Time
+	mu             sync.Mutex
+	connection     *websocket.Conn
+	startedAt      time.Time
+	contextId      string
+	sttConnectedAt time.Time
 
 	logger   commons.Logger
 	onPacket func(pkt ...internal_type.Packet) error
@@ -74,12 +77,14 @@ func (cst *sarvamSpeechToText) Initialize() error {
 
 	cst.mu.Lock()
 	cst.connection = conn
+	cst.sttConnectedAt = time.Now()
 	cst.mu.Unlock()
 
 	go cst.readLoop(conn)
 
 	cst.onPacket(internal_type.ConversationEventPacket{
-		Name: "stt",
+		ContextID: cst.contextId,
+		Name:      "stt",
 		Data: map[string]string{
 			"type":     "initialized",
 			"provider": cst.Name(),
@@ -147,6 +152,7 @@ func (cst *sarvamSpeechToText) handleTranscription(response sarvam_internal.Sarv
 		latencyMs = now.Sub(cst.startedAt).Milliseconds()
 		cst.startedAt = time.Time{}
 	}
+	ctxID := cst.contextId
 	cst.mu.Unlock()
 
 	langCode := ""
@@ -155,15 +161,17 @@ func (cst *sarvamSpeechToText) handleTranscription(response sarvam_internal.Sarv
 	}
 
 	cst.onPacket(
-		internal_type.InterruptionPacket{Source: internal_type.InterruptionSourceWord},
+		internal_type.InterruptionDetectedPacket{ContextID: ctxID, Source: internal_type.InterruptionSourceWord},
 		internal_type.SpeechToTextPacket{
+			ContextID:  ctxID,
 			Script:     transcriptionData.Transcript,
 			Confidence: 0.9,
 			Language:   langCode,
 			Interim:    false,
 		},
 		internal_type.ConversationEventPacket{
-			Name: "stt",
+			ContextID: ctxID,
+			Name:      "stt",
 			Data: map[string]string{
 				"type":       "completed",
 				"script":     transcriptionData.Transcript,
@@ -174,8 +182,9 @@ func (cst *sarvamSpeechToText) handleTranscription(response sarvam_internal.Sarv
 			},
 			Time: now,
 		},
-		internal_type.MessageMetricPacket{
-			Metrics: []*protos.Metric{{Name: "stt_latency_ms", Value: fmt.Sprintf("%d", latencyMs)}},
+		internal_type.UserMessageMetricPacket{
+			ContextID: ctxID,
+			Metrics:   []*protos.Metric{{Name: "stt_latency_ms", Value: fmt.Sprintf("%d", latencyMs)}},
 		},
 	)
 }
@@ -188,7 +197,8 @@ func (cst *sarvamSpeechToText) handleServerError(response sarvam_internal.Sarvam
 	}
 	cst.logger.Errorf("sarvam-stt: server error code=%s message=%s", errorData.Code, errorData.Error)
 	cst.onPacket(internal_type.ConversationEventPacket{
-		Name: "stt",
+		ContextID: cst.contextId,
+		Name:      "stt",
 		Data: map[string]string{
 			"type":    "error",
 			"message": errorData.Error,
@@ -197,38 +207,77 @@ func (cst *sarvamSpeechToText) handleServerError(response sarvam_internal.Sarvam
 	})
 }
 
-func (cst *sarvamSpeechToText) Transform(ctx context.Context, in internal_type.UserAudioPacket) error {
-	vl, err := cst.speechToTextMessage(in.Audio)
-	if err != nil {
-		return fmt.Errorf("sarvam-stt: failed to encode audio: %w", err)
-	}
+func (cst *sarvamSpeechToText) Transform(ctx context.Context, in internal_type.Packet) error {
+	switch pkt := in.(type) {
+	case internal_type.TurnChangePacket:
+		cst.mu.Lock()
+		cst.contextId = pkt.ContextID
+		cst.mu.Unlock()
+		return nil
+	case internal_type.InterruptionDetectedPacket:
+		cst.mu.Lock()
+		if pkt.Source == internal_type.InterruptionSourceVad && cst.startedAt.IsZero() {
+			cst.startedAt = time.Now()
+		}
+		cst.mu.Unlock()
+		return nil
+	case internal_type.UserAudioReceivedPacket:
+		vl, err := cst.speechToTextMessage(pkt.Audio)
+		if err != nil {
+			return fmt.Errorf("sarvam-stt: failed to encode audio: %w", err)
+		}
 
-	cst.mu.Lock()
-	connection := cst.connection
-	if cst.startedAt.IsZero() {
-		cst.startedAt = time.Now()
-	}
-	cst.mu.Unlock()
+		cst.mu.Lock()
+		connection := cst.connection
+		cst.mu.Unlock()
 
-	if connection == nil {
-		return fmt.Errorf("sarvam-stt: connection is not initialized")
-	}
+		if connection == nil {
+			return fmt.Errorf("sarvam-stt: connection is not initialized")
+		}
 
-	if err := connection.WriteMessage(websocket.TextMessage, vl); err != nil {
-		return fmt.Errorf("sarvam-stt: failed to send audio: %w", err)
-	}
+		if err := connection.WriteMessage(websocket.TextMessage, vl); err != nil {
+			return fmt.Errorf("sarvam-stt: failed to send audio: %w", err)
+		}
 
-	return nil
+		return nil
+	default:
+		return nil
+	}
 }
 
 func (cst *sarvamSpeechToText) Close(ctx context.Context) error {
 	cst.ctxCancel()
 	cst.mu.Lock()
-	defer cst.mu.Unlock()
+	ctxID := cst.contextId
+	connectedAt := cst.sttConnectedAt
+	cst.sttConnectedAt = time.Time{}
 	if cst.connection != nil {
 		conn := cst.connection
 		cst.connection = nil // mark nil before Close so readLoop sees intentional
 		conn.Close()
+	}
+	cst.mu.Unlock()
+
+	if !connectedAt.IsZero() {
+		cst.onPacket(
+			internal_type.ConversationEventPacket{
+				ContextID: ctxID,
+				Name:      "stt",
+				Data: map[string]string{
+					"type":     "closed",
+					"provider": cst.Name(),
+				},
+				Time: time.Now(),
+			},
+			internal_type.ConversationMetricPacket{
+				ContextID: 0,
+				Metrics: []*protos.Metric{{
+					Name:        type_enums.CONVERSATION_STT_DURATION.String(),
+					Value:       fmt.Sprintf("%d", time.Since(connectedAt).Nanoseconds()),
+					Description: "Total STT connection duration in nanoseconds",
+				}},
+			},
+		)
 	}
 	return nil
 }

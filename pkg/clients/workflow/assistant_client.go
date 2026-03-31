@@ -96,6 +96,13 @@ type AssistantServiceClient interface {
 	GetAssistantToolLog(ctx context.Context, auth types.SimplePrinciple, in *protos.GetAssistantToolLogRequest) (*protos.GetAssistantToolLogResponse, error)
 	GetAllAssistantToolLog(ctx context.Context, auth types.SimplePrinciple, in *protos.GetAllAssistantToolLogRequest) (*protos.GetAllAssistantToolLogResponse, error)
 	GetAllAssistantTelemetry(ctx context.Context, auth types.SimplePrinciple, in *protos.GetAllAssistantTelemetryRequest) (*protos.GetAllAssistantTelemetryResponse, error)
+
+	// telemetry providers
+	GetAssistantTelemetryProvider(ctx context.Context, auth types.SimplePrinciple, in *protos.GetAssistantTelemetryProviderRequest) (*protos.GetAssistantTelemetryProviderResponse, error)
+	GetAllAssistantTelemetryProvider(ctx context.Context, auth types.SimplePrinciple, in *protos.GetAllAssistantTelemetryProviderRequest) (*protos.GetAllAssistantTelemetryProviderResponse, error)
+	CreateAssistantTelemetryProvider(ctx context.Context, auth types.SimplePrinciple, in *protos.CreateAssistantTelemetryProviderRequest) (*protos.GetAssistantTelemetryProviderResponse, error)
+	UpdateAssistantTelemetryProvider(ctx context.Context, auth types.SimplePrinciple, in *protos.UpdateAssistantTelemetryProviderRequest) (*protos.GetAssistantTelemetryProviderResponse, error)
+	DeleteAssistantTelemetryProvider(ctx context.Context, auth types.SimplePrinciple, in *protos.DeleteAssistantTelemetryProviderRequest) (*protos.GetAssistantTelemetryProviderResponse, error)
 }
 
 type assistantServiceClient struct {
@@ -877,5 +884,65 @@ func (client *assistantServiceClient) GetAllAssistantTelemetry(ctx context.Conte
 		client.logger.Errorf("error while calling to get tool %v", err)
 	}
 	client.logger.Benchmark("Benchmarking: assistantClient.GetAllAssistantTelemetry", time.Since(start))
+	return res, nil
+}
+
+func (client *assistantServiceClient) GetAssistantTelemetryProvider(ctx context.Context, auth types.SimplePrinciple, in *protos.GetAssistantTelemetryProviderRequest) (*protos.GetAssistantTelemetryProviderResponse, error) {
+	start := time.Now()
+	res, err := client.assistantClient.GetAssistantTelemetryProvider(client.WithAuth(ctx, auth), in)
+	if err != nil {
+		client.logger.Benchmark("Benchmarking: assistantClient.GetAssistantTelemetryProvider", time.Since(start))
+		client.logger.Errorf("error while calling GetAssistantTelemetryProvider %v", err)
+		return nil, err
+	}
+	client.logger.Benchmark("Benchmarking: assistantClient.GetAssistantTelemetryProvider", time.Since(start))
+	return res, nil
+}
+
+func (client *assistantServiceClient) GetAllAssistantTelemetryProvider(ctx context.Context, auth types.SimplePrinciple, in *protos.GetAllAssistantTelemetryProviderRequest) (*protos.GetAllAssistantTelemetryProviderResponse, error) {
+	start := time.Now()
+	res, err := client.assistantClient.GetAllAssistantTelemetryProvider(client.WithAuth(ctx, auth), in)
+	if err != nil {
+		client.logger.Benchmark("Benchmarking: assistantClient.GetAllAssistantTelemetryProvider", time.Since(start))
+		client.logger.Errorf("error while calling GetAllAssistantTelemetryProvider %v", err)
+		return nil, err
+	}
+	client.logger.Benchmark("Benchmarking: assistantClient.GetAllAssistantTelemetryProvider", time.Since(start))
+	return res, nil
+}
+
+func (client *assistantServiceClient) CreateAssistantTelemetryProvider(ctx context.Context, auth types.SimplePrinciple, in *protos.CreateAssistantTelemetryProviderRequest) (*protos.GetAssistantTelemetryProviderResponse, error) {
+	start := time.Now()
+	res, err := client.assistantClient.CreateAssistantTelemetryProvider(client.WithAuth(ctx, auth), in)
+	if err != nil {
+		client.logger.Benchmark("Benchmarking: assistantClient.CreateAssistantTelemetryProvider", time.Since(start))
+		client.logger.Errorf("error while calling CreateAssistantTelemetryProvider %v", err)
+		return nil, err
+	}
+	client.logger.Benchmark("Benchmarking: assistantClient.CreateAssistantTelemetryProvider", time.Since(start))
+	return res, nil
+}
+
+func (client *assistantServiceClient) UpdateAssistantTelemetryProvider(ctx context.Context, auth types.SimplePrinciple, in *protos.UpdateAssistantTelemetryProviderRequest) (*protos.GetAssistantTelemetryProviderResponse, error) {
+	start := time.Now()
+	res, err := client.assistantClient.UpdateAssistantTelemetryProvider(client.WithAuth(ctx, auth), in)
+	if err != nil {
+		client.logger.Benchmark("Benchmarking: assistantClient.UpdateAssistantTelemetryProvider", time.Since(start))
+		client.logger.Errorf("error while calling UpdateAssistantTelemetryProvider %v", err)
+		return nil, err
+	}
+	client.logger.Benchmark("Benchmarking: assistantClient.UpdateAssistantTelemetryProvider", time.Since(start))
+	return res, nil
+}
+
+func (client *assistantServiceClient) DeleteAssistantTelemetryProvider(ctx context.Context, auth types.SimplePrinciple, in *protos.DeleteAssistantTelemetryProviderRequest) (*protos.GetAssistantTelemetryProviderResponse, error) {
+	start := time.Now()
+	res, err := client.assistantClient.DeleteAssistantTelemetryProvider(client.WithAuth(ctx, auth), in)
+	if err != nil {
+		client.logger.Benchmark("Benchmarking: assistantClient.DeleteAssistantTelemetryProvider", time.Since(start))
+		client.logger.Errorf("error while calling DeleteAssistantTelemetryProvider %v", err)
+		return nil, err
+	}
+	client.logger.Benchmark("Benchmarking: assistantClient.DeleteAssistantTelemetryProvider", time.Since(start))
 	return res, nil
 }

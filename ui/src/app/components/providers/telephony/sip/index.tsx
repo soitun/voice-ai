@@ -1,27 +1,13 @@
 import { Metadata } from '@rapidaai/react';
-import { FormLabel } from '@/app/components/form-label';
-import { FieldSet } from '@/app/components/form/fieldset';
-import { Input } from '@/app/components/form/input';
-import { InputHelper } from '@/app/components/input-helper';
+import { TextInput } from '@/app/components/carbon/form';
 
 export const ValidateSIPTelephonyOptions = (options: Metadata[]): boolean => {
   const credentialID = options.find(
     opt => opt.getKey() === 'rapida.credential_id',
   );
-  if (
-    !credentialID ||
-    !credentialID.getValue() ||
-    credentialID.getValue().length === 0
-  ) {
-    return false;
-  }
-
-  // Validate caller ID
+  if (!credentialID?.getValue()) return false;
   const callerId = options.find(opt => opt.getKey() === 'phone');
-  if (!callerId || !callerId.getValue() || callerId.getValue().length === 0) {
-    return false;
-  }
-
+  if (!callerId?.getValue()) return false;
   return true;
 };
 
@@ -47,21 +33,15 @@ export const ConfigureSIPTelephony: React.FC<{
   };
 
   return (
-    <>
-      <FieldSet className="col-span-2">
-        <FormLabel>Caller ID</FormLabel>
-        <Input
-          className="bg-light-background"
-          value={getParamValue('phone')}
-          onChange={v => {
-            updateParameter('phone', v.target.value);
-          }}
-          placeholder="e.g., +15551234567"
-        />
-        <InputHelper>
-          The phone number to display as caller ID for outbound calls.
-        </InputHelper>
-      </FieldSet>
-    </>
+    <div className="col-span-2">
+      <TextInput
+        id="sip-caller-id"
+        labelText="Caller ID"
+        value={getParamValue('phone')}
+        onChange={e => updateParameter('phone', e.target.value)}
+        placeholder="e.g., +15551234567"
+        helperText="The phone number to display as caller ID for outbound calls."
+      />
+    </div>
   );
 };

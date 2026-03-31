@@ -2,42 +2,36 @@ import { Endpoint } from '@rapidaai/react';
 import { Helmet } from '@/app/components/helmet';
 import { useEndpointPageStore, useRapidaStore } from '@/hooks';
 import { useCredential } from '@/hooks/use-credential';
-import { useCallback, useEffect } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import toast from 'react-hot-toast/headless';
-import { Tab } from '@/app/components/tab';
 import { Version } from '@/app/pages/endpoint/view/version-list';
 import { toHumanReadableRelativeTime } from '@/utils/date';
-import { cn } from '@/utils';
 import { Playground } from '@/app/pages/endpoint/view/try-playground';
 import { EndpointInstructionDialog } from '@/app/components/base/modal/endpoint-instruction-modal';
 import { CreateTagDialog } from '@/app/components/base/modal/create-tag-modal';
 import { Tag } from '@rapidaai/react';
-import { EndpointAction } from '@/app/pages/endpoint/view/endpoint-action';
-import { useParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { UpdateDescriptionDialog } from '@/app/components/base/modal/update-description-modal';
 import { EndpointTag } from '@/app/components/form/tag-input/endpoint-tags';
-import { PageHeaderBlock } from '@/app/components/blocks/page-header-block';
-import { PageTitleBlock } from '@/app/components/blocks/page-title-block';
 import { EndpointTraces } from '@/app/pages/endpoint/view/traces';
+import { EndpointSideNav } from '@/app/pages/endpoint/view/endpoint-side-nav';
+import { Breadcrumb, BreadcrumbItem, ComboButton, MenuItem } from '@carbon/react';
 
-/**
- *
- * @returns
- */
 export function ViewEndpointPage() {
-  /**
-   *
-   */
   const [userId, token, projectId] = useCredential();
-
-  /**
-   *
-   */
   const { showLoader, hideLoader } = useRapidaStore();
+  const [activeTab, setActiveTab] = useState('overview');
+  const [navExpanded, setNavExpanded] = useState(true);
+  const navigate = useNavigate();
 
-  /**
-   *
-   */
+  const handleTabChange = (tab: string) => {
+    if (tab === 'create-version') {
+      navigate(`/deployment/endpoint/${endpointId}/create-endpoint-version`);
+      return;
+    }
+    setActiveTab(tab);
+  };
+
   const {
     currentEndpoint,
     onChangeCurrentEndpoint,
@@ -53,10 +47,6 @@ export function ViewEndpointPage() {
     onHideUpdateDetailVisible,
     onUpdateEndpointDetail,
   } = useEndpointPageStore();
-
-  /**
-   * get all the models when type change
-   */
 
   const { endpointId, endpointProviderId } = useParams();
 
@@ -98,8 +88,28 @@ export function ViewEndpointPage() {
     onReload();
   }, [endpointId, endpointProviderId]);
 
+  const renderContent = () => {
+    if (!currentEndpointProviderModel || !currentEndpoint) return null;
+    switch (activeTab) {
+      case 'overview':
+        return (
+          <Playground
+            currentEndpoint={currentEndpoint}
+            currentEndpointProviderModel={currentEndpointProviderModel}
+          />
+        );
+      case 'Traces':
+        return <EndpointTraces currentEndpoint={currentEndpoint} />;
+      case 'versions':
+        return <Version currentEndpoint={currentEndpoint} onReload={onReload} />;
+      default:
+        return null;
+    }
+  };
+
   return (
-    <div className="h-full flex flex-col overflow-auto flex-1">
+    <div className="h-full flex flex-1 overflow-hidden">
+      {/* Modals */}
       <EndpointInstructionDialog
         className="w-1/2"
         modalOpen={instructionVisible}
@@ -107,7 +117,6 @@ export function ViewEndpointPage() {
         currentEndpoint={currentEndpoint}
         currentEndpointProviderModel={currentEndpointProviderModel}
       />
-
       <UpdateDescriptionDialog
         title="Edit details"
         name={currentEndpoint?.getName()}
@@ -122,24 +131,15 @@ export function ViewEndpointPage() {
         ) => {
           let wId = currentEndpoint?.getId();
           if (!wId) {
-            onError('Knowledge is undefined, please try again later.');
+            onError('Endpoint is undefined, please try again later.');
             return;
           }
           onUpdateEndpointDetail(
-            wId,
-            name,
-            description,
-            projectId,
-            token,
-            userId,
-            onError,
-            w => {
-              onSuccess();
-            },
+            wId, name, description, projectId, token, userId, onError,
+            w => onSuccess(),
           );
         }}
       />
-
       <CreateTagDialog
         title="Edit tags"
         tags={currentEndpoint?.getEndpointtag()?.getTagList()}
@@ -153,18 +153,11 @@ export function ViewEndpointPage() {
         ) => {
           let wId = currentEndpoint?.getId();
           if (!wId) {
-            onError(
-              'Endpoint is undefined, please provide a valid endpoint id.',
-            );
+            onError('Endpoint is undefined.');
             return;
           }
           onCreateEndpointTag(
-            wId,
-            tags,
-            projectId,
-            token,
-            userId,
-            onError,
+            wId, tags, projectId, token, userId, onError,
             endpoint => {
               let tags = endpoint.getEndpointtag();
               if (tags) onSuccess(tags);
@@ -174,59 +167,77 @@ export function ViewEndpointPage() {
       />
 
       <Helmet title="Hosted endpoints" />
-      <PageHeaderBlock>
-        <div className="flex items-center gap-3">
-          <PageTitleBlock>
-            <span className="text-gray-400 dark:text-gray-500 font-normal">
-              Endpoint
-            </span>
-            <span className="px-2 text-gray-300 dark:text-gray-600">/</span>
-            {currentEndpoint?.getName()}
-          </PageTitleBlock>
-          {currentEndpoint?.getEndpointprovidermodel()?.getCreateddate() && (
-            <span className="text-xs text-gray-500 dark:text-gray-400 tabular-nums">
-              {toHumanReadableRelativeTime(
-                currentEndpoint.getEndpointprovidermodel()?.getCreateddate()!,
-              )}
-            </span>
-          )}
-        </div>
-        {currentEndpoint && (
-          <EndpointAction currentEndpoint={currentEndpoint} />
-        )}
-      </PageHeaderBlock>
 
-      {currentEndpointProviderModel && currentEndpoint && (
-        <Tab
-          strict
-          active="overview"
-          className={cn('sticky top-0 z-1', 'bg-white dark:bg-gray-900')}
-          tabs={[
-            {
-              label: 'overview',
-              element: (
-                <Playground
-                  currentEndpoint={currentEndpoint}
-                  currentEndpointProviderModel={currentEndpointProviderModel}
+      {/* Side nav */}
+      <EndpointSideNav
+        activeTab={activeTab}
+        onChangeTab={handleTabChange}
+        expanded={navExpanded}
+        onToggle={() => setNavExpanded(!navExpanded)}
+      />
+
+      {/* Main content */}
+      <div className="flex flex-col flex-1 overflow-auto">
+        {/* Page header — only on overview */}
+        {activeTab === 'overview' && currentEndpoint && (
+          <div className="px-4 pt-4 pb-4 border-b border-gray-200 dark:border-gray-800">
+            <div className="flex items-start justify-between">
+              <div>
+                <Breadcrumb noTrailingSlash className="mb-2">
+                  <BreadcrumbItem href="/deployment/endpoint">
+                    Endpoints
+                  </BreadcrumbItem>
+                </Breadcrumb>
+                <h1 className="text-2xl font-light tracking-tight">
+                  {currentEndpoint.getName()}
+                </h1>
+                {currentEndpoint.getEndpointprovidermodel()?.getCreateddate() && (
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 tabular-nums">
+                    Last updated{' '}
+                    {toHumanReadableRelativeTime(
+                      currentEndpoint.getEndpointprovidermodel()?.getCreateddate()!,
+                    )}
+                  </p>
+                )}
+              </div>
+              <ComboButton
+                label="Create new version"
+                size="md"
+                onClick={() =>
+                  navigate(`/deployment/endpoint/${endpointId}/create-endpoint-version`)
+                }
+              >
+                <MenuItem
+                  label="View instructions"
+                  onClick={() => {
+                    const store = useEndpointPageStore.getState();
+                    store.onShowInstruction();
+                  }}
                 />
-              ),
-            },
-            {
-              label: 'Traces',
-              element: <EndpointTraces currentEndpoint={currentEndpoint} />,
-            },
-            {
-              label: 'versions',
-              element: (
-                <Version
-                  currentEndpoint={currentEndpoint}
-                  onReload={onReload}
+                <MenuItem
+                  label="Edit details"
+                  onClick={() => {
+                    if (currentEndpoint) {
+                      const store = useEndpointPageStore.getState();
+                      store.onShowUpdateDetailVisible(currentEndpoint);
+                    }
+                  }}
                 />
-              ),
-            },
-          ]}
-        />
-      )}
+                <MenuItem
+                  label="Edit tags"
+                  onClick={() => {
+                    if (currentEndpoint) {
+                      const store = useEndpointPageStore.getState();
+                      store.onShowEditTagVisible(currentEndpoint);
+                    }
+                  }}
+                />
+              </ComboButton>
+            </div>
+          </div>
+        )}
+        {renderContent()}
+      </div>
     </div>
   );
 }

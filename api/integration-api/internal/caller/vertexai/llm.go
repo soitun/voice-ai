@@ -16,6 +16,7 @@ import (
 	internal_caller_metrics "github.com/rapidaai/api/integration-api/internal/caller/metrics"
 	internal_callers "github.com/rapidaai/api/integration-api/internal/type"
 	"github.com/rapidaai/pkg/commons"
+	type_enums "github.com/rapidaai/pkg/types/enums"
 	"github.com/rapidaai/pkg/utils"
 	"github.com/rapidaai/protos"
 )
@@ -177,7 +178,7 @@ func (llc *largeLanguageCaller) StreamChatCompletion(
 	// Add first token time metric if tokens were streamed
 	if firstTokenTime != nil {
 		metrics.OnAddMetrics(&protos.Metric{
-			Name:        "FIRST_TOKEN_RECIEVED_TIME",
+			Name:        type_enums.TIME_TO_FIRST_TOKEN.String(),
 			Value:       fmt.Sprintf("%d", firstTokenTime.Sub(start)),
 			Description: "Time to receive first token from LLM",
 		})
