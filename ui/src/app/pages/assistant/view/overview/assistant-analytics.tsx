@@ -268,8 +268,6 @@ export const AssistantAnalytics: FC<{ assistant: Assistant }> = props => {
     }));
   })();
 
-  const hasData = totalMessages > 0 || totalSessions > 0;
-
   return (
     <div className="w-full p-4 space-y-4">
       {/* ── Toolbar ── */}
@@ -305,13 +303,7 @@ export const AssistantAnalytics: FC<{ assistant: Assistant }> = props => {
         </div>
       </div>
 
-      {!loading && !hasData ? (
-        <div className="flex items-center justify-center h-64 text-sm text-gray-500 dark:text-gray-400">
-          No data available for the selected period.
-        </div>
-      ) : (
-        <>
-          {/* ── Top section: metric cards (left) + summary block (right) ── */}
+      {/* ── Top section: metric cards (left) + summary block (right) ── */}
           <div className="grid grid-cols-1 xl:grid-cols-[1fr_280px] xl:items-start gap-4">
             {/* Left — two grouped tiles */}
             <div className="space-y-4">
@@ -523,8 +515,6 @@ export const AssistantAnalytics: FC<{ assistant: Assistant }> = props => {
               </ResponsiveContainer>
             </div>
           </ChartTile>
-        </>
-      )}
     </div>
   );
 };

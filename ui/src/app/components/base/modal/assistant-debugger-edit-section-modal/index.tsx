@@ -13,7 +13,7 @@ import {
 import { ErrorMessage } from '@/app/components/form/error-message';
 import { ReactNode } from 'react';
 
-type EditSection = 'experience' | 'voice-input' | 'voice-output';
+type EditSection = 'telephony' | 'experience' | 'voice-input' | 'voice-output';
 
 interface DeploymentEditSectionModalProps extends ModalProps {
   section: EditSection;
@@ -26,6 +26,7 @@ interface DeploymentEditSectionModalProps extends ModalProps {
 }
 
 const sectionToTitle = (section: EditSection) => {
+  if (section === 'telephony') return 'Telephony';
   if (section === 'experience') return 'General Experience';
   if (section === 'voice-input') return 'Voice Input';
   return 'Voice Output';

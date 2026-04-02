@@ -26,7 +26,7 @@ import (
 )
 
 const sipProvider = "sip"
-const defaultOutboundSIPPort = 5090
+const defaultOutboundSIPPort = 5060
 
 // sipTelephony implements the Telephony interface for native SIP
 type sipTelephony struct {
@@ -117,6 +117,16 @@ func (t *sipTelephony) parseConfig(vaultCredential *protos.VaultCredential) (*si
 	}
 	if domain, ok := credMap["sip_domain"].(string); ok {
 		cfg.Domain = domain
+	}
+
+	// Parse custom SIP headers from vault (stored as JSON string, e.g. '{"X-Custom":"value"}')
+	if headersRaw, ok := credMap["sip_headers"].(string); ok && headersRaw != "" {
+		parsed := make(map[string]string)
+		if err := json.Unmarshal([]byte(headersRaw), &parsed); err == nil {
+			cfg.CustomHeaders = parsed
+		} else {
+			t.logger.Warnw("failed to parse sip_headers JSON", "raw", headersRaw, "error", err)
+		}
 	}
 
 	// Outbound SIP dialing should use provider port semantics.

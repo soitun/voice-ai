@@ -35,16 +35,22 @@ import {
   GetDefaultTextToSpeechIfInvalid,
   ValidateTextToSpeechIfInvalid,
 } from '@/app/components/providers/text-to-speech/provider';
+import {
+  ValidateTelephonyOptions,
+} from '@/app/components/providers/telephony';
 
-export type EditSection = 'experience' | 'voice-input' | 'voice-output';
+export type EditSection = 'telephony' | 'experience' | 'voice-input' | 'voice-output';
 export type DeploymentType = 'debugger' | 'api' | 'web' | 'phone';
 
 type AudioConfig = { provider: string; parameters: Metadata[] };
+
+type TelephonyConfig = { provider: string; parameters: Metadata[] };
 
 type ExistingConfig = {
   experience: ExperienceConfig;
   inputAudio?: AudioConfig;
   outputAudio?: AudioConfig;
+  telephony?: TelephonyConfig;
 };
 
 const DEFAULT_EXPERIENCE: ExperienceConfig = {
@@ -110,6 +116,11 @@ export function useDeploymentSectionEdit(
   const [audioOutputConfig, setAudioOutputConfig] = useState<AudioConfig>({
     provider: 'cartesia',
     parameters: GetDefaultTextToSpeechIfInvalid('cartesia', GetDefaultSpeakerConfig()),
+  });
+
+  const [telephonyConfig, setTelephonyConfig] = useState<TelephonyConfig>({
+    provider: 'twilio',
+    parameters: [],
   });
 
   const [existingConfig, setExistingConfig] = useState<ExistingConfig>({
@@ -193,10 +204,20 @@ export function useDeploymentSectionEdit(
             setVoiceOutputEnable(false);
           }
 
+          let fetchedTelephony: TelephonyConfig | undefined;
+          if (type === 'phone' && deployment.getPhoneprovidername?.()) {
+            fetchedTelephony = {
+              provider: deployment.getPhoneprovidername() || '',
+              parameters: deployment.getPhoneoptionsList?.() || [],
+            };
+            setTelephonyConfig(fetchedTelephony);
+          }
+
           setExistingConfig({
             experience: fetchedExperience,
             inputAudio: fetchedInputAudio,
             outputAudio: fetchedOutputAudio,
+            telephony: fetchedTelephony,
           });
         },
       );
@@ -226,6 +247,19 @@ export function useDeploymentSectionEdit(
     const { type, section } = activeEdit;
     setIsSaving(true);
     setEditError('');
+
+    if (section === 'telephony') {
+      if (
+        !ValidateTelephonyOptions(
+          telephonyConfig.provider,
+          telephonyConfig.parameters,
+        )
+      ) {
+        setIsSaving(false);
+        setEditError('Please provide a valid telephony configuration.');
+        return;
+      }
+    }
 
     if (section === 'voice-input' && voiceInputEnable) {
       if (!audioInputConfig.provider) {
@@ -343,6 +377,12 @@ export function useDeploymentSectionEdit(
     } else if (type === 'phone') {
       const d = new AssistantPhoneDeployment();
       applyCommonFields(d);
+      const resolvedTelephony =
+        section === 'telephony' ? telephonyConfig : existingConfig.telephony;
+      if (resolvedTelephony) {
+        d.setPhoneprovidername(resolvedTelephony.provider);
+        d.setPhoneoptionsList(resolvedTelephony.parameters);
+      }
       req.setPhone(d);
     }
 
@@ -380,6 +420,8 @@ export function useDeploymentSectionEdit(
     setAudioInputConfig,
     audioOutputConfig,
     setAudioOutputConfig,
+    telephonyConfig,
+    setTelephonyConfig,
     openEditModal,
     closeEditModal,
     saveSection,

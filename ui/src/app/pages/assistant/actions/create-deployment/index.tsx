@@ -30,6 +30,7 @@ import { ConfigureExperienceModalForm } from '@/app/components/base/modal/assist
 import { ConfigureWebExperienceModalForm } from '@/app/components/base/modal/assistant-debugger-edit-section-modal/configure-web-experience-form';
 import { ConfigureAudioInputModalForm } from '@/app/components/base/modal/assistant-debugger-edit-section-modal/configure-audio-input-form';
 import { ConfigureAudioOutputModalForm } from '@/app/components/base/modal/assistant-debugger-edit-section-modal/configure-audio-output-form';
+import { TelephonyProvider } from '@/app/components/providers/telephony';
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -151,12 +152,24 @@ export const ConfigureAssistantDeploymentPage = () => {
             if (!isOpen) sectionEdit.closeEditModal();
           }}
           section={sectionEdit.activeEdit.section}
-          size={sectionEdit.activeEdit.section === 'experience' ? 'md' : 'lg'}
+          size={sectionEdit.activeEdit.section === 'experience' || sectionEdit.activeEdit.section === 'telephony' ? 'md' : 'lg'}
           label={DEPLOYMENT_LABELS[sectionEdit.activeEdit.type]}
           errorMessage={sectionEdit.editError}
           isSaving={sectionEdit.isSaving}
           onSave={sectionEdit.saveSection}
         >
+          {sectionEdit.activeEdit.section === 'telephony' && (
+              <TelephonyProvider
+                provider={sectionEdit.telephonyConfig.provider}
+                parameters={sectionEdit.telephonyConfig.parameters}
+                onChangeProvider={provider =>
+                  sectionEdit.setTelephonyConfig({ provider, parameters: [] })
+                }
+                onChangeParameter={parameters =>
+                  sectionEdit.setTelephonyConfig(c => ({ ...c, parameters }))
+                }
+              />
+            )}
           {sectionEdit.activeEdit.section === 'experience' &&
             sectionEdit.activeEdit.type === 'web' && (
               <ConfigureWebExperienceModalForm
@@ -316,7 +329,7 @@ export const ConfigureAssistantDeploymentPage = () => {
               assistant={assistant}
               onEdit={() => navi.goToConfigureCall(assistantId!)}
               onEditSection={section =>
-                sectionEdit.openEditModal('phone', section as any)
+                sectionEdit.openEditModal('phone', section)
               }
               onPreview={() => navi.goToAssistantPreviewCall(assistantId!)}
               onDetails={() => setIsPhoneExpanded(true)}

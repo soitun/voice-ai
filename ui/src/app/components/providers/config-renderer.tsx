@@ -458,83 +458,108 @@ const KeyValueField: React.FC<{
 }> = ({ param, value, onChange, colSpanClass }) => {
   const parseEntries = (raw: string): { key: string; value: string }[] => {
     if (!raw) return [];
-    return raw
-      .split(',')
-      .map(pair => {
-        const idx = pair.indexOf('=');
-        if (idx < 0) return { key: pair.trim(), value: '' };
-        return { key: pair.slice(0, idx).trim(), value: pair.slice(idx + 1).trim() };
-      })
-      .filter(e => e.key || e.value);
+    try {
+      const obj = JSON.parse(raw);
+      return Object.entries(obj).map(([key, value]) => ({
+        key,
+        value: String(value),
+      }));
+    } catch {
+      return [];
+    }
   };
 
-  const serialize = (entries: { key: string; value: string }[]): string =>
-    entries.map(e => `${e.key}=${e.value}`).join(',');
+  const serialize = (entries: { key: string; value: string }[]): string => {
+    const obj: Record<string, string> = {};
+    for (const e of entries) {
+      if (e.key) obj[e.key] = e.value;
+    }
+    return Object.keys(obj).length > 0 ? JSON.stringify(obj) : '';
+  };
 
-  const entries = parseEntries(value);
+  const [entries, setEntries] = useState<{ key: string; value: string }[]>(
+    () => parseEntries(value),
+  );
+
+  const syncEntries = (next: { key: string; value: string }[]) => {
+    setEntries(next);
+    onChange(serialize(next));
+  };
 
   const updateEntry = (index: number, field: 'key' | 'value', val: string) => {
     const next = [...entries];
     next[index] = { ...next[index], [field]: val };
-    onChange(serialize(next));
+    syncEntries(next);
   };
 
   const removeEntry = (index: number) => {
-    onChange(serialize(entries.filter((_, i) => i !== index)));
+    syncEntries(entries.filter((_, i) => i !== index));
   };
 
   const addEntry = () => {
-    onChange(serialize([...entries, { key: '', value: '' }]));
+    setEntries(prev => [...prev, { key: '', value: '' }]);
   };
 
   return (
-    <div className={cn(colSpanClass)} key={param.key}>
-      <p className="text-xs font-medium mb-2">{param.label} ({entries.length})</p>
-      <div className="border border-gray-200 dark:border-gray-700 divide-y divide-gray-200 dark:divide-gray-700">
-        {entries.map((entry, index) => (
-          <div key={index} className="flex items-center gap-2 px-2 py-1.5">
-            <TextInput
-              id={`kv-key-${param.key}-${index}`}
-              labelText=""
-              hideLabel
-              value={entry.key}
-              onChange={e => updateEntry(index, 'key', e.target.value)}
-              placeholder="Key"
-              size="md"
-              className="flex-1"
-            />
-            <span className="text-xs text-gray-400 shrink-0">=</span>
-            <TextInput
-              id={`kv-val-${param.key}-${index}`}
-              labelText=""
-              hideLabel
-              value={entry.value}
-              onChange={e => updateEntry(index, 'value', e.target.value)}
-              placeholder="Value"
-              size="md"
-              className="flex-1"
-            />
-            <Button
-              hasIconOnly
-              renderIcon={TrashCan}
-              iconDescription="Remove"
-              kind="danger--ghost"
-              size="md"
-              onClick={() => removeEntry(index)}
-            />
-          </div>
-        ))}
-      </div>
-      <div className="pt-4">
-        <TertiaryButton
-          size="md"
-          renderIcon={Add}
-          onClick={addEntry}
-          className="!w-full !max-w-none"
-        >
-          Add {param.label.toLowerCase()}
-        </TertiaryButton>
-      </div>
+    <div className={cn(colSpanClass, 'flex flex-col gap-4')} key={param.key}>
+      <p className="text-[10px] font-semibold tracking-[0.12em] uppercase text-gray-500 dark:text-gray-400">
+        {param.label} ({entries.length})
+      </p>
+      <table className="w-full border-collapse border border-gray-200 dark:border-gray-700 text-sm [&_input]:!border-none [&_.cds--text-input]:!border-none [&_.cds--text-input]:!outline-none [&_.cds--form-item]:!m-0">
+        <thead>
+          <tr className="bg-gray-50 dark:bg-gray-900">
+            <th className="text-left text-xs font-medium text-gray-500 dark:text-gray-400 px-3 py-2 border-b border-r border-gray-200 dark:border-gray-700 w-1/2">Key</th>
+            <th className="text-left text-xs font-medium text-gray-500 dark:text-gray-400 px-3 py-2 border-b border-r border-gray-200 dark:border-gray-700 w-1/2">Value</th>
+            <th className="border-b border-gray-200 dark:border-gray-700 w-8" />
+          </tr>
+        </thead>
+        <tbody>
+          {entries.map((entry, index) => (
+            <tr key={index} className="border-b border-gray-200 dark:border-gray-700 last:border-b-0">
+              <td className="border-r border-gray-200 dark:border-gray-700 p-0">
+                <TextInput
+                  id={`kv-key-${param.key}-${index}`}
+                  labelText=""
+                  hideLabel
+                  value={entry.key}
+                  onChange={e => updateEntry(index, 'key', e.target.value)}
+                  placeholder="Key"
+                  size="md"
+                />
+              </td>
+              <td className="border-r border-gray-200 dark:border-gray-700 p-0">
+                <TextInput
+                  id={`kv-val-${param.key}-${index}`}
+                  labelText=""
+                  hideLabel
+                  value={entry.value}
+                  onChange={e => updateEntry(index, 'value', e.target.value)}
+                  placeholder="Value"
+                  size="md"
+                />
+              </td>
+              <td className="p-0 text-center">
+                <Button
+                  hasIconOnly
+                  renderIcon={TrashCan}
+                  iconDescription="Remove"
+                  kind="danger--ghost"
+                  size="sm"
+                  onClick={() => removeEntry(index)}
+                />
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <TertiaryButton
+        size="md"
+        renderIcon={Add}
+        onClick={addEntry}
+        className="!w-full !max-w-none"
+      >
+        Add {param.label.toLowerCase()}
+      </TertiaryButton>
       {param.helpText && <p className="text-xs text-gray-500 mt-1">{param.helpText}</p>}
     </div>
   );

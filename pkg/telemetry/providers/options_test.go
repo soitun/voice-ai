@@ -24,11 +24,13 @@ func TestOTLPConfigFromOptions_Defaults(t *testing.T) {
 func TestOTLPConfigFromOptions_ParsesHeadersAndBool(t *testing.T) {
 	cfg := OTLPConfigFromOptions(map[string]interface{}{
 		"endpoint": "localhost:4318",
-		"headers":  "A=B, C=D",
+		"headers":  `{"A":"B","C":"D"}`,
 		"insecure": "true",
 	}, "otlp_http")
 	assert.True(t, cfg.Insecure)
-	assert.Equal(t, []string{"A=B", "C=D"}, cfg.Headers)
+	assert.Len(t, cfg.Headers, 2)
+	assert.Contains(t, cfg.Headers, "A=B")
+	assert.Contains(t, cfg.Headers, "C=D")
 }
 
 func TestDatadogConfigFromOptions(t *testing.T) {
@@ -38,13 +40,15 @@ func TestDatadogConfigFromOptions(t *testing.T) {
 	cfg, err := DatadogConfigFromOptions(map[string]interface{}{
 		"endpoint": "https://trace.agent.datadoghq.com",
 		"api_key":  "secret",
-		"headers":  "X-Env=prod",
+		"headers":  `{"X-Env":"prod"}`,
 		"insecure": true,
 	})
 	require.NoError(t, err)
 	assert.Equal(t, "http/protobuf", cfg.Protocol)
 	assert.True(t, cfg.Insecure)
-	assert.Equal(t, []string{"DD-API-KEY=secret", "X-Env=prod"}, cfg.Headers)
+	assert.Len(t, cfg.Headers, 2)
+	assert.Contains(t, cfg.Headers, "DD-API-KEY=secret")
+	assert.Contains(t, cfg.Headers, "X-Env=prod")
 }
 
 func TestGoogleTraceConfigFromOptions(t *testing.T) {
@@ -55,7 +59,7 @@ func TestGoogleTraceConfigFromOptions(t *testing.T) {
 		"endpoint":     "cloudtrace.googleapis.com",
 		"access_token": "token",
 		"api_key":      "key",
-		"headers":      "X-Foo=bar",
+		"headers":      `{"X-Foo":"bar"}`,
 		"insecure":     "1",
 	})
 	require.NoError(t, err)
@@ -73,7 +77,7 @@ func TestAzureMonitorConfigFromOptions(t *testing.T) {
 	cfg, err := AzureMonitorConfigFromOptions(map[string]interface{}{
 		"endpoint": "eastus.in.applicationinsights.azure.com",
 		"api_key":  "abc",
-		"headers":  "X-Test=yes",
+		"headers":  `{"X-Test":"yes"}`,
 		"insecure": "false",
 	})
 	require.NoError(t, err)
