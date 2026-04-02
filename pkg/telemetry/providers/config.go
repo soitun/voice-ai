@@ -6,6 +6,7 @@
 package providers
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 )
@@ -203,7 +204,7 @@ func optBool(opts map[string]interface{}, key string) bool {
 	}
 }
 
-// optHeaders parses a headers value that may be a single comma-separated string
+// optHeaders parses a headers value from a JSON object string: '{"key":"value"}'
 // or already a []string.
 func optHeaders(opts map[string]interface{}, key string) []string {
 	if opts == nil {
@@ -217,16 +218,17 @@ func optHeaders(opts map[string]interface{}, key string) []string {
 	case []string:
 		return h
 	case string:
-		if strings.TrimSpace(h) == "" {
+		trimmed := strings.TrimSpace(h)
+		if trimmed == "" {
 			return nil
 		}
-		parts := strings.Split(h, ",")
-		out := make([]string, 0, len(parts))
-		for _, p := range parts {
-			p = strings.TrimSpace(p)
-			if p != "" {
-				out = append(out, p)
-			}
+		var parsed map[string]string
+		if err := json.Unmarshal([]byte(trimmed), &parsed); err != nil {
+			return nil
+		}
+		out := make([]string, 0, len(parsed))
+		for k, v := range parsed {
+			out = append(out, k+"="+v)
 		}
 		return out
 	default:

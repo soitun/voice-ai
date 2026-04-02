@@ -96,14 +96,20 @@ func TestOptHeaders_EmptyString(t *testing.T) {
 	assert.Nil(t, optHeaders(map[string]interface{}{"headers": "   "}, "headers"))
 }
 
-func TestOptHeaders_CommaSeparatedString(t *testing.T) {
-	got := optHeaders(map[string]interface{}{"headers": "A=B, C=D"}, "headers")
-	assert.Equal(t, []string{"A=B", "C=D"}, got)
+func TestOptHeaders_JSONString(t *testing.T) {
+	got := optHeaders(map[string]interface{}{"headers": `{"A":"B","C":"D"}`}, "headers")
+	assert.Len(t, got, 2)
+	assert.Contains(t, got, "A=B")
+	assert.Contains(t, got, "C=D")
 }
 
-func TestOptHeaders_SingleString(t *testing.T) {
-	got := optHeaders(map[string]interface{}{"headers": "Authorization=Bearer token"}, "headers")
+func TestOptHeaders_SingleJSONEntry(t *testing.T) {
+	got := optHeaders(map[string]interface{}{"headers": `{"Authorization":"Bearer token"}`}, "headers")
 	assert.Equal(t, []string{"Authorization=Bearer token"}, got)
+}
+
+func TestOptHeaders_InvalidJSON(t *testing.T) {
+	assert.Nil(t, optHeaders(map[string]interface{}{"headers": "not json"}, "headers"))
 }
 
 func TestOptHeaders_SliceInput(t *testing.T) {

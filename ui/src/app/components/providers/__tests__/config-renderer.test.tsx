@@ -72,63 +72,6 @@ jest.mock('@/app/components/dropdown', () => {
   };
 });
 
-jest.mock('@/app/components/dropdown/custom-value-dropdown', () => {
-  const React = require('react');
-  return {
-    CustomValueDropdown: ({ currentValue, setValue, allValue, placeholder }: any) =>
-      React.createElement(
-        'div',
-        null,
-        placeholder ? React.createElement('span', null, placeholder) : null,
-        React.createElement(
-          'select',
-          {
-            value:
-              currentValue?.id ??
-              currentValue?.code ??
-              currentValue?.value ??
-              currentValue?.model_id ??
-              currentValue?.voice_id ??
-              currentValue?.language_id ??
-              '',
-            onChange: (e: any) => {
-              const selected = (allValue || []).find(
-                (item: any) =>
-                  item.id === e.target.value ||
-                  item.code === e.target.value ||
-                  item.value === e.target.value ||
-                  item.model_id === e.target.value ||
-                  item.voice_id === e.target.value ||
-                  item.language_id === e.target.value,
-              );
-              if (selected) setValue(selected);
-            },
-          },
-          React.createElement(
-            'option',
-            { value: '' },
-            placeholder || 'Select option',
-          ),
-          ...(allValue || []).map((item: any) => {
-            const value =
-              item.id ??
-              item.code ??
-              item.value ??
-              item.model_id ??
-              item.voice_id ??
-              item.language_id;
-            const label = item.name ?? item.label ?? String(value);
-            return React.createElement(
-              'option',
-              { key: String(value), value: String(value) },
-              label,
-            );
-          }),
-        ),
-      ),
-  };
-});
-
 jest.mock('@/app/components/carbon/form', () => {
   const React = require('react');
   return {
@@ -271,7 +214,7 @@ jest.mock('@carbon/react', () => {
     ModalHeader: ({ title }: any) => React.createElement('div', null, title),
     ModalBody: ({ children }: any) => React.createElement('div', null, children),
     ModalFooter: ({ children }: any) => React.createElement('div', null, children),
-    Button: ({ children, ...props }: any) => React.createElement('button', props, children),
+    Button: ({ children, hasIconOnly: _, renderIcon: _r, iconDescription: _d, ...props }: any) => React.createElement('button', props, children),
   };
 });
 

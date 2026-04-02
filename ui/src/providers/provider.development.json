@@ -156,6 +156,11 @@
                 "name": "sip_password",
                 "type": "string",
                 "label": "SIP Password (optional)"
+            },
+            {
+                "name": "sip_headers",
+                "type": "key_value",
+                "label": "Custom SIP Headers"
             }
         ]
     },
@@ -679,8 +684,8 @@
             },
             {
                 "name": "headers",
-                "type": "text",
-                "label": "Headers (key=value, one per line)"
+                "type": "key_value",
+                "label": "Custom Headers"
             }
         ]
     },

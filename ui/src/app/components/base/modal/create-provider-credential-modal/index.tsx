@@ -15,9 +15,14 @@ import {
   ModalBody,
   ModalFooter,
 } from '@/app/components/carbon/modal';
-import { PrimaryButton, SecondaryButton } from '@/app/components/carbon/button';
+import {
+  PrimaryButton,
+  SecondaryButton,
+  TertiaryButton,
+} from '@/app/components/carbon/button';
 import { Stack, TextInput, TextArea } from '@/app/components/carbon/form';
-import { Dropdown } from '@carbon/react';
+import { Dropdown, Button } from '@carbon/react';
+import { Add, TrashCan } from '@carbon/icons-react';
 import { connectionConfig } from '@/configs';
 import { useProviderContext } from '@/context/provider-context';
 import { Struct } from 'google-protobuf/google/protobuf/struct_pb';
@@ -60,7 +65,9 @@ export function CreateProviderCredentialDialog(
       return;
     }
     const missingFields = provider.configurations?.filter(
-      configOption => !config[configOption.name]?.trim(),
+      configOption =>
+        configOption.type !== 'key_value' &&
+        !config[configOption.name]?.trim(),
     );
     if (missingFields && missingFields.length > 0) {
       setError(
@@ -162,6 +169,14 @@ export function CreateProviderCredentialDialog(
                   required
                   onChange={e => handleConfigChange(x.name, e.target.value)}
                 />
+              ) : x.type === 'key_value' ? (
+                <CredentialKeyValueField
+                  key={idx}
+                  name={x.name}
+                  label={x.label}
+                  value={config[x.name] || ''}
+                  onChange={value => handleConfigChange(x.name, value)}
+                />
               ) : (
                 <TextInput
                   key={idx}
@@ -186,5 +201,124 @@ export function CreateProviderCredentialDialog(
         </PrimaryButton>
       </ModalFooter>
     </Modal>
+  );
+}
+
+function CredentialKeyValueField({
+  name,
+  label,
+  value,
+  onChange,
+}: {
+  name: string;
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  const parseEntries = (raw: string): { key: string; value: string }[] => {
+    if (!raw) return [];
+    try {
+      const obj = JSON.parse(raw);
+      return Object.entries(obj).map(([key, value]) => ({
+        key,
+        value: String(value),
+      }));
+    } catch {
+      return [];
+    }
+  };
+
+  const serialize = (entries: { key: string; value: string }[]): string => {
+    const obj: Record<string, string> = {};
+    for (const e of entries) {
+      if (e.key) obj[e.key] = e.value;
+    }
+    return Object.keys(obj).length > 0 ? JSON.stringify(obj) : '';
+  };
+
+  const [entries, setEntries] = useState<{ key: string; value: string }[]>(
+    () => parseEntries(value),
+  );
+
+  const syncEntries = (next: { key: string; value: string }[]) => {
+    setEntries(next);
+    onChange(serialize(next));
+  };
+
+  const updateEntry = (index: number, field: 'key' | 'value', val: string) => {
+    const next = [...entries];
+    next[index] = { ...next[index], [field]: val };
+    syncEntries(next);
+  };
+
+  const removeEntry = (index: number) => {
+    syncEntries(entries.filter((_, i) => i !== index));
+  };
+
+  const addEntry = () => {
+    setEntries(prev => [...prev, { key: '', value: '' }]);
+  };
+
+  return (
+    <div className="flex flex-col gap-4">
+      <p className="text-[10px] font-semibold tracking-[0.12em] uppercase text-gray-500 dark:text-gray-400">
+        {label} ({entries.length})
+      </p>
+      <table className="w-full border-collapse border border-gray-200 dark:border-gray-700 text-sm [&_input]:!border-none [&_.cds--text-input]:!border-none [&_.cds--text-input]:!outline-none [&_.cds--form-item]:!m-0">
+        <thead>
+          <tr className="bg-gray-50 dark:bg-gray-900">
+            <th className="text-left text-xs font-medium text-gray-500 dark:text-gray-400 px-3 py-2 border-b border-r border-gray-200 dark:border-gray-700 w-1/2">Key</th>
+            <th className="text-left text-xs font-medium text-gray-500 dark:text-gray-400 px-3 py-2 border-b border-r border-gray-200 dark:border-gray-700 w-1/2">Value</th>
+            <th className="border-b border-gray-200 dark:border-gray-700 w-8" />
+          </tr>
+        </thead>
+        <tbody>
+          {entries.map((entry, index) => (
+            <tr key={index} className="border-b border-gray-200 dark:border-gray-700 last:border-b-0">
+              <td className="border-r border-gray-200 dark:border-gray-700 p-0">
+                <TextInput
+                  id={`kv-key-${name}-${index}`}
+                  labelText=""
+                  hideLabel
+                  value={entry.key}
+                  onChange={e => updateEntry(index, 'key', e.target.value)}
+                  placeholder="Key"
+                  size="md"
+                />
+              </td>
+              <td className="border-r border-gray-200 dark:border-gray-700 p-0">
+                <TextInput
+                  id={`kv-val-${name}-${index}`}
+                  labelText=""
+                  hideLabel
+                  value={entry.value}
+                  onChange={e => updateEntry(index, 'value', e.target.value)}
+                  placeholder="Value"
+                  size="md"
+                />
+              </td>
+              <td className="p-0 text-center">
+                <Button
+                  hasIconOnly
+                  renderIcon={TrashCan}
+                  iconDescription="Remove"
+                  kind="danger--ghost"
+                  size="sm"
+                  onClick={() => removeEntry(index)}
+                />
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <TertiaryButton
+        size="md"
+        renderIcon={Add}
+        onClick={addEntry}
+        className="!w-full !max-w-none"
+      >
+        Add {label.toLowerCase()}
+      </TertiaryButton>
+    </div>
   );
 }

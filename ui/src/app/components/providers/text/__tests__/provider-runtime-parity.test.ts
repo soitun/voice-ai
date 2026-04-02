@@ -13,9 +13,6 @@ jest.mock('@/utils', () => ({
 jest.mock('@/app/components/dropdown', () => ({
   Dropdown: () => null,
 }));
-jest.mock('@/app/components/dropdown/custom-value-dropdown', () => ({
-  CustomValueDropdown: () => null,
-}));
 jest.mock('@/app/components/dropdown/credential-dropdown', () => ({
   CredentialDropdown: () => null,
 }));

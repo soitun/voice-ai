@@ -1517,18 +1517,22 @@ func (s *Server) MakeCall(ctx context.Context, cfg *Config, toURI, fromURI strin
 		fromDomain = cfg.Server
 	}
 
-	// Resolve the From header user identity:
-	// 1. Explicit CallerID from config (cloud providers set their DID here)
-	// 2. Auth username (correct for Asterisk/FreeSWITCH/Piopiy — matches provider account)
-	// The actual caller ID number (fromURI) goes in Display Name + P-Asserted-Identity.
-	fromUser := cfg.Username
+	// Resolve the From header user identity (standard SIP: phone number in From URI,
+	// auth credentials go in Authorization header via digest auth separately).
+	// Priority: 1. CallerID override (Asterisk/PBX that match endpoint by From user)
+	//           2. fromURI — the caller's phone number (standard SIP behavior)
+	//           3. Username — fallback to auth identity
+	fromUser := strings.TrimSpace(fromURI)
 	if cfg.CallerID != "" {
 		fromUser = cfg.CallerID
 	}
 	if fromUser == "" {
+		fromUser = cfg.Username
+	}
+	if fromUser == "" {
 		rtpHandler.Stop()
 		s.rtpAllocator.Release(rtpPort)
-		return nil, fmt.Errorf("SIP From user is empty: either sip_username or sip_caller_id must be set")
+		return nil, fmt.Errorf("SIP From user is empty: fromPhone, sip_caller_id, or sip_username must be set")
 	}
 
 	fromHDR := &sip.FromHeader{
@@ -1550,6 +1554,21 @@ func (s *Server) MakeCall(ctx context.Context, cfg *Config, toURI, fromURI strin
 		pai := sip.NewHeader("P-Asserted-Identity", fmt.Sprintf("<%s:%s@%s>", scheme, callerID, fromDomain))
 		inviteHeaders = append(inviteHeaders, pai)
 	}
+
+	// Append user-defined custom headers from vault credential
+	if len(cfg.CustomHeaders) > 0 {
+		s.logger.Infow("MakeCall appending custom SIP headers", "custom_headers", cfg.CustomHeaders)
+	}
+	for name, value := range cfg.CustomHeaders {
+		inviteHeaders = append(inviteHeaders, sip.NewHeader(name, value))
+	}
+
+	// Log all INVITE headers before sending
+	headerNames := make([]string, 0, len(inviteHeaders))
+	for _, h := range inviteHeaders {
+		headerNames = append(headerNames, h.Name()+": "+h.Value())
+	}
+	s.logger.Infow("MakeCall INVITE headers", "headers", headerNames)
 
 	// Send INVITE via DialogClientCache — the cache stores the dialog once established
 	// so that incoming BYE/re-INVITE can be matched to it via dialogClientCache.ReadBye

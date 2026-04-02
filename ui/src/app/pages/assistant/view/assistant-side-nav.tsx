@@ -113,6 +113,7 @@ export const AssistantSideNav: FC<AssistantSideNavProps> = ({
     <div
       className={cn(
         'relative shrink-0 flex flex-col h-full',
+        'bg-white dark:bg-gray-900',
         'border-r border-gray-200 dark:border-gray-800',
         'transition-all duration-200',
         expanded ? 'w-56' : 'w-12',
@@ -134,17 +135,17 @@ export const AssistantSideNav: FC<AssistantSideNavProps> = ({
           type="button"
           onClick={onToggle}
           className={cn(
-            'flex items-center h-10 w-full cursor-pointer',
+            'flex items-center h-10 w-full cursor-pointer px-4',
             'text-gray-400 dark:text-gray-500',
             'hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-600 dark:hover:text-gray-400',
             'transition-colors duration-100',
           )}
           aria-label={expanded ? 'Collapse nav' : 'Expand nav'}
         >
-          <span className="flex items-center justify-center w-12 h-10 shrink-0 text-gray-400 dark:text-gray-500">
+          <span className="shrink-0">
             {expanded ? <SidePanelClose size={16} /> : <SidePanelOpen size={16} />}
           </span>
-          {expanded && <span className="text-xs truncate">Collapse</span>}
+          {expanded && <span className="text-xs truncate ml-3">Collapse</span>}
         </button>
       </div>
     </div>

@@ -93,6 +93,10 @@ type Config struct {
 	// so the From URI matches the auth endpoint (required for PJSIP endpoint resolution).
 	CallerID string `json:"sip_caller_id,omitempty" mapstructure:"sip_caller_id"`
 
+	// CustomHeaders are user-defined SIP headers added to outbound INVITE requests.
+	// Stored in vault as comma-separated key=value pairs (e.g. "X-Custom=foo,X-Other=bar").
+	CustomHeaders map[string]string `json:"sip_headers,omitempty" mapstructure:"sip_headers"`
+
 	// Platform operational settings — from app config (not from vault)
 	Port              int       `json:"sip_port" mapstructure:"sip_port"`
 	Transport         Transport `json:"sip_transport" mapstructure:"sip_transport"`

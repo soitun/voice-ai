@@ -208,6 +208,7 @@ export function Version(props: VersionProps) {
           totalSelected={selectedVersionId ? 1 : 0}
           onCancel={() => setSelectedVersionId(null)}
           totalCount={filteredRows.length}
+          className="[&_[class*=divider]]:hidden"
         >
           <TableBatchAction
             renderIcon={Rocket}
@@ -260,14 +261,14 @@ export function Version(props: VersionProps) {
                 onClick={() => !isCurrent && setSelectedVersionId(selectedVersionId === data.id ? null : data.id)}
                 className={!isCurrent ? 'cursor-pointer' : ''}
               >
-                <TableCell className="!w-12 !pr-0">
+                <TableCell className="!w-12 !pr-0" onClick={e => e.stopPropagation()}>
                   <RadioButton
                     id={`version-select-${data.id}`}
                     name="version-select"
                     labelText=""
                     hideLabel
                     checked={selectedVersionId === data.id}
-                    onClick={() =>
+                    onChange={() =>
                       setSelectedVersionId(
                         selectedVersionId === data.id ? null : data.id,
                       )
