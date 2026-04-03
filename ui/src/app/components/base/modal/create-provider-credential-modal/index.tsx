@@ -273,6 +273,13 @@ function CredentialKeyValueField({
           </tr>
         </thead>
         <tbody>
+          {entries.length === 0 && (
+            <tr>
+              <td colSpan={3} className="px-4 py-3 text-xs text-gray-500 dark:text-gray-400">
+                No entries yet. Click <strong>Add {label.toLowerCase()}</strong> below to add key-value pairs.
+              </td>
+            </tr>
+          )}
           {entries.map((entry, index) => (
             <tr key={index} className="border-b border-gray-200 dark:border-gray-700 last:border-b-0">
               <td className="border-r border-gray-200 dark:border-gray-700 p-0">

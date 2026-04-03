@@ -313,6 +313,13 @@ export const CreateAssistantWebhook: FC<{ assistantId: string }> = ({
                       </tr>
                     </thead>
                     <tbody>
+                      {headers.length === 0 && (
+                        <tr>
+                          <td colSpan={3} className="px-4 py-3 text-xs text-gray-500 dark:text-gray-400">
+                            No headers yet. Click <strong>Add header</strong> below to add key-value pairs.
+                          </td>
+                        </tr>
+                      )}
                       {headers.map((header, index) => (
                         <tr key={index} className="border-b border-gray-200 dark:border-gray-700 last:border-b-0">
                           <td className="border-r border-gray-200 dark:border-gray-700 p-0">
