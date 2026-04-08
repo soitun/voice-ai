@@ -43,7 +43,7 @@ func (cApi *ConversationGrpcApi) CreatePhoneCall(ctx context.Context, ir *protos
 	}
 
 	// Pipeline handles the full outbound flow
-	result := cApi.channelPipeline.RunSync(ctx, channel_pipeline.OutboundRequestedPipeline{
+	result := cApi.channelPipeline.Run(ctx, channel_pipeline.OutboundRequestedPipeline{
 		ID:          fmt.Sprintf("%d", ir.GetAssistant().GetAssistantId()),
 		Auth:        auth,
 		AssistantID: ir.GetAssistant().GetAssistantId(),

@@ -15,148 +15,90 @@ import (
 	"github.com/rapidaai/pkg/types"
 )
 
-// handleOutboundRequested drives the complete outbound call flow:
-// validate → load assistant → create conversation → save context → observer → dispatch.
-// This is a SYNC handler — the controller blocks on resultCh.
-func (d *Dispatcher) handleOutboundRequested(ctx context.Context, v OutboundRequestedPipeline, resultCh chan<- *PipelineResult) {
+func (d *Dispatcher) runOutbound(ctx context.Context, v OutboundRequestedPipeline) *PipelineResult {
 	d.logger.Infow("Pipeline: OutboundRequested",
 		"to", v.ToPhone,
 		"from", v.FromPhone,
 		"assistant_id", v.AssistantID)
 
-	// Stage 1: Load assistant
 	if d.onLoadAssistant == nil {
-		sendResult(resultCh, &PipelineResult{Error: ErrCallbackNotConfigured})
-		return
+		return &PipelineResult{Error: ErrCallbackNotConfigured}
 	}
 	assistant, err := d.onLoadAssistant(ctx, v.Auth, v.AssistantID)
 	if err != nil {
-		sendResult(resultCh, &PipelineResult{Error: fmt.Errorf("invalid assistant: %w", err)})
-		return
+		return &PipelineResult{Error: fmt.Errorf("invalid assistant: %w", err)}
 	}
 	if assistant.AssistantPhoneDeployment == nil {
-		sendResult(resultCh, &PipelineResult{Error: fmt.Errorf("phone deployment not enabled")})
-		return
+		return &PipelineResult{Error: fmt.Errorf("phone deployment not enabled")}
 	}
 
-	// Stage 2: Resolve from phone
 	fromPhone := v.FromPhone
 	if fromPhone == "" {
 		fn, err := assistant.AssistantPhoneDeployment.GetOptions().GetString("phone")
 		if err != nil {
-			sendResult(resultCh, &PipelineResult{Error: fmt.Errorf("no phone number configured: %w", err)})
-			return
+			return &PipelineResult{Error: fmt.Errorf("no phone number configured: %w", err)}
 		}
 		fromPhone = fn
 	}
 	provider := assistant.AssistantPhoneDeployment.TelephonyProvider
 
-	// Stage 3: Create conversation
 	if d.onCreateConversation == nil {
-		sendResult(resultCh, &PipelineResult{Error: ErrCallbackNotConfigured})
-		return
+		return &PipelineResult{Error: ErrCallbackNotConfigured}
 	}
 	conversationID, err := d.onCreateConversation(ctx, v.Auth, v.ToPhone, assistant.Id, assistant.AssistantProviderId, "outbound")
 	if err != nil {
-		sendResult(resultCh, &PipelineResult{Error: fmt.Errorf("failed to create conversation: %w", err)})
-		return
+		return &PipelineResult{Error: fmt.Errorf("failed to create conversation: %w", err)}
 	}
 
-	// Stage 4: Apply conversation extras (options, arguments, metadata)
 	if d.onApplyConversationExtras != nil {
 		if err := d.onApplyConversationExtras(ctx, v.Auth, assistant.Id, conversationID, v.Options, v.Args, v.Metadata); err != nil {
 			d.logger.Warnw("Failed to apply conversation extras", "error", err)
 		}
 	}
 
-	// Stage 5: Save call context
 	if d.onSaveCallContext == nil {
-		sendResult(resultCh, &PipelineResult{Error: ErrCallbackNotConfigured})
-		return
+		return &PipelineResult{Error: ErrCallbackNotConfigured}
 	}
 	callInfo := &internal_type.CallInfo{CallerNumber: v.ToPhone, Provider: provider, Status: "queued"}
 	contextID, err := d.onSaveCallContext(ctx, v.Auth, assistant, conversationID, callInfo, provider)
 	if err != nil {
-		sendResult(resultCh, &PipelineResult{Error: fmt.Errorf("failed to save call context: %w", err)})
-		return
+		return &PipelineResult{Error: fmt.Errorf("failed to save call context: %w", err)}
 	}
 
-	// Stage 6: Create observer
+	var observer *obs.ConversationObserver
 	if d.onCreateObserver != nil {
-		o := d.onCreateObserver(ctx, contextID, v.Auth, assistant.Id, conversationID)
-		if o != nil {
-			d.storeObserver(contextID, o)
-		}
+		observer = d.onCreateObserver(ctx, contextID, v.Auth, assistant.Id, conversationID)
 	}
 
-	// Emit metadata through observer
-	if o, ok := d.getObserver(contextID); ok {
-		o.EmitMetadata(ctx, []*types.Metadata{
+	if observer != nil {
+		observer.EmitMetadata(ctx, []*types.Metadata{
 			types.NewMetadata("telephony.contextId", contextID),
 			types.NewMetadata("telephony.toPhone", v.ToPhone),
 			types.NewMetadata("telephony.fromPhone", fromPhone),
 			types.NewMetadata("telephony.provider", provider),
 		})
+		observer.EmitEvent(ctx, obs.ComponentTelephony, map[string]string{
+			obs.DataType:      obs.EventOutboundRequested,
+			obs.DataProvider:  provider,
+			obs.DataTo:        v.ToPhone,
+			obs.DataFrom:      fromPhone,
+			obs.DataContextID: contextID,
+		})
 	}
-
-	d.emitEvent(ctx, contextID, obs.ComponentTelephony, map[string]string{
-		obs.DataType:      obs.EventOutboundRequested,
-		obs.DataProvider:  provider,
-		obs.DataTo:        v.ToPhone,
-		obs.DataFrom:      fromPhone,
-		obs.DataContextID: contextID,
-	})
 
 	if d.onDispatchOutbound != nil {
 		if err := d.onDispatchOutbound(ctx, contextID); err != nil {
 			d.logger.Error("Pipeline: outbound dispatch failed", "error", err)
-			d.emitEvent(ctx, contextID, obs.ComponentTelephony, map[string]string{
-				obs.DataType: obs.EventOutboundDispatchFailed, obs.DataError: err.Error(),
-			})
-			d.OnPipeline(ctx, CallFailedPipeline{ID: contextID, Stage: "dispatch", Error: err})
-			sendResult(resultCh, &PipelineResult{
-				ContextID:      contextID,
-				ConversationID: conversationID,
-				Error:          err,
-			})
-			return
+			if observer != nil {
+				observer.EmitEvent(ctx, obs.ComponentTelephony, map[string]string{
+					obs.DataType: obs.EventOutboundDispatchFailed, obs.DataError: err.Error(),
+				})
+				observer.Shutdown(ctx)
+			}
+			return &PipelineResult{ContextID: contextID, ConversationID: conversationID, Error: err}
 		}
 	}
 
-	sendResult(resultCh, &PipelineResult{
-		ContextID:      contextID,
-		ConversationID: conversationID,
-	})
-}
-
-// handleOutboundDialed emits CallInfo telemetry from the provider after dialing.
-func (d *Dispatcher) handleOutboundDialed(ctx context.Context, v OutboundDialedPipeline) {
-	d.logger.Infow("Pipeline: OutboundDialed", "call_id", v.ID)
-
-	if v.CallInfo == nil {
-		return
-	}
-
-	if o, ok := d.getObserver(v.ID); ok {
-		metadata := []*types.Metadata{}
-		if v.CallInfo.ChannelUUID != "" {
-			metadata = append(metadata, types.NewMetadata("telephony.uuid", v.CallInfo.ChannelUUID))
-		}
-		if v.CallInfo.ErrorMessage != "" {
-			metadata = append(metadata, types.NewMetadata("telephony.error", v.CallInfo.ErrorMessage))
-		}
-		for k, val := range v.CallInfo.Extra {
-			metadata = append(metadata, types.NewMetadata(k, val))
-		}
-		if len(metadata) > 0 {
-			o.EmitMetadata(ctx, metadata)
-		}
-	}
-
-	if v.CallInfo.StatusInfo.Event != "" {
-		d.emitEvent(ctx, v.ID, obs.ComponentTelephony, map[string]string{
-			obs.DataType:   v.CallInfo.StatusInfo.Event,
-			"channel_uuid": v.CallInfo.ChannelUUID,
-		})
-	}
+	// Observer stays alive — the outbound call session will use it via the requestor
+	return &PipelineResult{ContextID: contextID, ConversationID: conversationID}
 }

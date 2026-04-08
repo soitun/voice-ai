@@ -10,44 +10,19 @@ import (
 	"context"
 	"fmt"
 
-	obs "github.com/rapidaai/api/assistant-api/internal/observe"
 	sip_infra "github.com/rapidaai/api/assistant-api/sip/infra"
 )
 
 func (d *Dispatcher) handleByeReceived(ctx context.Context, v sip_infra.ByeReceivedPipeline) {
 	d.logger.Infow("Pipeline: ByeReceived", "call_id", v.ID, "reason", v.Reason)
-
-	d.OnPipeline(ctx,
-		sip_infra.CallEndedPipeline{
-			ID:     v.ID,
-			Reason: "bye",
-		},
-		sip_infra.EventEmittedPipeline{
-			ID:    v.ID,
-			Event: obs.EventByeReceived,
-		},
-	)
 }
 
 func (d *Dispatcher) handleCancelReceived(ctx context.Context, v sip_infra.CancelReceivedPipeline) {
 	d.logger.Infow("Pipeline: CancelReceived", "call_id", v.ID)
-
-	d.OnPipeline(ctx,
-		sip_infra.CallEndedPipeline{
-			ID:     v.ID,
-			Reason: "cancel",
-		},
-		sip_infra.EventEmittedPipeline{
-			ID:    v.ID,
-			Event: obs.EventCancelReceived,
-		},
-	)
 }
 
 func (d *Dispatcher) handleTransferRequested(ctx context.Context, v sip_infra.TransferRequestedPipeline) {
-	d.logger.Warnw("Pipeline: TransferRequested (not supported)",
-		"call_id", v.ID,
-		"target", v.TargetURI)
+	d.logger.Warnw("Pipeline: TransferRequested (not supported)", "call_id", v.ID, "target", v.TargetURI)
 }
 
 func (d *Dispatcher) handleCallEnded(ctx context.Context, v sip_infra.CallEndedPipeline) {
@@ -55,44 +30,11 @@ func (d *Dispatcher) handleCallEnded(ctx context.Context, v sip_infra.CallEndedP
 		"call_id", v.ID,
 		"duration", v.Duration,
 		"reason", v.Reason)
-
-	d.emitEvent(ctx, v.ID, obs.ComponentSIP, map[string]string{
-		obs.DataType:   obs.EventCallEnded,
-		obs.DataReason: v.Reason,
-	})
-
-	if hooks, ok := d.getHooks(v.ID); ok {
-		hooks.OnEnd(ctx)
-		d.removeHooks(v.ID)
-	}
-
-	d.removeObserver(ctx, v.ID)
-
-	if d.onCallEnd != nil {
-		d.onCallEnd(v.ID)
-	}
 }
 
 func (d *Dispatcher) handleCallFailed(ctx context.Context, v sip_infra.CallFailedPipeline) {
 	d.logger.Warnw("Pipeline: CallFailed",
 		"call_id", v.ID,
-		"error", v.Error,
+		"error", fmt.Sprintf("%v", v.Error),
 		"sip_code", v.SIPCode)
-
-	d.emitEvent(ctx, v.ID, obs.ComponentSIP, map[string]string{
-		obs.DataType:  obs.EventCallFailed,
-		obs.DataError: fmt.Sprintf("%v", v.Error),
-		"sip_code":    fmt.Sprintf("%d", v.SIPCode),
-	})
-
-	if hooks, ok := d.getHooks(v.ID); ok {
-		hooks.OnError(ctx)
-		d.removeHooks(v.ID)
-	}
-
-	d.removeObserver(ctx, v.ID)
-
-	if d.onCallEnd != nil {
-		d.onCallEnd(v.ID)
-	}
 }

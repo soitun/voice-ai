@@ -8,6 +8,7 @@ package sip_pipeline
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	obs "github.com/rapidaai/api/assistant-api/internal/observe"
@@ -15,8 +16,6 @@ import (
 	"github.com/rapidaai/pkg/types"
 )
 
-// handleSessionEstablished converges inbound and outbound calls.
-// Creates conversation, observer, hooks, then launches Talk() in a goroutine.
 func (d *Dispatcher) handleSessionEstablished(ctx context.Context, v sip_infra.SessionEstablishedPipeline) {
 	d.logger.Infow("Pipeline: SessionEstablished",
 		"call_id", v.ID,
@@ -25,79 +24,70 @@ func (d *Dispatcher) handleSessionEstablished(ctx context.Context, v sip_infra.S
 
 	if d.onCallSetup == nil || d.onCallStart == nil {
 		d.logger.Error("Pipeline: callbacks not configured", "call_id", v.ID)
-		d.OnPipeline(ctx, sip_infra.CallFailedPipeline{
-			ID:    v.ID,
-			Error: sip_infra.ErrConnectionFailed,
-		})
+		v.Session.End()
 		return
 	}
 
 	setup, err := d.onCallSetup(ctx, v.Session, v.Auth, v.AssistantID, v.FromURI, string(v.Direction))
 	if err != nil {
 		d.logger.Error("Pipeline: call setup failed", "call_id", v.ID, "error", err)
-		d.OnPipeline(ctx, sip_infra.CallFailedPipeline{ID: v.ID, Error: err})
+		v.Session.End()
 		return
 	}
 
+	var observer *obs.ConversationObserver
 	if d.onCreateObserver != nil {
-		o := d.onCreateObserver(ctx, setup, v.Auth)
-		if o != nil {
-			d.storeObserver(v.ID, o)
-		}
+		observer = d.onCreateObserver(ctx, setup, v.Auth)
 	}
 
+	var hooks *obs.ConversationHooks
 	if d.onCreateHooks != nil {
-		hooks := d.onCreateHooks(ctx, v.Auth, v.AssistantID, setup.ConversationID)
+		hooks = d.onCreateHooks(ctx, v.Auth, v.AssistantID, setup.ConversationID)
 		if hooks != nil {
-			d.storeHooks(v.ID, hooks)
 			hooks.OnBegin(ctx)
 		}
 	}
 
-	if o, ok := d.getObserver(v.ID); ok {
-		o.EmitMetadata(ctx, []*types.Metadata{
+	if observer != nil {
+		observer.EmitMetadata(ctx, []*types.Metadata{
 			types.NewMetadata("sip.caller_uri", v.FromURI),
 			types.NewMetadata("conversation.direction", string(v.Direction)),
 			types.NewMetadata("conversation.provider", "sip"),
 		})
-	}
-
-	d.OnPipeline(ctx,
-		sip_infra.CallStartedPipeline{ID: v.ID, Session: v.Session},
-		sip_infra.EventEmittedPipeline{ID: v.ID, Event: obs.EventCallStarted, Data: map[string]string{
+		observer.EmitEvent(ctx, obs.ComponentSIP, map[string]string{
+			obs.DataType:      obs.EventCallStarted,
 			obs.DataDirection: string(v.Direction),
-		}},
-	)
+		})
+	}
 
 	go func() {
 		startTime := time.Now()
+		reason := "talk_completed"
 		defer func() {
 			if r := recover(); r != nil {
+				reason = fmt.Sprintf("panic: %v", r)
 				d.logger.Error("Pipeline: onCallStart panicked", "call_id", v.ID, "panic", r)
 			}
-			d.OnPipeline(ctx, sip_infra.CallEndedPipeline{
-				ID:       v.ID,
-				Duration: time.Since(startTime),
-				Reason:   "talk_completed",
-			})
+
+			if observer != nil {
+				observer.EmitEvent(ctx, obs.ComponentSIP, map[string]string{
+					obs.DataType:   obs.EventCallEnded,
+					obs.DataReason: reason,
+				})
+				observer.Shutdown(ctx)
+			}
+			if hooks != nil {
+				hooks.OnEnd(ctx)
+			}
+			if d.onCallEnd != nil {
+				d.onCallEnd(v.ID)
+			}
+
+			d.logger.Infow("Pipeline: CallEnded",
+				"call_id", v.ID,
+				"duration", fmt.Sprintf("%dms", time.Since(startTime).Milliseconds()),
+				"reason", reason)
 		}()
 		d.onCallStart(ctx, v.Session, setup, v.VaultCredential, v.Config, string(v.Direction))
 	}()
-}
-
-func (d *Dispatcher) handleCallStarted(ctx context.Context, v sip_infra.CallStartedPipeline) {
-	d.logger.Infow("Pipeline: CallStarted", "call_id", v.ID)
-}
-
-func (d *Dispatcher) handleHoldRequested(ctx context.Context, v sip_infra.HoldRequestedPipeline) {
-	action := "hold"
-	if !v.IsHold {
-		action = "resume"
-	}
-	d.logger.Infow("Pipeline: HoldRequested", "call_id", v.ID, "action", action)
-	d.OnPipeline(ctx, sip_infra.EventEmittedPipeline{ID: v.ID, Event: action})
-}
-
-func (d *Dispatcher) handleReInviteReceived(ctx context.Context, v sip_infra.ReInviteReceivedPipeline) {
-	d.logger.Debugw("Pipeline: ReInviteReceived", "call_id", v.ID)
 }

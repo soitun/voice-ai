@@ -6,21 +6,12 @@
 
 package channel_pipeline
 
-import (
-	"context"
-
-	obs "github.com/rapidaai/api/assistant-api/internal/observe"
-)
+import "context"
 
 func (d *Dispatcher) handleEventEmitted(ctx context.Context, v EventEmittedPipeline) {
 	d.logger.Debugw("Pipeline: Event", "call_id", v.ID, "event", v.Event)
-	d.emitEvent(ctx, v.ID, obs.ComponentTelephony, v.Data)
 }
 
 func (d *Dispatcher) handleMetricEmitted(ctx context.Context, v MetricEmittedPipeline) {
-	if len(v.Metrics) == 0 {
-		return
-	}
 	d.logger.Debugw("Pipeline: Metric", "call_id", v.ID, "count", len(v.Metrics))
-	d.emitMetric(ctx, v.ID, v.Metrics)
 }

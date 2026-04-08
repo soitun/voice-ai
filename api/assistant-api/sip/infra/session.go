@@ -240,18 +240,14 @@ func (s *Session) isValidTransition(from, to CallState) bool {
 	return false
 }
 
-// emitEvent sends an event to the event channel (non-blocking)
-// Safe to call after session has ended — silently drops the event.
+// emitEvent sends an event to the event channel (non-blocking).
+// Safe to call during End() — the recover guard handles closed channel.
 func (s *Session) emitEvent(eventType EventType, data map[string]interface{}) {
-	if s.ended.Load() {
-		return
-	}
 	event := NewEvent(eventType, s.info.CallID, data)
-	defer func() { recover() }() // guard against closed channel race
+	defer func() { recover() }()
 	select {
 	case s.eventChan <- event:
 	default:
-		// Channel full, drop event
 	}
 }
 
@@ -477,13 +473,13 @@ func (s *Session) End() {
 		return // Already ended
 	}
 
-	// Only transition through ending if not already in a terminal state
-	// (e.g. already set to CallStateFailed before End() was called)
-	if !s.info.State.IsTerminal() {
+	s.mu.RLock()
+	terminal := s.info.State.IsTerminal()
+	s.mu.RUnlock()
+	if !terminal {
 		s.SetState(CallStateEnding)
 	}
 
-	// Stop RTP handler if present
 	s.mu.Lock()
 	rtpHandler := s.rtpHandler
 	s.rtpHandler = nil
@@ -495,12 +491,12 @@ func (s *Session) End() {
 		}
 	}
 
-	// Cancel context
 	s.cancel()
 
-	// Set final state before closing channels to avoid send-on-closed-channel
-	// Skip if already in a terminal state (e.g. failed)
-	if !s.info.State.IsTerminal() {
+	s.mu.RLock()
+	terminal = s.info.State.IsTerminal()
+	s.mu.RUnlock()
+	if !terminal {
 		s.SetState(CallStateEnded)
 	}
 

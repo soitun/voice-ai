@@ -14,7 +14,6 @@ import (
 
 	"github.com/rapidaai/api/assistant-api/config"
 	callcontext "github.com/rapidaai/api/assistant-api/internal/callcontext"
-	channel_pipeline "github.com/rapidaai/api/assistant-api/internal/channel/pipeline"
 	internal_assistant_entity "github.com/rapidaai/api/assistant-api/internal/entity/assistants"
 	internal_services "github.com/rapidaai/api/assistant-api/internal/services"
 	internal_type "github.com/rapidaai/api/assistant-api/internal/type"
@@ -36,10 +35,8 @@ type InboundDispatcher struct {
 	logger           commons.Logger
 	vaultClient      web_client.VaultClient
 	assistantService internal_services.AssistantService
-	telephonyOpt     TelephonyOption
-	pipeline         *channel_pipeline.Dispatcher
+	telephonyOpt TelephonyOption
 
-	// createConversation is injected — keeps the dispatcher free of conversationService dependency.
 	createConversation CreateConversationFunc
 }
 
@@ -54,8 +51,7 @@ func NewInboundDispatcher(deps TelephonyDispatcherDeps) *InboundDispatcher {
 		logger:           deps.Logger,
 		vaultClient:      deps.VaultClient,
 		assistantService: deps.AssistantService,
-		telephonyOpt:     deps.TelephonyOpt,
-		pipeline:         deps.Pipeline,
+		telephonyOpt: deps.TelephonyOpt,
 		createConversation: func(ctx context.Context, auth types.SimplePrinciple, callerNumber string, assistantID, assistantProviderID uint64, direction type_enums.ConversationDirection, source utils.RapidaSource) (uint64, error) {
 			conv, err := deps.ConversationService.CreateConversation(ctx, auth, callerNumber, assistantID, assistantProviderID, direction, source)
 			if err != nil {
@@ -64,11 +60,6 @@ func NewInboundDispatcher(deps TelephonyDispatcherDeps) *InboundDispatcher {
 			return conv.Id, nil
 		},
 	}
-}
-
-// SetPipeline sets the pipeline dispatcher (for late initialization).
-func (d *InboundDispatcher) SetPipeline(p *channel_pipeline.Dispatcher) {
-	d.pipeline = p
 }
 
 // HandleStatusCallback resolves the telephony provider and processes a status callback
@@ -87,26 +78,11 @@ func (d *InboundDispatcher) HandleStatusCallback(c *gin.Context, provider string
 		return nil
 	}
 
-	// Emit status callback telemetry through pipeline observer.
-	// The observer persists to DB + exports to telemetry backends.
-	if d.pipeline != nil {
-		d.pipeline.OnPipeline(c,
-			channel_pipeline.EventEmittedPipeline{
-				ID:    fmt.Sprintf("%d", conversationId),
-				Event: statusInfo.Event,
-				Data: map[string]string{
-					"type":     statusInfo.Event,
-					"provider": provider,
-				},
-			},
-			channel_pipeline.MetricEmittedPipeline{
-				ID: fmt.Sprintf("%d", conversationId),
-				Metrics: []*protos.Metric{
-					{Name: "STATUS", Value: statusInfo.Event, Description: "Status callback from provider"},
-				},
-			},
-		)
-	}
+	d.logger.Infow("Status callback received",
+		"provider", provider,
+		"event", statusInfo.Event,
+		"assistant_id", assistantId,
+		"conversation_id", conversationId)
 	return nil
 }
 
@@ -142,14 +118,6 @@ func (d *InboundDispatcher) ResolveVaultCredential(ctx context.Context, auth typ
 	}
 	vltC, err := d.vaultClient.GetCredential(ctx, auth, credentialID)
 	if err != nil {
-		// Emit failure through pipeline (observer persists RECORD_FAILED)
-		if d.pipeline != nil {
-			d.pipeline.OnPipeline(ctx, channel_pipeline.CallFailedPipeline{
-				ID:    fmt.Sprintf("%d", conversationId),
-				Stage: "vault_credential",
-				Error: err,
-			})
-		}
 		return nil, fmt.Errorf("failed to resolve vault credential: %w", err)
 	}
 	return vltC, nil

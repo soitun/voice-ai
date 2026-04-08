@@ -23,12 +23,12 @@ type AssistantConversation struct {
 	Source    utils.RapidaSource               `json:"source" gorm:"type:string;size:50;not null;default:web-app"`
 	Direction type_enums.ConversationDirection `json:"direction" gorm:"type:string;size:20;not null;default:inbound"`
 
-	Arguments       []*AssistantConversationArgument       `json:"arguments" gorm:"foreignKey:AssistantConversationId"`
-	Metadatas       []*AssistantConversationMetadata       `json:"metadata" gorm:"foreignKey:AssistantConversationId"`
-	Metrics         []*AssistantConversationMetric         `json:"metrics" gorm:"foreignKey:AssistantConversationId"`
-	Options         []*AssistantConversationOption         `json:"options" gorm:"foreignKey:AssistantConversationId"`
-	Recordings      []*AssistantConversationRecording      `json:"recordings" gorm:"foreignKey:AssistantConversationId"`
-	TelephonyEvents []*AssistantConversationTelephonyEvent `json:"telephonyEvents" gorm:"foreignKey:AssistantConversationId"`
+	Arguments  []*AssistantConversationArgument  `json:"arguments" gorm:"foreignKey:AssistantConversationId"`
+	Metadatas  []*AssistantConversationMetadata  `json:"metadata" gorm:"foreignKey:AssistantConversationId"`
+	Metrics    []*AssistantConversationMetric    `json:"metrics" gorm:"foreignKey:AssistantConversationId"`
+	Options    []*AssistantConversationOption    `json:"options" gorm:"foreignKey:AssistantConversationId"`
+	Recordings []*AssistantConversationRecording `json:"recordings" gorm:"foreignKey:AssistantConversationId"`
+	// TelephonyEvents []*AssistantConversationTelephonyEvent `json:"telephonyEvents" gorm:"foreignKey:AssistantConversationId"`
 }
 
 func (ac *AssistantConversation) GetArguments() map[string]interface{} {

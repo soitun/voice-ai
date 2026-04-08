@@ -19,22 +19,22 @@ import (
 	internal_grpc "github.com/rapidaai/api/assistant-api/internal/channel/grpc"
 	channel_pipeline "github.com/rapidaai/api/assistant-api/internal/channel/pipeline"
 	channel_telephony "github.com/rapidaai/api/assistant-api/internal/channel/telephony"
+	internal_webrtc "github.com/rapidaai/api/assistant-api/internal/channel/webrtc"
 	internal_assistant_entity "github.com/rapidaai/api/assistant-api/internal/entity/assistants"
 	observe "github.com/rapidaai/api/assistant-api/internal/observe"
 	observe_exporters "github.com/rapidaai/api/assistant-api/internal/observe/exporters"
-	internal_type "github.com/rapidaai/api/assistant-api/internal/type"
-	internal_webrtc "github.com/rapidaai/api/assistant-api/internal/channel/webrtc"
 	internal_services "github.com/rapidaai/api/assistant-api/internal/services"
 	internal_assistant_service "github.com/rapidaai/api/assistant-api/internal/services/assistant"
+	internal_type "github.com/rapidaai/api/assistant-api/internal/type"
 	sip_infra "github.com/rapidaai/api/assistant-api/sip/infra"
 	web_client "github.com/rapidaai/pkg/clients/web"
-	"github.com/rapidaai/protos"
 	"github.com/rapidaai/pkg/commons"
 	"github.com/rapidaai/pkg/connectors"
 	"github.com/rapidaai/pkg/storages"
 	storage_files "github.com/rapidaai/pkg/storages/file-storage"
 	"github.com/rapidaai/pkg/types"
 	"github.com/rapidaai/pkg/utils"
+	"github.com/rapidaai/protos"
 	assistant_api "github.com/rapidaai/protos"
 )
 
@@ -183,9 +183,7 @@ func newConversationApiCore(cfg *config.AssistantConfig, logger commons.Logger,
 		},
 	})
 
-	// Wire pipeline into telephony dispatchers for observer-based telemetry
-	inbound.SetPipeline(pipeline)
-	outboundDisp.SetPipeline(pipeline)
+	pipeline.Start(context.Background())
 
 	return &ConversationApi{
 		cfg:                          cfg,

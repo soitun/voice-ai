@@ -20,6 +20,7 @@ import (
 	"github.com/rapidaai/api/assistant-api/config"
 	channel_pipeline "github.com/rapidaai/api/assistant-api/internal/channel/pipeline"
 	"github.com/rapidaai/pkg/commons"
+	"github.com/rapidaai/pkg/connectors"
 )
 
 type audioSocketEngine struct {
@@ -30,11 +31,15 @@ type audioSocketEngine struct {
 	mu       sync.RWMutex
 }
 
-func NewAudioSocketEngine(cfg *config.AssistantConfig, logger commons.Logger, pipeline *channel_pipeline.Dispatcher) *audioSocketEngine {
+func NewAudioSocketEngine(cfg *config.AssistantConfig, logger commons.Logger,
+	postgres connectors.PostgresConnector,
+	redis connectors.RedisConnector,
+	opensearch connectors.OpenSearchConnector,
+) *audioSocketEngine {
 	return &audioSocketEngine{
 		cfg:      cfg,
 		logger:   logger,
-		pipeline: pipeline,
+		pipeline: newSessionPipeline(cfg, logger, postgres, redis, opensearch),
 	}
 }
 
@@ -45,9 +50,7 @@ func (m *audioSocketEngine) Connect(ctx context.Context) error {
 		return fmt.Errorf("audiosocket listen failed: %w", err)
 	}
 	m.listener = listener
-
 	m.logger.Info("AudioSocket server started", "addr", addr)
-
 	go m.acceptLoop(ctx)
 	return nil
 }
@@ -94,7 +97,7 @@ func (m *audioSocketEngine) handleConnection(ctx context.Context, conn net.Conn)
 
 	m.logger.Infof("AudioSocket connection contextId=%s", contextID)
 
-	result := m.pipeline.RunSync(ctx, channel_pipeline.SessionConnectedPipeline{
+	result := m.pipeline.Run(ctx, channel_pipeline.SessionConnectedPipeline{
 		ID:        contextID,
 		ContextID: contextID,
 		Conn:      conn,
@@ -107,9 +110,6 @@ func (m *audioSocketEngine) handleConnection(ctx context.Context, conn net.Conn)
 	}
 }
 
-// readContextID reads the initial UUID frame from the AudioSocket connection.
-// Asterisk sends a FrameTypeUUID (0x01) frame with 16-byte UUID payload.
-// Frame format: 1-byte type + 2-byte big-endian length + payload.
 func (m *audioSocketEngine) readContextID(reader *bufio.Reader) (string, error) {
 	const frameTypeUUID byte = 0x01
 

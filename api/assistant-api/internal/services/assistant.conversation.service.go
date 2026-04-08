@@ -18,25 +18,23 @@ import (
 )
 
 type GetConversationOption struct {
-	InjectContext        bool
-	InjectArgument       bool
-	InjectMetadata       bool
-	InjectMetric         bool
-	InjectOption         bool
-	InjectMessage        bool
-	InjectRecording      bool
-	InjectTelephonyEvent bool
+	InjectContext   bool
+	InjectArgument  bool
+	InjectMetadata  bool
+	InjectMetric    bool
+	InjectOption    bool
+	InjectMessage   bool
+	InjectRecording bool
 }
 
 func NewDefaultGetConversationOption() *GetConversationOption {
 	return &GetConversationOption{
-		InjectContext:        true,
-		InjectArgument:       true,
-		InjectMetadata:       true,
-		InjectMetric:         true,
-		InjectOption:         true,
-		InjectRecording:      false,
-		InjectTelephonyEvent: true,
+		InjectContext:   true,
+		InjectArgument:  true,
+		InjectMetadata:  true,
+		InjectMetric:    true,
+		InjectOption:    true,
+		InjectRecording: false,
 	}
 }
 
@@ -57,8 +55,6 @@ func (gco *GetConversationOption) WithFieldSelector(selectors []*workflow_api.Fi
 			gco.InjectMessage = true
 		case "recording":
 			gco.InjectRecording = true
-		case "telephonyEvent":
-			gco.InjectTelephonyEvent = true
 		}
 	}
 	return gco
@@ -305,13 +301,4 @@ type AssistantConversationService interface {
 		assistantConversationId uint64,
 		user, system []byte,
 	) (*internal_conversation_entity.AssistantConversationRecording, error)
-
-	ApplyConversationTelephonyEvent(
-		ctx context.Context,
-		auth types.SimplePrinciple,
-		telephony string,
-		assistantId uint64,
-		assistantConversationId uint64,
-		events []*types.Event,
-	) ([]*internal_conversation_entity.AssistantConversationTelephonyEvent, error)
 }

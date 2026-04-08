@@ -40,11 +40,9 @@ import (
 // SIPEngine manages a multi-tenant SIP server. Config is resolved per-call
 // from each assistant's phone deployment and vault credentials.
 type SIPEngine struct {
-	mu       sync.RWMutex
-	cfg      *config.AssistantConfig
-	logger   commons.Logger
-	server   *sip_infra.Server
-	sessions map[string]*sip_infra.SIPSession
+	cfg    *config.AssistantConfig
+	logger commons.Logger
+	server *sip_infra.Server
 
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -82,7 +80,6 @@ func NewSIPEngine(config *config.AssistantConfig, logger commons.Logger,
 		deploymentService:            internal_assistant_service.NewAssistantDeploymentService(config, logger, postgres),
 		storage:                      storage_files.NewStorage(config.AssetStoreConfig, logger),
 		vaultClient: web_client.NewVaultClientGRPC(&config.AppConfig, logger, redis),
-		sessions:                     make(map[string]*sip_infra.SIPSession),
 	}
 }
 
@@ -168,8 +165,6 @@ func (m *SIPEngine) Connect(ctx context.Context) error {
 }
 
 func (m *SIPEngine) GetServer() *sip_infra.Server {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
 	return m.server
 }
 
@@ -314,19 +309,16 @@ func (m *SIPEngine) onCancel(session *sip_infra.Session) error {
 }
 
 func (m *SIPEngine) EndCall(callID string) error {
-	m.dispatcher.OnPipeline(m.ctx, sip_infra.ByeReceivedPipeline{
-		ID:     callID,
-		Reason: "app_hangup",
-	})
-	return nil
+	session, ok := m.server.GetSession(callID)
+	if !ok {
+		return fmt.Errorf("session %s not found", callID)
+	}
+	return m.server.EndCall(session)
 }
 
 func (m *SIPEngine) GetActiveCalls() int {
-	m.mu.RLock()
-	srv := m.server
-	m.mu.RUnlock()
-	if srv != nil {
-		return srv.SessionCount()
+	if m.server != nil {
+		return m.server.SessionCount()
 	}
 	return 0
 }
@@ -335,31 +327,13 @@ func (m *SIPEngine) Stop() {
 	if m.registrationClient != nil {
 		m.registrationClient.UnregisterAll(context.Background())
 	}
-
 	if m.cancel != nil {
 		m.cancel()
 	}
-
-	m.mu.Lock()
 	if m.server != nil {
 		m.server.Stop()
 		m.server = nil
 	}
-	// Snapshot+clear under lock; cancel outside to avoid deadlock if Cancel
-	// triggers callbacks that re-acquire m.mu.
-	pending := make([]*sip_infra.SIPSession, 0, len(m.sessions))
-	for _, session := range m.sessions {
-		pending = append(pending, session)
-	}
-	m.sessions = make(map[string]*sip_infra.SIPSession)
-	m.mu.Unlock()
-
-	for _, session := range pending {
-		if session.Cancel != nil {
-			session.Cancel()
-		}
-	}
-
 	m.logger.Infow("SIP Manager stopped")
 }
 
@@ -698,26 +672,8 @@ func (m *SIPEngine) pipelineCallStart(ctx context.Context, session *sip_infra.Se
 		OrganizationID:      setup.OrganizationID,
 	}
 
-	callCtx, cancel := context.WithCancel(ctx)
+	callCtx, cancel := context.WithCancel(session.Context())
 	defer cancel()
-
-	tenantID := fmt.Sprintf("%d", cc.OrganizationID)
-	m.mu.Lock()
-	m.sessions[callID] = &sip_infra.SIPSession{
-		CallID:      callID,
-		AssistantID: cc.AssistantID,
-		TenantID:    tenantID,
-		Auth:        auth,
-		Config:      sipConfig,
-		Cancel:      cancel,
-	}
-	m.mu.Unlock()
-
-	defer func() {
-		m.mu.Lock()
-		delete(m.sessions, callID)
-		m.mu.Unlock()
-	}()
 
 	select {
 	case <-session.ByeReceived():
@@ -777,14 +733,9 @@ func (m *SIPEngine) pipelineCallStart(ctx context.Context, session *sip_infra.Se
 }
 
 func (m *SIPEngine) pipelineCallEnd(callID string) {
-	m.mu.Lock()
-	if sipSession, exists := m.sessions[callID]; exists {
-		if sipSession.Cancel != nil {
-			sipSession.Cancel()
-		}
-		delete(m.sessions, callID)
+	if session, ok := m.server.GetSession(callID); ok {
+		session.End()
 	}
-	m.mu.Unlock()
 }
 
 func (m *SIPEngine) createObserver(ctx context.Context, setup *sip_pipeline.CallSetupResult, auth types.SimplePrinciple) *observe.ConversationObserver {

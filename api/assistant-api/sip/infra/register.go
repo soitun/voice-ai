@@ -60,6 +60,8 @@ type activeRegistration struct {
 	reg       *Registration
 	cancel    context.CancelFunc
 	expiresAt time.Time
+	callID    string
+	cseq      uint32
 }
 
 // RegistrationClient manages outbound SIP REGISTER transactions.
@@ -97,13 +99,15 @@ func (rc *RegistrationClient) Register(ctx context.Context, reg *Registration) e
 		expiresIn = defaultRegisterExpiry
 	}
 
-	grantedExpiry, err := rc.sendRegister(ctx, reg, expiresIn)
+	// Stable Call-ID per binding (RFC 3261 §10.2)
+	bindingCallID := fmt.Sprintf("reg-%s-%d", reg.DID, time.Now().UnixNano())
+	var cseq uint32 = 1
+
+	grantedExpiry, err := rc.sendRegister(ctx, reg, expiresIn, bindingCallID, cseq)
 	if err != nil {
 		return fmt.Errorf("%w: DID %s at %s: %v", ErrRegistrationFailed, reg.DID, reg.Config.Server, err)
 	}
 
-	// Store active registration and start renewal loop.
-	// Cancel any existing registration for this DID first (idempotent replace).
 	regCtx, cancelReg := context.WithCancel(ctx)
 
 	rc.mu.Lock()
@@ -114,6 +118,8 @@ func (rc *RegistrationClient) Register(ctx context.Context, reg *Registration) e
 		reg:       reg,
 		cancel:    cancelReg,
 		expiresAt: time.Now().Add(time.Duration(grantedExpiry) * time.Second),
+		callID:    bindingCallID,
+		cseq:      cseq + 1,
 	}
 	rc.mu.Unlock()
 
@@ -146,7 +152,7 @@ func (rc *RegistrationClient) Unregister(ctx context.Context, did string) error 
 	unregCtx, cancel := contextWithTimeout(ctx, defaultRegisterTimeout)
 	defer cancel()
 
-	if _, err := rc.sendRegister(unregCtx, active.reg, 0); err != nil {
+	if _, err := rc.sendRegister(unregCtx, active.reg, 0, active.callID, active.cseq); err != nil {
 		rc.logger.Warnw("Failed to send REGISTER Expires:0",
 			"did", did,
 			"error", err)
@@ -203,7 +209,7 @@ func (rc *RegistrationClient) GetRegisteredDIDs() []string {
 
 // sendRegister constructs and sends a REGISTER request, handling digest auth if challenged.
 // Returns the granted expiry from the 200 OK response.
-func (rc *RegistrationClient) sendRegister(ctx context.Context, reg *Registration, expiresIn int) (int, error) {
+func (rc *RegistrationClient) sendRegister(ctx context.Context, reg *Registration, expiresIn int, bindingCallID string, cseq uint32) (int, error) {
 	cfg := reg.Config
 
 	domain := cfg.Domain
@@ -259,11 +265,9 @@ func (rc *RegistrationClient) sendRegister(ctx context.Context, reg *Registratio
 	expiresHdr := sip.ExpiresHeader(expiresIn)
 	req.AppendHeader(&expiresHdr)
 
-	// CSeq
-	req.AppendHeader(&sip.CSeqHeader{SeqNo: 1, MethodName: sip.REGISTER})
+	req.AppendHeader(&sip.CSeqHeader{SeqNo: cseq, MethodName: sip.REGISTER})
 
-	// Call-ID (unique per registration binding per RFC 3261 §10.2)
-	callID := sip.CallIDHeader(fmt.Sprintf("reg-%s-%d", reg.DID, time.Now().UnixNano()))
+	callID := sip.CallIDHeader(bindingCallID)
 	req.AppendHeader(&callID)
 
 	// Max-Forwards
@@ -304,11 +308,20 @@ func (rc *RegistrationClient) sendRegister(ctx context.Context, reg *Registratio
 		return 0, fmt.Errorf("rejected with %d %s", resp.StatusCode, resp.Reason)
 	}
 
-	// Parse granted expiry — registrar may shorten our requested duration
+	// Parse granted expiry. Per RFC 3261 §10.2.4, the registrar may return the
+	// granted duration either as a Contact;expires=N parameter or a top-level
+	// Expires header. Contact-level takes precedence when present.
 	grantedExpiry := expiresIn
-	if hdr := resp.GetHeader("Expires"); hdr != nil {
-		if parsed, err := strconv.Atoi(strings.TrimSpace(hdr.Value())); err == nil && parsed > 0 {
-			grantedExpiry = parsed
+	if contact := resp.GetHeader("Contact"); contact != nil {
+		if exp := parseContactExpires(contact.Value()); exp > 0 {
+			grantedExpiry = exp
+		}
+	}
+	if grantedExpiry == expiresIn {
+		if hdr := resp.GetHeader("Expires"); hdr != nil {
+			if parsed, err := strconv.Atoi(strings.TrimSpace(hdr.Value())); err == nil && parsed > 0 {
+				grantedExpiry = parsed
+			}
 		}
 	}
 
@@ -328,8 +341,15 @@ func (rc *RegistrationClient) renewLoop(ctx context.Context, reg *Registration, 
 		case <-ctx.Done():
 			return
 		case <-timer.C:
+			rc.mu.RLock()
+			active, ok := rc.registrations[reg.DID]
+			rc.mu.RUnlock()
+			if !ok {
+				return
+			}
+
 			renewCtx, cancel := contextWithTimeout(ctx, defaultRegisterTimeout)
-			grantedExpiry, err := rc.sendRegister(renewCtx, reg, expiresIn)
+			grantedExpiry, err := rc.sendRegister(renewCtx, reg, expiresIn, active.callID, active.cseq)
 			cancel()
 
 			if err != nil {
@@ -344,6 +364,7 @@ func (rc *RegistrationClient) renewLoop(ctx context.Context, reg *Registration, 
 			rc.mu.Lock()
 			if active, ok := rc.registrations[reg.DID]; ok {
 				active.expiresAt = time.Now().Add(time.Duration(grantedExpiry) * time.Second)
+				active.cseq++
 			}
 			rc.mu.Unlock()
 
@@ -375,4 +396,24 @@ func contextWithTimeout(parent context.Context, timeout time.Duration) (context.
 // Some registrars reject "+" in the userinfo field.
 func normalizeUser(did string) string {
 	return strings.TrimPrefix(did, "+")
+}
+
+// parseContactExpires extracts the expires parameter from a Contact header value.
+// Handles: <sip:user@host>;expires=3600 and <sip:user@host;expires=3600>
+func parseContactExpires(contact string) int {
+	lower := strings.ToLower(contact)
+	idx := strings.Index(lower, "expires=")
+	if idx < 0 {
+		return 0
+	}
+	val := contact[idx+8:]
+	end := strings.IndexAny(val, ";, \t>")
+	if end > 0 {
+		val = val[:end]
+	}
+	parsed, err := strconv.Atoi(strings.TrimSpace(val))
+	if err != nil || parsed <= 0 {
+		return 0
+	}
+	return parsed
 }

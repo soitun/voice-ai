@@ -10,6 +10,7 @@ import (
 	"strconv"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 
 	channel_pipeline "github.com/rapidaai/api/assistant-api/internal/channel/pipeline"
@@ -60,8 +61,8 @@ func (cApi *ConversationApi) CallReciever(c *gin.Context) {
 	}
 
 	// Pipeline handles: create conversation, answer provider, emit events
-	result := cApi.channelPipeline.RunSync(c, channel_pipeline.CallReceivedPipeline{
-		ID:          assistantID,
+	result := cApi.channelPipeline.Run(c, channel_pipeline.CallReceivedPipeline{
+		ID:          uuid.NewString(),
 		Provider:    c.Param("telephony"),
 		Auth:        iAuth,
 		AssistantID: assistantId,
@@ -91,7 +92,7 @@ func (cApi *ConversationApi) CallTalkerByContext(c *gin.Context) {
 
 	// Pipeline handles: resolve context, create streamer, create talker,
 	// create observer+hooks, hooks.OnBegin, Talk() (blocks), hooks.OnEnd, cleanup.
-	result := cApi.channelPipeline.RunSync(c, channel_pipeline.SessionConnectedPipeline{
+	result := cApi.channelPipeline.Run(c, channel_pipeline.SessionConnectedPipeline{
 		ID:        contextID,
 		ContextID: contextID,
 		WebSocket: ws,

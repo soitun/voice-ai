@@ -45,12 +45,11 @@ func TestSessionConnected_ReaderWriterPassedToStreamer(t *testing.T) {
 	})
 
 	ctx := context.Background()
-	d.Start(ctx)
 
 	reader := bufio.NewReader(&bytes.Buffer{})
 	writer := bufio.NewWriter(&bytes.Buffer{})
 
-	result := d.RunSync(ctx, SessionConnectedPipeline{
+	result := d.Run(ctx, SessionConnectedPipeline{
 		ID:        "test-call",
 		ContextID: "test-ctx",
 		Reader:    reader,
@@ -87,9 +86,8 @@ func TestSessionConnected_NilReaderWriter(t *testing.T) {
 	})
 
 	ctx := context.Background()
-	d.Start(ctx)
 
-	result := d.RunSync(ctx, SessionConnectedPipeline{
+	result := d.Run(ctx, SessionConnectedPipeline{
 		ID:        "ws-call",
 		ContextID: "ws-ctx",
 	})
@@ -119,9 +117,8 @@ func TestSessionConnected_ResolveSessionError(t *testing.T) {
 	})
 
 	ctx := context.Background()
-	d.Start(ctx)
 
-	result := d.RunSync(ctx, SessionConnectedPipeline{
+	result := d.Run(ctx, SessionConnectedPipeline{
 		ID:        "fail-call",
 		ContextID: "bad-ctx",
 	})
@@ -141,9 +138,8 @@ func TestSessionConnected_MissingResolveCallback(t *testing.T) {
 	})
 
 	ctx := context.Background()
-	d.Start(ctx)
 
-	result := d.RunSync(ctx, SessionConnectedPipeline{
+	result := d.Run(ctx, SessionConnectedPipeline{
 		ID:        "no-resolve",
 		ContextID: "no-resolve-ctx",
 	})
@@ -163,9 +159,8 @@ func TestSessionConnected_MissingStreamerCallback(t *testing.T) {
 	})
 
 	ctx := context.Background()
-	d.Start(ctx)
 
-	result := d.RunSync(ctx, SessionConnectedPipeline{
+	result := d.Run(ctx, SessionConnectedPipeline{
 		ID:        "no-streamer",
 		ContextID: "no-streamer-ctx",
 	})
@@ -186,9 +181,8 @@ func TestSessionConnected_ContextCanceled(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 	defer cancel()
-	d.Start(ctx)
 
-	result := d.RunSync(ctx, SessionConnectedPipeline{
+	result := d.Run(ctx, SessionConnectedPipeline{
 		ID:        "cancel-call",
 		ContextID: "cancel-ctx",
 	})
@@ -213,14 +207,13 @@ func TestSessionConnected_ConnFieldPassedThrough(t *testing.T) {
 	})
 
 	ctx := context.Background()
-	d.Start(ctx)
 
 	// Use a pipe to create a real net.Conn
 	server, client := net.Pipe()
 	defer server.Close()
 	defer client.Close()
 
-	d.RunSync(ctx, SessionConnectedPipeline{
+	d.Run(ctx, SessionConnectedPipeline{
 		ID:        "conn-test",
 		ContextID: "conn-ctx",
 		Conn:      client,
@@ -228,5 +221,30 @@ func TestSessionConnected_ConnFieldPassedThrough(t *testing.T) {
 
 	if capturedConn != client {
 		t.Error("Conn field was not passed to OnCreateStreamer")
+	}
+}
+
+// TestRunSession_InlineExecution verifies that Run executes on the caller's
+// goroutine (no spawned goroutines) by checking that the result is available
+// immediately after the call returns.
+func TestRunSession_InlineExecution(t *testing.T) {
+	d := NewDispatcher(&DispatcherConfig{
+		Logger: newTestLogger(),
+		OnResolveSession: func(ctx context.Context, contextID string) (*callcontext.CallContext, *protos.VaultCredential, error) {
+			return nil, nil, errors.New("inline-check")
+		},
+	})
+
+	result := d.Run(context.Background(), SessionConnectedPipeline{
+		ID:        "inline",
+		ContextID: "inline-ctx",
+	})
+
+	// Result must be available synchronously — no channel read, no timeout needed.
+	if result == nil {
+		t.Fatal("expected non-nil result")
+	}
+	if result.Error == nil || result.Error.Error() != "inline-check" {
+		t.Fatalf("expected inline-check error, got: %v", result.Error)
 	}
 }

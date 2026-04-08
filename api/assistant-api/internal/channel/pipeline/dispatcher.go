@@ -11,7 +11,6 @@ import (
 	"context"
 	"fmt"
 	"net"
-	"sync"
 
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
@@ -45,9 +44,8 @@ type PipelineResult struct {
 }
 
 type callEnvelope struct {
-	ctx      context.Context
-	p        Pipeline
-	resultCh chan<- *PipelineResult // nil for async (fire-and-forget)
+	ctx context.Context
+	p   Pipeline
 }
 
 // Dispatcher routes channel call lifecycle stages to priority-based goroutines.
@@ -57,7 +55,6 @@ type callEnvelope struct {
 //	media   — session connected, initialized, active
 //	control — events, metrics
 type Dispatcher struct {
-	mu     sync.RWMutex
 	logger commons.Logger
 
 	signalCh  chan callEnvelope
@@ -65,11 +62,6 @@ type Dispatcher struct {
 	mediaCh   chan callEnvelope
 	controlCh chan callEnvelope
 
-	observers      map[string]*observe.ConversationObserver
-	hooks          map[string]*observe.ConversationHooks
-	pendingResults map[string]chan<- *PipelineResult
-
-	// Callbacks — each stage has its own independent callback
 	onReceiveCall             OnReceiveCallFunc
 	onLoadAssistant           OnLoadAssistantFunc
 	onCreateConversation      OnCreateConversationFunc
@@ -150,9 +142,6 @@ type DispatcherConfig struct {
 func NewDispatcher(cfg *DispatcherConfig) *Dispatcher {
 	return &Dispatcher{
 		logger:                    cfg.Logger,
-		observers:                 make(map[string]*observe.ConversationObserver),
-		hooks:                     make(map[string]*observe.ConversationHooks),
-		pendingResults:            make(map[string]chan<- *PipelineResult),
 		onReceiveCall:             cfg.OnReceiveCall,
 		onLoadAssistant:           cfg.OnLoadAssistant,
 		onCreateConversation:      cfg.OnCreateConversation,
@@ -185,39 +174,40 @@ func (d *Dispatcher) Start(ctx context.Context) {
 // OnPipeline enqueues a pipeline stage asynchronously (fire-and-forget).
 func (d *Dispatcher) OnPipeline(ctx context.Context, stages ...Pipeline) {
 	for _, s := range stages {
-		d.enqueue(ctx, s, nil)
+		d.enqueue(ctx, s)
 	}
 }
 
-// RunSync enqueues a pipeline stage and blocks until the handler completes.
-// The handler writes its result to the result channel. The controller blocks here.
-func (d *Dispatcher) RunSync(ctx context.Context, stage Pipeline) *PipelineResult {
-	resultCh := make(chan *PipelineResult, 1)
-	d.enqueue(ctx, stage, resultCh)
-	select {
-	case r := <-resultCh:
-		return r
-	case <-ctx.Done():
-		return &PipelineResult{Error: ctx.Err()}
+// Run executes a sync pipeline stage inline on the caller's goroutine.
+// For CallReceived, SessionConnected, and OutboundRequested the handler runs
+// sequentially without channels or goroutines. All other stage types are
+// forwarded to OnPipeline (async fire-and-forget) and an empty result is returned.
+func (d *Dispatcher) Run(ctx context.Context, stage Pipeline) *PipelineResult {
+	switch v := stage.(type) {
+	case CallReceivedPipeline:
+		return d.runInboundCall(ctx, v)
+	case SessionConnectedPipeline:
+		return d.runSession(ctx, v)
+	case OutboundRequestedPipeline:
+		return d.runOutbound(ctx, v)
+	default:
+		d.OnPipeline(ctx, stage)
+		return &PipelineResult{}
 	}
 }
 
-func (d *Dispatcher) enqueue(ctx context.Context, s Pipeline, resultCh chan<- *PipelineResult) {
-	e := callEnvelope{ctx: ctx, p: s, resultCh: resultCh}
+func (d *Dispatcher) enqueue(ctx context.Context, s Pipeline) {
+	e := callEnvelope{ctx: ctx, p: s}
 	switch s.(type) {
 	case DisconnectRequestedPipeline, CallCompletedPipeline, CallFailedPipeline:
 		d.signalCh <- e
-	case CallReceivedPipeline, WebhookParsedPipeline, AssistantResolvedPipeline,
-		ConversationCreatedPipeline, ProviderAnsweringPipeline, ProviderAnsweredPipeline,
-		OutboundRequestedPipeline, OutboundDialedPipeline:
-		d.setupCh <- e
-	case SessionConnectedPipeline, SessionInitializedPipeline, CallActivePipeline, ModeSwitchPipeline:
+	case ModeSwitchPipeline:
 		d.mediaCh <- e
 	case EventEmittedPipeline, MetricEmittedPipeline:
 		d.controlCh <- e
 	default:
 		d.logger.Warnw("OnPipeline: unrouted type", "type", fmt.Sprintf("%T", s))
-		d.setupCh <- e
+		d.controlCh <- e
 	}
 }
 
@@ -246,40 +236,16 @@ func (d *Dispatcher) drain(ch chan callEnvelope) {
 
 func (d *Dispatcher) dispatch(e callEnvelope) {
 	ctx := e.ctx
-	resultCh := e.resultCh
 
 	switch v := e.p.(type) {
-	case CallReceivedPipeline:
-		d.handleCallReceived(ctx, v, resultCh)
-	case SessionConnectedPipeline:
-		d.handleSessionConnected(ctx, v, resultCh)
-
-	case WebhookParsedPipeline:
-		d.handleWebhookParsed(ctx, v)
-	case AssistantResolvedPipeline:
-		d.handleAssistantResolved(ctx, v)
-	case ConversationCreatedPipeline:
-		d.handleConversationCreated(ctx, v)
-	case ProviderAnsweringPipeline:
-		d.handleProviderAnswering(ctx, v)
-	case ProviderAnsweredPipeline:
-		d.handleProviderAnswered(ctx, v)
-	case SessionInitializedPipeline:
-		d.handleSessionInitialized(ctx, v)
-	case CallActivePipeline:
-		d.handleCallActive(ctx, v)
-	case ModeSwitchPipeline:
-		d.handleModeSwitch(ctx, v)
 	case DisconnectRequestedPipeline:
 		d.handleDisconnectRequested(ctx, v)
 	case CallCompletedPipeline:
 		d.handleCallCompleted(ctx, v)
 	case CallFailedPipeline:
 		d.handleCallFailed(ctx, v)
-	case OutboundRequestedPipeline:
-		d.handleOutboundRequested(ctx, v, resultCh)
-	case OutboundDialedPipeline:
-		d.handleOutboundDialed(ctx, v)
+	case ModeSwitchPipeline:
+		d.handleModeSwitch(ctx, v)
 	case EventEmittedPipeline:
 		d.handleEventEmitted(ctx, v)
 	case MetricEmittedPipeline:
@@ -289,72 +255,3 @@ func (d *Dispatcher) dispatch(e callEnvelope) {
 	}
 }
 
-func (d *Dispatcher) storeObserver(callID string, obs *observe.ConversationObserver) {
-	d.mu.Lock()
-	d.observers[callID] = obs
-	d.mu.Unlock()
-}
-
-func (d *Dispatcher) getObserver(callID string) (*observe.ConversationObserver, bool) {
-	d.mu.RLock()
-	obs, ok := d.observers[callID]
-	d.mu.RUnlock()
-	return obs, ok
-}
-
-func (d *Dispatcher) removeObserver(ctx context.Context, callID string) {
-	d.mu.Lock()
-	obs, ok := d.observers[callID]
-	if ok {
-		delete(d.observers, callID)
-	}
-	d.mu.Unlock()
-	if ok && obs != nil {
-		obs.Shutdown(ctx)
-	}
-}
-
-func (d *Dispatcher) emitEvent(ctx context.Context, callID, name string, data map[string]string) {
-	obs, ok := d.getObserver(callID)
-	if !ok {
-		return
-	}
-	obs.EmitEvent(ctx, name, data)
-}
-
-func (d *Dispatcher) emitMetric(ctx context.Context, callID string, metrics []*protos.Metric) {
-	if len(metrics) == 0 {
-		return
-	}
-	obs, ok := d.getObserver(callID)
-	if !ok {
-		return
-	}
-	obs.EmitMetric(ctx, metrics)
-}
-
-func (d *Dispatcher) storeHooks(callID string, h *observe.ConversationHooks) {
-	d.mu.Lock()
-	d.hooks[callID] = h
-	d.mu.Unlock()
-}
-
-func (d *Dispatcher) getHooks(callID string) (*observe.ConversationHooks, bool) {
-	d.mu.RLock()
-	h, ok := d.hooks[callID]
-	d.mu.RUnlock()
-	return h, ok
-}
-
-func (d *Dispatcher) removeHooks(callID string) {
-	d.mu.Lock()
-	delete(d.hooks, callID)
-	d.mu.Unlock()
-}
-
-// sendResult is a nil-safe helper to send to resultCh.
-func sendResult(ch chan<- *PipelineResult, r *PipelineResult) {
-	if ch != nil {
-		ch <- r
-	}
-}

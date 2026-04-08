@@ -23,6 +23,7 @@ import (
 	_ "github.com/golang-migrate/migrate/v4/database/postgres"
 	_ "github.com/golang-migrate/migrate/v4/source/file"
 	"github.com/improbable-eng/grpc-web/go/grpcweb"
+
 	"github.com/rapidaai/api/assistant-api/config"
 	router "github.com/rapidaai/api/assistant-api/router"
 	assistant_sip "github.com/rapidaai/api/assistant-api/sip"
@@ -324,7 +325,6 @@ func (app *AppRunner) AllEngine(ctx context.Context) error {
 		app.SIP = sipManager.GetServer()
 		app.Closeable = append(app.Closeable, sipManager.Disconnect)
 	}
-	// AudioSocket is optional and only started if configured. It listens for TCP connections from telephony providers for audio streaming in calls.
 	if app.Cfg.AudioSocketConfig != nil {
 		socketEngine := assistant_socket.NewAudioSocketEngine(app.Cfg, app.Logger, app.Postgres, app.Redis, app.Opensearch)
 		if err := socketEngine.Connect(ctx); err != nil {
