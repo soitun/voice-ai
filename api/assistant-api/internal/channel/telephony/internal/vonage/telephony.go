@@ -194,6 +194,9 @@ func (vng *vonageTelephony) ReceiveCall(c *gin.Context) (*internal_type.CallInfo
 		Extra:        make(map[string]string),
 	}
 
+	if v, ok := queryParams["to"]; ok && v != "" {
+		info.FromNumber = v
+	}
 	if v, ok := queryParams["conversation_uuid"]; ok && v != "" {
 		info.Extra["conversation_uuid"] = v
 	}

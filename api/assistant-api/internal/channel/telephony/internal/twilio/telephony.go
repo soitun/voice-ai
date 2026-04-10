@@ -200,6 +200,9 @@ func (tpc *twilioTelephony) ReceiveCall(c *gin.Context) (*internal_type.CallInfo
 		Status:       "SUCCESS",
 		StatusInfo:   internal_type.StatusInfo{Event: "webhook", Payload: queryParams},
 	}
+	if v, ok := queryParams["To"]; ok && v != "" {
+		info.FromNumber = v // DID that received the call (our number)
+	}
 	if v, ok := queryParams["CallSid"]; ok && v != "" {
 		info.ChannelUUID = v
 	}

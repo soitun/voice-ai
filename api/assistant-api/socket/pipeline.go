@@ -74,9 +74,7 @@ func newSessionPipeline(ctx context.Context, cfg *config.AssistantConfig, logger
 		},
 		OnCreateObserver: newObserverFactory(cfg, logger, opensearch, conversationService),
 		OnCompleteSession: func(ctx context.Context, contextID string) {
-			if _, err := store.Claim(ctx, contextID); err != nil {
-				logger.Warnf("failed to claim call context %s: %v", contextID, err)
-			}
+			logger.Debugf("session completed: contextId=%s", contextID)
 		},
 	})
 

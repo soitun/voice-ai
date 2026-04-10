@@ -77,6 +77,10 @@ func (d *Dispatcher) runInboundCall(ctx context.Context, v CallReceivedPipeline)
 		})
 	}
 
+	if observer != nil {
+		observer.Shutdown(ctx)
+	}
+
 	v.GinContext.Set("contextId", contextID)
 	if d.onAnswerProvider != nil {
 		if err := d.onAnswerProvider(ctx, v.GinContext, v.Auth, v.Provider, v.AssistantID, callInfo.CallerNumber, conversationID); err != nil {

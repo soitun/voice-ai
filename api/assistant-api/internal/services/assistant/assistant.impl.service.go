@@ -298,7 +298,7 @@ func (eService *assistantService) Get(ctx context.Context,
 					}).
 					First(&deployment)
 				if tx.Error != nil {
-					eService.logger.Warnf("unable to find assistant tools with error %+v", tx.Error)
+					// eService.logger.Warnf("unable to find assistant tools with error %+v", tx.Error)
 					return
 				}
 				assistant.AssistantDebuggerDeployment = deployment

@@ -209,9 +209,12 @@ func (as *Streamer) Send(response internal_type.Stream) error {
 			as.audioProcessor.ClearOutputBuffer()
 		}
 	case *protos.ConversationDirective:
-		if data.GetType() == protos.ConversationDirective_END_CONVERSATION {
+		switch data.GetType() {
+		case protos.ConversationDirective_END_CONVERSATION:
 			_ = as.writeFrame(FrameTypeHangup, nil)
 			return as.close()
+		case protos.ConversationDirective_TRANSFER_CONVERSATION:
+			as.Logger.Warnw("Call transfer not supported for AudioSocket")
 		}
 	}
 

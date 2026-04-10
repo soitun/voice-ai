@@ -65,6 +65,8 @@ func (executor *toolExecutor) initializeLocalTool(ctx context.Context, logger co
 		return internal_tool_local.NewEndpointToolCaller(ctx, logger, toolOpts, communication)
 	case "end_of_conversation":
 		return internal_tool_local.NewEndOfConversationCaller(ctx, logger, toolOpts, communication)
+	case "transfer_call":
+		return internal_tool_local.NewTransferCallCaller(ctx, logger, toolOpts, communication)
 	default:
 		return nil, errors.New("illegal tool action provided")
 	}

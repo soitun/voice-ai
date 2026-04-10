@@ -149,10 +149,11 @@ func (exotel *exotelWebsocketStreamer) Send(response internal_type.Stream) error
 			}
 		}
 	case *protos.ConversationDirective:
-		if data.GetType() == protos.ConversationDirective_END_CONVERSATION {
-			if err := exotel.Cancel(); err != nil {
-				exotel.Logger.Errorf("Error disconnecting command:", err)
-			}
+		switch data.GetType() {
+		case protos.ConversationDirective_END_CONVERSATION:
+			exotel.Cancel()
+		case protos.ConversationDirective_TRANSFER_CONVERSATION:
+			exotel.Logger.Warnw("Call transfer not supported for Exotel")
 		}
 	}
 	return nil

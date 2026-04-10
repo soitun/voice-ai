@@ -57,6 +57,17 @@ export function CreateProviderCredentialDialog(
     setConfig(prev => ({ ...prev, [name]: value }));
   };
 
+  const isConfigFieldRequired = (field: {
+    name: string;
+    label: string;
+    required?: boolean;
+  }) => {
+    if (field.required === false) return false;
+    if (field.label?.toLowerCase().includes('(optional)')) return false;
+    if (provider?.code === 'sip' && field.name === 'sip_headers') return false;
+    return true;
+  };
+
   const validateAndSubmit = () => {
     if (!provider) {
       setError('Please select the provider which you want to create the key.');
@@ -67,7 +78,9 @@ export function CreateProviderCredentialDialog(
       return;
     }
     const missingFields = provider.configurations?.filter(
-      configOption => !config[configOption.name]?.trim(),
+      configOption =>
+        isConfigFieldRequired(configOption) &&
+        !config[configOption.name]?.trim(),
     );
     if (missingFields && missingFields.length > 0) {
       setError(
@@ -168,7 +181,7 @@ export function CreateProviderCredentialDialog(
                   labelText={x.label}
                   placeholder={x.label}
                   value={config[x.name] || ''}
-                  required
+                  required={isConfigFieldRequired(x)}
                   onChange={e => handleConfigChange(x.name, e.target.value)}
                 />
               ) : x.type === 'key_value' ? (
@@ -186,7 +199,7 @@ export function CreateProviderCredentialDialog(
                   labelText={x.label}
                   placeholder={x.label}
                   value={config[x.name] || ''}
-                  required
+                  required={isConfigFieldRequired(x)}
                   onChange={e => handleConfigChange(x.name, e.target.value)}
                 />
               ),

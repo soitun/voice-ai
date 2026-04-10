@@ -989,14 +989,15 @@ func (talking *genericRequestor) handleToolResult(ctx context.Context, vl intern
 func (talking *genericRequestor) handleDirective(ctx context.Context, vl internal_type.DirectivePacket) {
 	anyArgs, _ := utils.InterfaceMapToAnyMap(vl.Arguments)
 	switch vl.Directive {
-	case protos.ConversationDirective_END_CONVERSATION:
+	case protos.ConversationDirective_END_CONVERSATION,
+		protos.ConversationDirective_TRANSFER_CONVERSATION:
 		if err := talking.Notify(ctx, &protos.ConversationDirective{
 			Id:   vl.ContextID,
 			Type: vl.Directive,
 			Args: anyArgs,
 			Time: timestamppb.Now(),
 		}); err != nil {
-			talking.logger.Errorf("error notifying end conversation action: %v", err)
+			talking.logger.Errorf("error notifying directive %s: %v", vl.Directive, err)
 		}
 	default:
 	}

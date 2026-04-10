@@ -22,7 +22,9 @@ import (
 	internal_telephony_base "github.com/rapidaai/api/assistant-api/internal/channel/telephony/internal/base"
 	internal_type "github.com/rapidaai/api/assistant-api/internal/type"
 	"github.com/rapidaai/pkg/commons"
+	rapida_utils "github.com/rapidaai/pkg/utils"
 	"github.com/rapidaai/protos"
+	"google.golang.org/protobuf/types/known/anypb"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -206,7 +208,8 @@ func (aws *asteriskWebsocketStreamer) Send(response internal_type.Stream) error 
 		}
 
 	case *protos.ConversationDirective:
-		if data.GetType() == protos.ConversationDirective_END_CONVERSATION {
+		switch data.GetType() {
+		case protos.ConversationDirective_END_CONVERSATION:
 			aws.stopAudioProcessing()
 			if err := aws.sendCommand("HANGUP"); err != nil {
 				aws.Logger.Warn("Failed to send HANGUP via WebSocket, trying ARI API", "error", err)
@@ -216,9 +219,19 @@ func (aws *asteriskWebsocketStreamer) Send(response internal_type.Stream) error 
 					}
 				}
 			}
-			if err := aws.Cancel(); err != nil {
-				aws.Logger.Errorf("Error disconnecting:", err)
+			aws.Cancel()
+		case protos.ConversationDirective_TRANSFER_CONVERSATION:
+			to := extractTransferTarget(data.GetArgs())
+			if to == "" || aws.channelName == "" {
+				aws.Logger.Warnw("Transfer directive missing target or channel name")
+				return nil
 			}
+			aws.Logger.Infow("Transferring Asterisk call via ARI redirect", "to", to, "channel", aws.channelName)
+			aws.stopAudioProcessing()
+			if err := aws.redirectViaARI(to); err != nil {
+				aws.Logger.Errorw("ARI redirect failed", "error", err, "to", to)
+			}
+			aws.Cancel()
 		}
 	}
 
@@ -301,6 +314,55 @@ func (aws *asteriskWebsocketStreamer) hangupViaARI() error {
 
 	aws.Logger.Info("Successfully hung up call via ARI API", "channel", aws.channelName)
 	return nil
+}
+
+// redirectViaARI transfers a call by redirecting the Asterisk channel to a new extension.
+func (aws *asteriskWebsocketStreamer) redirectViaARI(target string) error {
+	vaultCredential := aws.VaultCredential()
+	if vaultCredential == nil || vaultCredential.GetValue() == nil {
+		return fmt.Errorf("vault credential is nil")
+	}
+	credMap := vaultCredential.GetValue().AsMap()
+	ariURL, _ := credMap["ari_url"].(string)
+	user, _ := credMap["ari_user"].(string)
+	password, _ := credMap["ari_password"].(string)
+
+	redirectURL := fmt.Sprintf("%s/ari/channels/%s/redirect", ariURL, aws.channelName)
+	req, err := http.NewRequest("POST", redirectURL, nil)
+	if err != nil {
+		return fmt.Errorf("failed to create redirect request: %w", err)
+	}
+	req.SetBasicAuth(user, password)
+	q := req.URL.Query()
+	q.Set("endpoint", fmt.Sprintf("PJSIP/%s", target))
+	req.URL.RawQuery = q.Encode()
+
+	client := &http.Client{Timeout: 5 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return fmt.Errorf("ARI redirect failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent {
+		return fmt.Errorf("ARI redirect returned status: %d", resp.StatusCode)
+	}
+	aws.Logger.Infow("Asterisk call redirected via ARI", "channel", aws.channelName, "target", target)
+	return nil
+}
+
+func extractTransferTarget(args map[string]*anypb.Any) string {
+	if args == nil {
+		return ""
+	}
+	iface, err := rapida_utils.AnyMapToInterfaceMap(args)
+	if err != nil {
+		return ""
+	}
+	if to, ok := iface["to"].(string); ok {
+		return to
+	}
+	return ""
 }
 
 func (aws *asteriskWebsocketStreamer) Cancel() error {

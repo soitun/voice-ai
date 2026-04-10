@@ -17,8 +17,10 @@ import (
 	internal_telephony_base "github.com/rapidaai/api/assistant-api/internal/channel/telephony/internal/base"
 	internal_type "github.com/rapidaai/api/assistant-api/internal/type"
 	"github.com/rapidaai/pkg/commons"
+	rapida_utils "github.com/rapidaai/pkg/utils"
 	protos "github.com/rapidaai/protos"
 	"github.com/vonage/vonage-go-sdk"
+	"google.golang.org/protobuf/types/known/anypb"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -139,28 +141,27 @@ func (vng *vonageWebsocketStreamer) Send(response internal_type.Stream) error {
 			vng.writeMu.Unlock()
 		}
 	case *protos.ConversationDirective:
-		if data.GetType() == protos.ConversationDirective_END_CONVERSATION {
+		switch data.GetType() {
+		case protos.ConversationDirective_END_CONVERSATION:
 			if vng.GetConversationUuid() != "" {
 				cAuth, err := vonageAuth(vng.VaultCredential())
 				if err != nil {
 					vng.Logger.Errorf("Error creating Vonage client:", err)
-					if err := vng.Cancel(); err != nil {
-						vng.Logger.Errorf("Error disconnecting command:", err)
-					}
+					vng.Cancel()
 					return nil
 				}
-
 				if _, _, err := vonage.NewVoiceClient(cAuth).Hangup(vng.GetConversationUuid()); err != nil {
 					vng.Logger.Errorf("Error ending Vonage call:", err)
-					if err := vng.Cancel(); err != nil {
-						vng.Logger.Errorf("Error disconnecting command:", err)
-					}
+					vng.Cancel()
 					return nil
 				}
 			}
-			if err := vng.Cancel(); err != nil {
-				vng.Logger.Errorf("Error disconnecting command:", err)
-			}
+			vng.Cancel()
+		case protos.ConversationDirective_TRANSFER_CONVERSATION:
+			to := extractTransferTarget(data.GetArgs())
+			vng.Logger.Warnw("Vonage call transfer not yet implemented", "to", to)
+			// TODO: Vonage transfer requires NCCO URL hosting for PUT /calls/{uuid}
+			// with action: "transfer" and destination NCCO containing connect action.
 		}
 	}
 	return nil
@@ -195,4 +196,18 @@ func (vng *vonageWebsocketStreamer) Cancel() error {
 	}
 	vng.BaseStreamer.Cancel()
 	return nil
+}
+
+func extractTransferTarget(args map[string]*anypb.Any) string {
+	if args == nil {
+		return ""
+	}
+	iface, err := rapida_utils.AnyMapToInterfaceMap(args)
+	if err != nil {
+		return ""
+	}
+	if to, ok := iface["to"].(string); ok {
+		return to
+	}
+	return ""
 }

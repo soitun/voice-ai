@@ -9,6 +9,7 @@ package internal_twilio_telephony
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"sync"
 	"sync/atomic"
 
@@ -19,8 +20,10 @@ import (
 	internal_twilio "github.com/rapidaai/api/assistant-api/internal/channel/telephony/internal/twilio/internal"
 	internal_type "github.com/rapidaai/api/assistant-api/internal/type"
 	"github.com/rapidaai/pkg/commons"
+	rapida_utils "github.com/rapidaai/pkg/utils"
 	"github.com/rapidaai/protos"
 	openapi "github.com/twilio/twilio-go/rest/api/v2010"
+	"google.golang.org/protobuf/types/known/anypb"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -150,29 +153,42 @@ func (tws *twilioWebsocketStreamer) Send(response internal_type.Stream) error {
 			}
 		}
 	case *protos.ConversationDirective:
-		if data.GetType() == protos.ConversationDirective_END_CONVERSATION {
+		switch data.GetType() {
+		case protos.ConversationDirective_END_CONVERSATION:
 			if tws.GetConversationUuid() != "" {
 				client, err := twilioClient(tws.VaultCredential())
 				if err != nil {
 					tws.Logger.Errorf("Error creating Twilio client:", err)
-					if err := tws.Cancel(); err != nil {
-						tws.Logger.Errorf("Error disconnecting command:", err)
-					}
+					tws.Cancel()
 					return nil
 				}
 				params := &openapi.UpdateCallParams{}
 				params.SetStatus("completed")
 				if _, err := client.Api.UpdateCall(tws.GetConversationUuid(), params); err != nil {
 					tws.Logger.Errorf("Error ending Twilio call:", err)
-					if err := tws.Cancel(); err != nil {
-						tws.Logger.Errorf("Error disconnecting command:", err)
-					}
+					tws.Cancel()
 					return nil
 				}
 			}
-			if err := tws.Cancel(); err != nil {
-				tws.Logger.Errorf("Error disconnecting command:", err)
+			tws.Cancel()
+		case protos.ConversationDirective_TRANSFER_CONVERSATION:
+			to := extractTransferTarget(data.GetArgs())
+			if to == "" || tws.GetConversationUuid() == "" {
+				tws.Logger.Warnw("Transfer directive missing target or call ID")
+				return nil
 			}
+			tws.Logger.Infow("Transferring Twilio call", "to", to)
+			client, err := twilioClient(tws.VaultCredential())
+			if err != nil {
+				tws.Logger.Errorf("Error creating Twilio client for transfer:", err)
+				return nil
+			}
+			params := &openapi.UpdateCallParams{}
+			params.SetTwiml(fmt.Sprintf(`<Response><Dial>%s</Dial></Response>`, to))
+			if _, err := client.Api.UpdateCall(tws.GetConversationUuid(), params); err != nil {
+				tws.Logger.Errorf("Error transferring Twilio call:", err)
+			}
+			tws.Cancel()
 		}
 	}
 	return nil
@@ -256,4 +272,18 @@ func (tws *twilioWebsocketStreamer) sendTwilioMessage(
 func (tws *twilioWebsocketStreamer) handleError(message string, err error) error {
 	tws.Logger.Error(message, "error", err.Error())
 	return err
+}
+
+func extractTransferTarget(args map[string]*anypb.Any) string {
+	if args == nil {
+		return ""
+	}
+	iface, err := rapida_utils.AnyMapToInterfaceMap(args)
+	if err != nil {
+		return ""
+	}
+	if to, ok := iface["to"].(string); ok {
+		return to
+	}
+	return ""
 }

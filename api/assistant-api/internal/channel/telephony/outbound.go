@@ -9,31 +9,35 @@ package channel_telephony
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/rapidaai/api/assistant-api/config"
 	callcontext "github.com/rapidaai/api/assistant-api/internal/callcontext"
 	internal_services "github.com/rapidaai/api/assistant-api/internal/services"
 	web_client "github.com/rapidaai/pkg/clients/web"
 	"github.com/rapidaai/pkg/commons"
+	"github.com/rapidaai/pkg/types"
 )
 
 type OutboundDispatcher struct {
-	cfg              *config.AssistantConfig
-	store            callcontext.Store
-	logger           commons.Logger
-	vaultClient      web_client.VaultClient
-	assistantService internal_services.AssistantService
-	telephonyOpt     TelephonyOption
+	cfg                 *config.AssistantConfig
+	store               callcontext.Store
+	logger              commons.Logger
+	vaultClient         web_client.VaultClient
+	assistantService    internal_services.AssistantService
+	conversationService internal_services.AssistantConversationService
+	telephonyOpt        TelephonyOption
 }
 
 func NewOutboundDispatcher(deps TelephonyDispatcherDeps) *OutboundDispatcher {
 	return &OutboundDispatcher{
-		cfg:              deps.Cfg,
-		store:            deps.Store,
-		logger:           deps.Logger,
-		vaultClient:      deps.VaultClient,
-		assistantService: deps.AssistantService,
-		telephonyOpt:     deps.TelephonyOpt,
+		cfg:                 deps.Cfg,
+		store:               deps.Store,
+		logger:              deps.Logger,
+		vaultClient:         deps.VaultClient,
+		assistantService:    deps.AssistantService,
+		conversationService: deps.ConversationService,
+		telephonyOpt:        deps.TelephonyOpt,
 	}
 }
 
@@ -56,7 +60,50 @@ func (d *OutboundDispatcher) Dispatch(ctx context.Context, contextID string) err
 	}
 
 	d.logger.Infof("outbound dispatcher[%s]: call initiated for contextId=%s", cc.Provider, contextID)
+
+	// Monitor for unanswered calls — if context is still PENDING after timeout,
+	// the callee never answered and media never connected. Mark as failed.
+	go d.monitorCallConnect(ctx, contextID, cc)
+
 	return nil
+}
+
+const callConnectTimeout = 2 * time.Minute
+
+// monitorCallConnect checks if the call context was claimed (media connected) within timeout.
+// If still PENDING, the callee declined/didn't answer — mark as CLAIMED and persist FAILED metric.
+func (d *OutboundDispatcher) monitorCallConnect(ctx context.Context, contextID string, cc *callcontext.CallContext) {
+	select {
+	case <-ctx.Done():
+		return
+	case <-time.After(callConnectTimeout):
+	}
+
+	current, err := d.store.Get(ctx, contextID)
+	if err != nil {
+		return
+	}
+	if current.Status != callcontext.StatusPending {
+		return // Already claimed or processed
+	}
+
+	d.logger.Warnw("Outbound call not answered within timeout, marking as failed",
+		"contextId", contextID,
+		"provider", cc.Provider,
+		"timeout", callConnectTimeout)
+
+	// Claim the context so it's not stuck as PENDING
+	if _, err := d.store.Claim(ctx, contextID); err != nil {
+		d.logger.Warnw("Failed to claim stale call context", "contextId", contextID, "error", err)
+	}
+
+	// Persist FAILED metric
+	if d.conversationService != nil {
+		auth := cc.ToAuth()
+		d.conversationService.PersistMetrics(ctx, auth, cc.AssistantID, cc.ConversationID, []*types.Metric{
+			{Name: "status", Value: "FAILED", Description: "no_answer_timeout"},
+		})
+	}
 }
 
 func (d *OutboundDispatcher) performOutbound(ctx context.Context, cc *callcontext.CallContext) error {

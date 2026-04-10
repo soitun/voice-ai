@@ -20,8 +20,10 @@ import (
 	internal_type "github.com/rapidaai/api/assistant-api/internal/type"
 	sip_infra "github.com/rapidaai/api/assistant-api/sip/infra"
 	"github.com/rapidaai/pkg/commons"
+	rapida_utils "github.com/rapidaai/pkg/utils"
 	"github.com/rapidaai/protos"
 	"github.com/zaf/g711"
+	"google.golang.org/protobuf/types/known/anypb"
 )
 
 var (
@@ -161,7 +163,24 @@ func (s *Streamer) Send(response internal_type.Stream) error {
 			return s.handleInterruption()
 		}
 	case *protos.ConversationDirective:
-		if data.GetType() == protos.ConversationDirective_END_CONVERSATION {
+		switch data.GetType() {
+		case protos.ConversationDirective_END_CONVERSATION:
+			return s.Close()
+		case protos.ConversationDirective_TRANSFER_CONVERSATION:
+			to := extractTransferTarget(data.GetArgs())
+			if to == "" {
+				s.Logger.Warnw("Transfer directive missing 'to' target")
+				return nil
+			}
+			s.Logger.Infow("Transferring SIP call", "to", to)
+			s.mu.RLock()
+			session := s.session
+			s.mu.RUnlock()
+			if session != nil {
+				if err := session.SendRefer(to); err != nil {
+					s.Logger.Errorw("SIP REFER failed", "error", err, "to", to)
+				}
+			}
 			return s.Close()
 		}
 	}
@@ -275,4 +294,19 @@ func (s *Streamer) Close() error {
 
 func mulawToAlaw(in []byte) []byte {
 	return g711.EncodeAlaw(g711.DecodeUlaw(in))
+}
+
+// extractTransferTarget reads the "to" field from a ConversationDirective's Args map.
+func extractTransferTarget(args map[string]*anypb.Any) string {
+	if args == nil {
+		return ""
+	}
+	iface, err := rapida_utils.AnyMapToInterfaceMap(args)
+	if err != nil {
+		return ""
+	}
+	if to, ok := iface["to"].(string); ok {
+		return to
+	}
+	return ""
 }

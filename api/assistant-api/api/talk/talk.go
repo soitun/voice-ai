@@ -9,6 +9,7 @@ import (
 	"bufio"
 	"context"
 	"errors"
+	"fmt"
 	"net"
 
 	"github.com/gin-gonic/gin"
@@ -118,6 +119,15 @@ func newConversationApiCore(cfg *config.AssistantConfig, logger commons.Logger,
 					return err
 				}
 			}
+			if len(metadata) > 0 {
+				md := make([]*types.Metadata, 0, len(metadata))
+				for k, v := range metadata {
+					md = append(md, types.NewMetadata(k, fmt.Sprintf("%v", v)))
+				}
+				if _, err := conversationService.ApplyConversationMetadata(ctx, auth, assistantID, conversationID, md); err != nil {
+					return err
+				}
+			}
 			return nil
 		},
 		OnResolveSession: func(ctx context.Context, contextID string) (*callcontext.CallContext, *protos.VaultCredential, error) {
@@ -179,9 +189,9 @@ func newConversationApiCore(cfg *config.AssistantConfig, logger commons.Logger,
 			})
 		},
 		OnCompleteSession: func(ctx context.Context, contextID string) {
-			if _, err := store.Claim(ctx, contextID); err != nil {
-				logger.Warnf("failed to claim call context %s: %v", contextID, err)
-			}
+			// Context already claimed at connect time (ResolveCallSessionByContext).
+			// No state transition needed — CLAIMED is the terminal state.
+			logger.Debugf("session completed: contextId=%s", contextID)
 		},
 	})
 

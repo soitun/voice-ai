@@ -230,6 +230,9 @@ func (exo *exotelTelephony) ReceiveCall(c *gin.Context) (*internal_type.CallInfo
 		Status:       "SUCCESS",
 		StatusInfo:   internal_type.StatusInfo{Event: "webhook", Payload: queryParams},
 	}
+	if v, ok := queryParams["CallTo"]; ok && v != "" {
+		info.FromNumber = v
+	}
 	if v, ok := queryParams["CallSid"]; ok && v != "" {
 		info.ChannelUUID = v
 	}

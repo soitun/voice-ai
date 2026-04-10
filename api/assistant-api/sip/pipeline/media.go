@@ -72,6 +72,11 @@ func (d *Dispatcher) handleSessionEstablished(ctx context.Context, v sip_infra.S
 		if clientPhone == "" {
 			clientPhone = v.FromURI
 		}
+		// Assistant phone = our DID (To URI for inbound, From URI for outbound)
+		assistantPhone := ""
+		if info := v.Session.GetInfo(); info.LocalURI != "" {
+			assistantPhone = sip_infra.ExtractDIDFromURI(info.LocalURI)
+		}
 		codec := ""
 		sampleRate := ""
 		if negotiated := v.Session.GetNegotiatedCodec(); negotiated != nil {
@@ -79,7 +84,7 @@ func (d *Dispatcher) handleSessionEstablished(ctx context.Context, v sip_infra.S
 			sampleRate = fmt.Sprintf("%d", negotiated.ClockRate)
 		}
 		observer.EmitMetadata(ctx, obs.ClientMetadata(
-			clientPhone, "", string(v.Direction), "sip",
+			clientPhone, assistantPhone, string(v.Direction), "sip",
 			v.ID, "", codec, sampleRate,
 		))
 		observer.EmitEvent(ctx, obs.ComponentTelephony, map[string]string{
