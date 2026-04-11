@@ -810,7 +810,7 @@ func (m *SIPEngine) RegisterAssistant(ctx context.Context, auth types.SimplePrin
 	}
 
 	return m.registrationClient.Register(ctx, &sip_infra.Registration{
-		DID:         did,
+		DID:         sip_infra.NormalizeDID(did),
 		Config:      sipConfig,
 		AssistantID: assistantID,
 	})
