@@ -273,6 +273,28 @@ const (
 	EventTypeRTPStopped EventType = "rtp_stopped"
 )
 
+// =============================================================================
+// Bridge Transfer Constants
+// =============================================================================
+
+const (
+	// BridgeCallTimeout is the maximum time to wait for the transfer target to answer.
+	BridgeCallTimeout = 30 * time.Second
+
+	// BridgeSafetyTimeout tears down the bridge if neither side hangs up.
+	BridgeSafetyTimeout = 5 * time.Minute
+
+	// MetadataBridgeTransferTarget is the session metadata key set by the streamer
+	// when a TRANSFER_CONVERSATION directive is received. The engine reads this
+	// after Talk() returns to orchestrate the bridge.
+	MetadataBridgeTransferTarget = "bridge_transfer_target"
+
+	// MetadataBridgeTransferStatus is set by executeBridgeTransfer to indicate
+	// the outcome. Values: "completed" or "failed". Read by media.go to emit
+	// the correct transfer event.
+	MetadataBridgeTransferStatus = "bridge_transfer_status"
+)
+
 // Event represents events from SIP stack
 type Event struct {
 	Type      EventType              `json:"type"`
@@ -404,6 +426,7 @@ func NormalizeDID(did string) string {
 }
 
 // ExtractDIDFromURI extracts the user part from a SIP URI as a phone number (DID).
+// Strips URI parameters (e.g. ;user=phone) that some providers append.
 func ExtractDIDFromURI(uri string) string {
 	raw := strings.TrimPrefix(strings.TrimPrefix(uri, "sip:"), "sips:")
 
@@ -412,6 +435,11 @@ func ExtractDIDFromURI(uri string) string {
 		return ""
 	}
 	user := parts[0]
+
+	// Strip URI parameters (e.g. "+15551234567;user=phone" → "+15551234567")
+	if idx := strings.IndexByte(user, ';'); idx >= 0 {
+		user = user[:idx]
+	}
 
 	// Skip credential pairs (assistantID:apiKey)
 	if strings.Contains(user, ":") {
