@@ -61,13 +61,14 @@ type CancelReceivedPipeline struct {
 func (p CancelReceivedPipeline) CallID() string { return p.ID }
 
 type TransferInitiatedPipeline struct {
-	ID          string
-	Session     *Session
-	TargetURI   string
-	Config      *Config
-	OnConnected func(outboundRTP *RTPHandler)
-	OnFailed    func()
-	OnTeardown  func()
+	ID              string
+	Session         *Session
+	TargetURI       string
+	Config          *Config
+	OnConnected     func(outboundRTP *RTPHandler)
+	OnFailed        func()
+	OnTeardown      func()
+	OnOperatorAudio func([]byte)
 }
 
 func (p TransferInitiatedPipeline) CallID() string { return p.ID }

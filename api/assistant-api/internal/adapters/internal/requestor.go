@@ -489,12 +489,12 @@ func (r *genericRequestor) initializeCollectors(ctx context.Context) {
 		OrganizationID: orgID,
 		Persist: &observe.ServicePersister{
 			ApplyMetrics: func(ctx context.Context, auth types.SimplePrinciple, assistantID, conversationID uint64, metrics []*types.Metric) (interface{}, error) {
-				dbCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+				dbCtx, cancel := context.WithTimeout(context.Background(), dbWriteTimeout)
 				defer cancel()
 				return r.conversationService.ApplyConversationMetrics(dbCtx, auth, assistantID, conversationID, metrics)
 			},
 			ApplyMetadata: func(ctx context.Context, auth types.SimplePrinciple, assistantID, conversationID uint64, metadata []*types.Metadata) (interface{}, error) {
-				dbCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+				dbCtx, cancel := context.WithTimeout(context.Background(), dbWriteTimeout)
 				defer cancel()
 				return r.conversationService.ApplyConversationMetadata(dbCtx, auth, assistantID, conversationID, metadata)
 			},
@@ -544,7 +544,7 @@ func (r *genericRequestor) buildSnapshot() *observe.ConversationSnapshot {
 // shutdownCollectors waits for in-flight exports and shuts down all exporters.
 func (r *genericRequestor) shutdownCollectors(_ context.Context) {
 	if r.observer != nil {
-		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), collectorWriteTimeout)
 		defer cancel()
 		r.observer.Shutdown(shutdownCtx)
 	}

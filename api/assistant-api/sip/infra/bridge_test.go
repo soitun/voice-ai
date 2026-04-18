@@ -137,7 +137,7 @@ func TestForwardBridgeAudio_PassthroughSameCodec(t *testing.T) {
 	dst := make(chan []byte, 10)
 	ctx, cancel := context.WithCancel(context.Background())
 
-	go srv.forwardBridgeAudio(ctx, src, dst, false, &CodecPCMU, &CodecPCMU)
+	go srv.forwardBridgeAudio(ctx, src, dst, false, &CodecPCMU, &CodecPCMU, nil)
 
 	for i := 0; i < 5; i++ {
 		src <- []byte{byte(i), byte(i + 1)}
@@ -162,7 +162,7 @@ func TestForwardBridgeAudio_TranscodesWhenNeeded(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	go srv.forwardBridgeAudio(ctx, src, dst, true, &CodecPCMA, &CodecPCMU)
+	go srv.forwardBridgeAudio(ctx, src, dst, true, &CodecPCMA, &CodecPCMU, nil)
 
 	alaw := []byte{0xD5, 0xD5}
 	src <- alaw
@@ -186,7 +186,7 @@ func TestForwardBridgeAudio_ExitsOnContextCancel(t *testing.T) {
 
 	done := make(chan struct{})
 	go func() {
-		srv.forwardBridgeAudio(ctx, src, dst, false, &CodecPCMU, &CodecPCMU)
+		srv.forwardBridgeAudio(ctx, src, dst, false, &CodecPCMU, &CodecPCMU, nil)
 		close(done)
 	}()
 
@@ -210,7 +210,7 @@ func TestForwardBridgeAudio_ExitsOnSrcClose(t *testing.T) {
 
 	done := make(chan struct{})
 	go func() {
-		srv.forwardBridgeAudio(ctx, src, dst, false, &CodecPCMU, &CodecPCMU)
+		srv.forwardBridgeAudio(ctx, src, dst, false, &CodecPCMU, &CodecPCMU, nil)
 		close(done)
 	}()
 
@@ -232,7 +232,7 @@ func TestForwardBridgeAudio_DropsFrameWhenDstFull(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	go srv.forwardBridgeAudio(ctx, src, dst, false, &CodecPCMU, &CodecPCMU)
+	go srv.forwardBridgeAudio(ctx, src, dst, false, &CodecPCMU, &CodecPCMU, nil)
 
 	// Fill dst
 	src <- []byte{0x01}
@@ -262,7 +262,7 @@ func TestBridgeTransfer_NilInboundRTP_EndsBothSessions(t *testing.T) {
 	inbound := newInboundTestSession(t) // no RTP handler
 	outbound, _ := newBridgeTestSession(t, CallDirectionOutbound, &CodecPCMU)
 
-	err := srv.BridgeTransfer(context.Background(), inbound, outbound)
+	err := srv.BridgeTransfer(context.Background(), inbound, outbound, nil)
 	require.Error(t, err)
 	assert.ErrorIs(t, err, ErrRTPNotInitialized)
 	assert.True(t, inbound.IsEnded())
@@ -276,7 +276,7 @@ func TestBridgeTransfer_NilOutboundRTP_EndsBothSessions(t *testing.T) {
 	inbound, _ := newBridgeTestSession(t, CallDirectionInbound, &CodecPCMU)
 	outbound := newInboundTestSession(t) // no RTP handler
 
-	err := srv.BridgeTransfer(context.Background(), inbound, outbound)
+	err := srv.BridgeTransfer(context.Background(), inbound, outbound, nil)
 	require.Error(t, err)
 	assert.ErrorIs(t, err, ErrRTPNotInitialized)
 	assert.True(t, inbound.IsEnded())
@@ -293,7 +293,7 @@ func TestBridgeTransfer_ContextCancellation(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
 	go func() {
-		done <- srv.BridgeTransfer(ctx, inbound, outbound)
+		done <- srv.BridgeTransfer(ctx, inbound, outbound, nil)
 	}()
 
 	time.Sleep(10 * time.Millisecond)
@@ -318,7 +318,7 @@ func TestBridgeTransfer_InboundByeEndsBridge(t *testing.T) {
 
 	done := make(chan error, 1)
 	go func() {
-		done <- srv.BridgeTransfer(context.Background(), inbound, outbound)
+		done <- srv.BridgeTransfer(context.Background(), inbound, outbound, nil)
 	}()
 
 	time.Sleep(10 * time.Millisecond)
@@ -342,7 +342,7 @@ func TestBridgeTransfer_OutboundByeEndsBridge(t *testing.T) {
 
 	done := make(chan error, 1)
 	go func() {
-		done <- srv.BridgeTransfer(context.Background(), inbound, outbound)
+		done <- srv.BridgeTransfer(context.Background(), inbound, outbound, nil)
 	}()
 
 	time.Sleep(10 * time.Millisecond)
@@ -367,7 +367,7 @@ func TestBridgeTransfer_SessionEndTerminatesBridge(t *testing.T) {
 
 	done := make(chan error, 1)
 	go func() {
-		done <- srv.BridgeTransfer(context.Background(), inbound, outbound)
+		done <- srv.BridgeTransfer(context.Background(), inbound, outbound, nil)
 	}()
 
 	time.Sleep(10 * time.Millisecond)
@@ -392,7 +392,7 @@ func TestBridgeTransfer_AudioForwardsBidirectionally(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
 	go func() {
-		done <- srv.BridgeTransfer(ctx, inbound, outbound)
+		done <- srv.BridgeTransfer(ctx, inbound, outbound, nil)
 	}()
 
 	// outbound → inbound (inbound→outbound is handled by streamer's forwardIncomingAudio)
@@ -418,7 +418,7 @@ func TestBridgeTransfer_TranscodesAcrossCodecs(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
 	go func() {
-		done <- srv.BridgeTransfer(ctx, inbound, outbound)
+		done <- srv.BridgeTransfer(ctx, inbound, outbound, nil)
 	}()
 
 	// µ-law from outbound → A-law on inbound
@@ -447,7 +447,7 @@ func TestBridgeTransfer_AlreadyEndedSessions(t *testing.T) {
 	outbound.End()
 
 	// RTP handler is nil after End() clears it
-	err := srv.BridgeTransfer(context.Background(), inbound, outbound)
+	err := srv.BridgeTransfer(context.Background(), inbound, outbound, nil)
 	require.Error(t, err)
 	assert.ErrorIs(t, err, ErrRTPNotInitialized)
 }
@@ -465,7 +465,7 @@ func TestBridgeTransfer_OnlyEndsOutboundSession(t *testing.T) {
 
 	done := make(chan error, 1)
 	go func() {
-		done <- srv.BridgeTransfer(context.Background(), inbound, outbound)
+		done <- srv.BridgeTransfer(context.Background(), inbound, outbound, nil)
 	}()
 
 	// Give the bridge goroutines time to start
@@ -498,7 +498,7 @@ func TestBridgeTransfer_InboundBye_OnlyEndsOutbound(t *testing.T) {
 
 	done := make(chan error, 1)
 	go func() {
-		done <- srv.BridgeTransfer(context.Background(), inbound, outbound)
+		done <- srv.BridgeTransfer(context.Background(), inbound, outbound, nil)
 	}()
 
 	time.Sleep(10 * time.Millisecond)
@@ -524,7 +524,7 @@ func TestForwardBridgeAudio_Passthrough_10Frames(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	go srv.forwardBridgeAudio(ctx, src, dst, false, &CodecPCMU, &CodecPCMU)
+	go srv.forwardBridgeAudio(ctx, src, dst, false, &CodecPCMU, &CodecPCMU, nil)
 
 	const frameCount = 10
 	for i := 0; i < frameCount; i++ {
@@ -551,7 +551,7 @@ func TestForwardBridgeAudio_ContextCancel_NoHang(t *testing.T) {
 
 	done := make(chan struct{})
 	go func() {
-		srv.forwardBridgeAudio(ctx, src, dst, false, &CodecPCMU, &CodecPCMU)
+		srv.forwardBridgeAudio(ctx, src, dst, false, &CodecPCMU, &CodecPCMU, nil)
 		close(done)
 	}()
 

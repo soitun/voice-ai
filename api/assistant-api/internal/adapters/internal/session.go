@@ -37,7 +37,8 @@ const (
 	// dbWriteTimeout is the maximum duration allowed for database write operations
 	// (inserts, updates, metric flushes). Uses a background context so that writes
 	// are not cancelled by the caller's context lifecycle.
-	dbWriteTimeout = 1 * time.Second
+	dbWriteTimeout        = 5 * time.Second
+	collectorWriteTimeout = 10 * time.Second
 )
 
 // =============================================================================

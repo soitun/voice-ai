@@ -933,7 +933,7 @@ func (m *SIPEngine) pipelineCallStart(ctx context.Context, session *sip_infra.Se
 		ClearBridgeTarget()
 		StopRingback()
 		ExitTransferMode()
-		CancelTalk()
+		PushBridgeOperatorAudio([]byte)
 	}
 	if ts, ok := streamer.(transferable); ok {
 		ts.SetOnTransferInitiated(func(target string) {
@@ -945,10 +945,10 @@ func (m *SIPEngine) pipelineCallStart(ctx context.Context, session *sip_infra.Se
 				OnConnected: func(outboundRTP *sip_infra.RTPHandler) {
 					ts.StopRingback()
 					ts.SetBridgeOutRTP(outboundRTP)
-					ts.CancelTalk()
 				},
-				OnFailed:   func() { ts.ExitTransferMode() },
-				OnTeardown: func() { ts.ClearBridgeTarget() },
+				OnFailed:        func() { ts.ExitTransferMode() },
+				OnTeardown:      func() { ts.ClearBridgeTarget() },
+				OnOperatorAudio: func(audio []byte) { ts.PushBridgeOperatorAudio(audio) },
 			})
 		})
 	}
@@ -973,16 +973,6 @@ func (m *SIPEngine) pipelineCallStart(ctx context.Context, session *sip_infra.Se
 
 	if err := talker.Talk(callCtx, auth); err != nil {
 		m.logger.Warnw("SIP talker exited", "error", err, "call_id", callID)
-	}
-
-	// If a bridge transfer is active, keep callCtx alive so forwardIncomingAudio
-	// continues routing RTP between the inbound and outbound sessions. The bridge
-	// handler ends the session when the bridge completes, unblocking this wait.
-	// The defer cancel() then fires harmlessly (callCtx's parent is already done).
-	state := session.GetState()
-	if state == sip_infra.CallStateTransferring || state == sip_infra.CallStateBridgeConnected {
-		m.logger.Infow("Bridge active after Talk exit, waiting for completion", "call_id", callID)
-		<-session.Context().Done()
 	}
 
 	m.logger.Infow("SIP call ended", "call_id", callID)

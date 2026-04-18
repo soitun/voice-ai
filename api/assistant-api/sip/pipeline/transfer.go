@@ -81,7 +81,7 @@ func (d *Dispatcher) executeTransfer(ctx context.Context, v sip_infra.TransferIn
 		OutboundSession: outboundSession,
 	})
 
-	if err := d.server.BridgeTransfer(context.Background(), v.Session, outboundSession); err != nil {
+	if err := d.server.BridgeTransfer(context.Background(), v.Session, outboundSession, v.OnOperatorAudio); err != nil {
 		d.logger.Errorw("Pipeline: bridge failed",
 			"call_id", v.ID, "error", err)
 		v.Session.SetMetadata(sip_infra.MetadataBridgeTransferStatus, "failed")

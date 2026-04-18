@@ -87,7 +87,7 @@ func (s *Server) MakeBridgeCall(ctx context.Context, cfg *Config, toURI, fromURI
 // Blocks until one side hangs up, a safety timeout, or context cancellation.
 // Ends the outbound session on exit; the inbound session lifecycle is owned by
 // the caller (executeTransfer) to avoid racing with metadata writes.
-func (s *Server) BridgeTransfer(ctx context.Context, inbound, outbound *Session) error {
+func (s *Server) BridgeTransfer(ctx context.Context, inbound, outbound *Session, onOperatorAudio func([]byte)) error {
 	inCallID := inbound.GetCallID()
 	outCallID := outbound.GetCallID()
 
@@ -120,7 +120,7 @@ func (s *Server) BridgeTransfer(ctx context.Context, inbound, outbound *Session)
 	// Outbound→inbound: transfer target voice to caller.
 	// Inbound→outbound (caller voice to target) is handled by the streamer's
 	// forwardIncomingAudio which writes to bridgeOutRTP when set.
-	go s.forwardBridgeAudio(audioCtx, outRTP.AudioIn(), inRTP.AudioOut(), needsTranscode, outCodec, inCodec)
+	go s.forwardBridgeAudio(audioCtx, outRTP.AudioIn(), inRTP.AudioOut(), needsTranscode, outCodec, inCodec, onOperatorAudio)
 
 	// Wait for either side to hang up
 	select {
@@ -156,7 +156,7 @@ func (s *Server) BridgeTransfer(ctx context.Context, inbound, outbound *Session)
 }
 
 // forwardBridgeAudio reads audio from src and writes to dst, transcoding if needed.
-func (s *Server) forwardBridgeAudio(ctx context.Context, src <-chan []byte, dst chan<- []byte, needsTranscode bool, srcCodec, dstCodec *Codec) {
+func (s *Server) forwardBridgeAudio(ctx context.Context, src <-chan []byte, dst chan<- []byte, needsTranscode bool, srcCodec, dstCodec *Codec, onAudio func([]byte)) {
 	for {
 		select {
 		case <-ctx.Done():
@@ -165,6 +165,7 @@ func (s *Server) forwardBridgeAudio(ctx context.Context, src <-chan []byte, dst 
 			if !ok {
 				return
 			}
+			rawData := data
 			if needsTranscode {
 				data = s.transcodeG711(data, srcCodec, dstCodec)
 			}
@@ -173,7 +174,9 @@ func (s *Server) forwardBridgeAudio(ctx context.Context, src <-chan []byte, dst 
 			case <-ctx.Done():
 				return
 			default:
-				// dst full — drop frame to prevent stall
+			}
+			if onAudio != nil {
+				onAudio(rawData)
 			}
 		}
 	}

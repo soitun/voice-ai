@@ -117,6 +117,16 @@ func (t *genericRequestor) Talk(_ context.Context, auth types.SimplePrinciple) e
 				}
 			}
 
+		case *protos.ConversationBridgeUserAudio:
+			if initialized {
+				t.OnPacket(t.streamer.Context(), internal_type.RecordUserAudioPacket{ContextID: t.GetID(), Audio: payload.Audio})
+			}
+
+		case *protos.ConversationBridgeOperatorAudio:
+			if initialized {
+				t.OnPacket(t.streamer.Context(), internal_type.RecordAssistantAudioPacket{ContextID: t.GetID(), Audio: payload.Audio})
+			}
+
 		case *protos.ConversationMetadata:
 			if initialized {
 				if err := t.OnPacket(t.streamer.Context(),
