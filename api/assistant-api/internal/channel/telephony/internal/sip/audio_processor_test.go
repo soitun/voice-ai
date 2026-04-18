@@ -9,13 +9,14 @@ package internal_sip_telephony
 import (
 	"context"
 	"errors"
+	"reflect"
 	"sync"
 	"testing"
 	"time"
+	"unsafe"
 
 	internal_type "github.com/rapidaai/api/assistant-api/internal/type"
 	sip_infra "github.com/rapidaai/api/assistant-api/sip/infra"
-	"github.com/rapidaai/pkg/commons"
 	"github.com/rapidaai/protos"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -63,21 +64,29 @@ func (r *pushRecorder) get() []internal_type.Stream {
 
 func testRTPHandler(t *testing.T, codec *sip_infra.Codec) *sip_infra.RTPHandler {
 	t.Helper()
-	logger, _ := commons.NewApplicationLogger()
-	pt := uint8(0)
-	if codec != nil {
-		pt = codec.PayloadType
+	h := &sip_infra.RTPHandler{}
+
+	effectiveCodec := codec
+	if effectiveCodec == nil {
+		effectiveCodec = &sip_infra.CodecPCMU
 	}
-	h, err := sip_infra.NewRTPHandler(context.Background(), &sip_infra.RTPConfig{
-		LocalIP:     "127.0.0.1",
-		LocalPort:   0, // OS picks a free port
-		PayloadType: pt,
-		ClockRate:   8000,
-		Logger:      logger,
-	})
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = h.Stop() })
+
+	setUnexportedField(t, h, "codec", effectiveCodec)
+	setUnexportedField(t, h, "audioInChan", make(chan []byte, 100))
+	setUnexportedField(t, h, "audioOutChan", make(chan []byte, 100))
+	setUnexportedField(t, h, "flushAudioCh", make(chan struct{}, 1))
+
 	return h
+}
+
+func setUnexportedField(t *testing.T, obj interface{}, field string, val interface{}) {
+	t.Helper()
+	rv := reflect.ValueOf(obj)
+	require.Equal(t, reflect.Ptr, rv.Kind(), "obj must be a pointer")
+	fv := rv.Elem().FieldByName(field)
+	require.True(t, fv.IsValid(), "field %s not found", field)
+	target := reflect.NewAt(fv.Type(), unsafe.Pointer(fv.UnsafeAddr())).Elem()
+	target.Set(reflect.ValueOf(val))
 }
 
 func newTestAudioProcessor(t *testing.T, codec *sip_infra.Codec, resampler internal_type.AudioResampler, recorder *pushRecorder) *AudioProcessor {
@@ -800,18 +809,11 @@ func TestNewAudioProcessor_InitializesChannels(t *testing.T) {
 
 func benchAudioProcessor(b *testing.B, codec *sip_infra.Codec) *AudioProcessor {
 	b.Helper()
-	logger, _ := commons.NewApplicationLogger()
-	rtp, err := sip_infra.NewRTPHandler(context.Background(), &sip_infra.RTPConfig{
-		LocalIP:     "127.0.0.1",
-		LocalPort:   0,
-		PayloadType: codec.PayloadType,
-		ClockRate:   8000,
-		Logger:      logger,
-	})
-	if err != nil {
-		b.Fatal(err)
-	}
-	b.Cleanup(func() { _ = rtp.Stop() })
+	rtp := &sip_infra.RTPHandler{}
+	setUnexportedFieldBench(b, rtp, "codec", codec)
+	setUnexportedFieldBench(b, rtp, "audioInChan", make(chan []byte, 100))
+	setUnexportedFieldBench(b, rtp, "audioOutChan", make(chan []byte, 100))
+	setUnexportedFieldBench(b, rtp, "flushAudioCh", make(chan struct{}, 1))
 
 	return NewAudioProcessor(AudioProcessorConfig{
 		RTPHandler: rtp,
@@ -878,14 +880,17 @@ func BenchmarkForwardUserAudio_NoBridge(b *testing.B) {
 
 // BenchmarkForwardUserAudio_BridgeActive measures the bridge forwarding hot path.
 func BenchmarkForwardUserAudio_BridgeActive(b *testing.B) {
-	logger, _ := commons.NewApplicationLogger()
-	rtp, _ := sip_infra.NewRTPHandler(context.Background(), &sip_infra.RTPConfig{
-		LocalIP: "127.0.0.1", LocalPort: 0, PayloadType: 0, ClockRate: 8000, Logger: logger,
-	})
-	bridgeRTP, _ := sip_infra.NewRTPHandler(context.Background(), &sip_infra.RTPConfig{
-		LocalIP: "127.0.0.1", LocalPort: 0, PayloadType: 0, ClockRate: 8000, Logger: logger,
-	})
-	b.Cleanup(func() { _ = rtp.Stop(); _ = bridgeRTP.Stop() })
+	rtp := &sip_infra.RTPHandler{}
+	setUnexportedFieldBench(b, rtp, "codec", &sip_infra.CodecPCMU)
+	setUnexportedFieldBench(b, rtp, "audioInChan", make(chan []byte, 100))
+	setUnexportedFieldBench(b, rtp, "audioOutChan", make(chan []byte, 100))
+	setUnexportedFieldBench(b, rtp, "flushAudioCh", make(chan struct{}, 1))
+
+	bridgeRTP := &sip_infra.RTPHandler{}
+	setUnexportedFieldBench(b, bridgeRTP, "codec", &sip_infra.CodecPCMU)
+	setUnexportedFieldBench(b, bridgeRTP, "audioInChan", make(chan []byte, 100))
+	setUnexportedFieldBench(b, bridgeRTP, "audioOutChan", make(chan []byte, 100))
+	setUnexportedFieldBench(b, bridgeRTP, "flushAudioCh", make(chan struct{}, 1))
 
 	proc := NewAudioProcessor(AudioProcessorConfig{
 		RTPHandler: rtp,
@@ -914,4 +919,18 @@ func BenchmarkForwardUserAudio_BridgeActive(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		_ = proc.ForwardUserAudio(frame)
 	}
+}
+
+func setUnexportedFieldBench(b *testing.B, obj interface{}, field string, val interface{}) {
+	b.Helper()
+	rv := reflect.ValueOf(obj)
+	if rv.Kind() != reflect.Ptr {
+		b.Fatalf("obj must be a pointer")
+	}
+	fv := rv.Elem().FieldByName(field)
+	if !fv.IsValid() {
+		b.Fatalf("field %s not found", field)
+	}
+	target := reflect.NewAt(fv.Type(), unsafe.Pointer(fv.UnsafeAddr())).Elem()
+	target.Set(reflect.ValueOf(val))
 }
