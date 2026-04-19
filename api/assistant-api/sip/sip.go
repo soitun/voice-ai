@@ -934,9 +934,14 @@ func (m *SIPEngine) pipelineCallStart(ctx context.Context, session *sip_infra.Se
 		StopRingback()
 		ExitTransferMode()
 		PushBridgeOperatorAudio([]byte)
+		PushToolResult(contextID, toolID, name string, success bool, data map[string]interface{})
 	}
 	if ts, ok := streamer.(transferable); ok {
 		ts.SetOnTransferInitiated(func(target string) {
+			toolID, _ := session.GetMetadata("tool_id")
+			toolIDStr, _ := toolID.(string)
+			toolCtxID, _ := session.GetMetadata("tool_context_id")
+			toolCtxIDStr, _ := toolCtxID.(string)
 			m.dispatcher.OnPipeline(m.ctx, sip_infra.TransferInitiatedPipeline{
 				ID:        callID,
 				Session:   session,
@@ -946,8 +951,24 @@ func (m *SIPEngine) pipelineCallStart(ctx context.Context, session *sip_infra.Se
 					ts.StopRingback()
 					ts.SetBridgeOutRTP(outboundRTP)
 				},
-				OnFailed:        func() { ts.ExitTransferMode() },
-				OnTeardown:      func() { ts.ClearBridgeTarget() },
+				OnFailed: func() {
+					ts.ExitTransferMode()
+					if toolIDStr != "" {
+						ts.PushToolResult(toolCtxIDStr, toolIDStr, "transfer_call", false, map[string]interface{}{
+							"data": fmt.Sprintf("Transfer to %s failed", target),
+						})
+					}
+				},
+				OnTeardown: func() {
+					ts.ClearBridgeTarget()
+					if toolIDStr != "" {
+						status, _ := session.GetMetadata(sip_infra.MetadataBridgeTransferStatus)
+						statusStr, _ := status.(string)
+						ts.PushToolResult(toolCtxIDStr, toolIDStr, "transfer_call", statusStr == "completed", map[string]interface{}{
+							"data": fmt.Sprintf("Transfer to %s %s", target, statusStr),
+						})
+					}
+				},
 				OnOperatorAudio: func(audio []byte) { ts.PushBridgeOperatorAudio(audio) },
 			})
 		})

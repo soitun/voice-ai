@@ -57,7 +57,8 @@ func (e *executorStub) Execute(_ context.Context, _ internal_type.Communication,
 	e.mu.Unlock()
 	return e.err
 }
-func (e *executorStub) Close(context.Context) error { return nil }
+func (e *executorStub) GetToolExecutor() internal_agent_executor.ToolExecutor { return nil }
+func (e *executorStub) Close(context.Context) error                           { return nil }
 func (e *executorStub) getPackets() []internal_type.Packet {
 	e.mu.Lock()
 	defer e.mu.Unlock()
@@ -334,8 +335,8 @@ func TestOnPacket_RoutesToCorrectChannel(t *testing.T) {
 		{"RecordAssistantAudioPacket", internal_type.RecordAssistantAudioPacket{ContextID: "c"}, "low"},
 		{"SaveMessagePacket", internal_type.SaveMessagePacket{ContextID: "c"}, "low"},
 		{"ConversationEventPacket", internal_type.ConversationEventPacket{ContextID: "c"}, "low"},
-		{"LLMToolCallPacket", internal_type.LLMToolCallPacket{ContextID: "c"}, "low"},
-		{"LLMToolResultPacket", internal_type.LLMToolResultPacket{ContextID: "c"}, "low"},
+		{"LLMToolCallPacket", internal_type.LLMToolCallPacket{ContextID: "c"}, "output"},
+		{"LLMToolResultPacket", internal_type.LLMToolResultPacket{ContextID: "c"}, "output"},
 		{"UserMessageMetricPacket", internal_type.UserMessageMetricPacket{ContextID: "c"}, "low"},
 		{"AssistantMessageMetricPacket", internal_type.AssistantMessageMetricPacket{ContextID: "c"}, "low"},
 	}
@@ -1184,7 +1185,8 @@ func (e *e2eExecutorStub) Execute(_ context.Context, comm internal_type.Communic
 	}
 	return nil
 }
-func (e *e2eExecutorStub) Close(context.Context) error { return nil }
+func (e *e2eExecutorStub) GetToolExecutor() internal_agent_executor.ToolExecutor { return nil }
+func (e *e2eExecutorStub) Close(context.Context) error                           { return nil }
 func (e *e2eExecutorStub) getPackets() []internal_type.Packet {
 	e.mu.Lock()
 	defer e.mu.Unlock()

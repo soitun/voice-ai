@@ -60,7 +60,7 @@ func (r *genericRequestor) OnPacket(ctx context.Context, pkts ...internal_type.P
 			internal_type.NormalizedUserTextPacket:
 			r.inputCh <- e
 
-		// Output — LLM generation, TTS, outbound pipeline
+		// Output — LLM generation, TTS, tool execution, outbound pipeline
 		case internal_type.ExecuteLLMPacket,
 			internal_type.LLMResponseDeltaPacket,
 			internal_type.LLMResponseDonePacket,
@@ -69,10 +69,12 @@ func (r *genericRequestor) OnPacket(ctx context.Context, pkts ...internal_type.P
 			internal_type.InjectMessagePacket,
 			internal_type.SpeakTextPacket,
 			internal_type.TextToSpeechAudioPacket,
-			internal_type.TextToSpeechEndPacket:
+			internal_type.TextToSpeechEndPacket,
+			internal_type.LLMToolCallPacket,
+			internal_type.LLMToolResultPacket:
 			r.outputCh <- e
 
-		// Low — recording, metrics, persistence, events, tools
+		// Low — recording, metrics, persistence, events
 		case internal_type.RecordUserAudioPacket,
 			internal_type.RecordAssistantAudioPacket,
 			internal_type.SaveMessagePacket,
@@ -82,8 +84,6 @@ func (r *genericRequestor) OnPacket(ctx context.Context, pkts ...internal_type.P
 			internal_type.UserMessageMetricPacket,
 			internal_type.UserMessageMetadataPacket,
 			internal_type.AssistantMessageMetadataPacket,
-			internal_type.LLMToolCallPacket,
-			internal_type.LLMToolResultPacket,
 			internal_type.ConversationEventPacket:
 			r.lowCh <- e
 
@@ -644,7 +644,9 @@ func (talking *genericRequestor) handleInterruptTTS(ctx context.Context, vl inte
 func (talking *genericRequestor) handleInterruptLLM(ctx context.Context, vl internal_type.InterruptLLMPacket) {
 	if talking.assistantExecutor != nil {
 		utils.Go(ctx, func() {
-			talking.assistantExecutor.Execute(ctx, talking, internal_type.InterruptionDetectedPacket{ContextID: vl.ContextID})
+			if err := talking.assistantExecutor.Execute(ctx, talking, internal_type.InterruptionDetectedPacket{ContextID: vl.ContextID}); err != nil {
+				talking.logger.Errorf("LLM interruption error: %v", err)
+			}
 		})
 	}
 }
@@ -736,9 +738,11 @@ func (talking *genericRequestor) handleInjectMessagePacket(ctx context.Context, 
 	}
 
 	// Record injected message in executor history (e.g. for LLM context).
-	if err := talking.assistantExecutor.Execute(ctx, talking, vl); err != nil {
-		talking.logger.Errorf("assistant executor error: %v", err)
-	}
+	utils.Go(ctx, func() {
+		if err := talking.assistantExecutor.Execute(ctx, talking, vl); err != nil {
+			talking.logger.Errorf("assistant executor error: %v", err)
+		}
+	})
 
 	// Use the CURRENT session context — not vl.ContextId(). The inject packet
 	// was created before the InterruptionDetectedPacket rotated the context
@@ -963,9 +967,16 @@ func (talking *genericRequestor) handleToolCall(ctx context.Context, vl internal
 	if err := talking.CreateToolLog(ctx, vl.ContextID, vl.ToolID, vl.Name, type_enums.RECORD_IN_PROGRESS, req); err != nil {
 		talking.logger.Errorf("error logging tool call start: %v", err)
 	}
-	talking.OnPacket(ctx, internal_type.UserMessageMetricPacket{
+	talking.OnPacket(ctx, internal_type.ConversationEventPacket{
 		ContextID: vl.ContextID,
-		Metrics:   []*protos.Metric{{Name: "tool_call_triggered", Value: vl.Name, Description: fmt.Sprintf("tool call triggered: %s", vl.ToolID)}},
+		Name:      observe.ComponentTool,
+		Data:      map[string]string{observe.DataType: observe.EventToolCallStarted, "name": vl.Name, "id": vl.ToolID},
+		Time:      time.Now(),
+	})
+	utils.Go(ctx, func() {
+		if err := talking.assistantExecutor.Execute(ctx, talking, vl); err != nil {
+			talking.logger.Errorf("assistant executor error: %v", err)
+		}
 	})
 }
 
@@ -974,11 +985,16 @@ func (talking *genericRequestor) handleToolResult(ctx context.Context, vl intern
 	if err := talking.UpdateToolLog(ctx, vl.ToolID, vl.TimeTaken, type_enums.RECORD_COMPLETE, res); err != nil {
 		talking.logger.Errorf("error logging tool call result: %v", err)
 	}
-	talking.OnPacket(ctx, internal_type.AssistantMessageMetricPacket{
+	talking.OnPacket(ctx, internal_type.ConversationEventPacket{
 		ContextID: vl.ContextID,
-		Metrics: []*protos.Metric{
-			{Name: "tool_call_time_taken", Value: fmt.Sprintf("%d", vl.TimeTaken), Description: fmt.Sprintf("time_taken for tool call: %s, id: %s", vl.Name, vl.ToolID)},
-			{Name: "tool_call_completed", Value: fmt.Sprintf("%d", vl.TimeTaken), Description: fmt.Sprintf("time_taken for tool call: %s, id: %s", vl.Name, vl.ToolID)}},
+		Name:      observe.ComponentTool,
+		Data:      map[string]string{observe.DataType: observe.EventToolCallCompleted, "name": vl.Name, "id": vl.ToolID},
+		Time:      time.Now(),
+	})
+	utils.Go(ctx, func() {
+		if err := talking.assistantExecutor.Execute(ctx, talking, vl); err != nil {
+			talking.logger.Errorf("tool result processing failed: %v", err)
+		}
 	})
 }
 

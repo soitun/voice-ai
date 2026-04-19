@@ -9,7 +9,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"strings"
 
 	internal_tool "github.com/rapidaai/api/assistant-api/internal/agent/executor/tool/internal"
 	internal_assistant_entity "github.com/rapidaai/api/assistant-api/internal/entity/assistants"
@@ -30,7 +29,7 @@ func NewEndpointToolCaller(
 	ctx context.Context,
 	logger commons.Logger,
 	toolOptions *internal_assistant_entity.AssistantTool,
-	communcation internal_type.Communication,
+	communication internal_type.Communication,
 ) (internal_tool.ToolCaller, error) {
 	opts := toolOptions.GetOptions()
 	endpointID, err := opts.GetUint64("tool.endpoint_id")
@@ -53,87 +52,49 @@ func NewEndpointToolCaller(
 	}, nil
 }
 
-func (afkTool *endpointToolCaller) Call(ctx context.Context, contextID, toolId string, args map[string]interface{}, communication internal_type.Communication) internal_tool.ToolCallResult {
-	body := afkTool.Parse(afkTool.endpointParameters, args, communication)
+func (t *endpointToolCaller) Call(ctx context.Context, contextID, toolId string, args map[string]interface{}, communication internal_type.Communication) {
+	communication.OnPacket(ctx, internal_type.LLMToolCallPacket{
+		ToolID: toolId, Name: t.Name(), ContextID: contextID, Arguments: args,
+	})
+
+	body := t.Argumenting(t.endpointParameters, args, communication)
 	ivk, err := communication.DeploymentCaller().Invoke(
 		ctx,
 		communication.Auth(),
-		afkTool.inputBuilder.Invoke(&protos.EndpointDefinition{EndpointId: afkTool.endpointId, Version: "latest"}, afkTool.inputBuilder.Arguments(body, nil), afkTool.inputBuilder.Metadata(map[string]interface{}{"message_id": contextID}, nil), nil),
+		t.inputBuilder.Invoke(&protos.EndpointDefinition{EndpointId: t.endpointId, Version: "latest"}, t.inputBuilder.Arguments(body, nil), t.inputBuilder.Metadata(map[string]interface{}{"message_id": contextID}, nil), nil),
 	)
 	if err != nil {
-		afkTool.logger.Errorf("error while calling endpoint %+v", err)
-		return internal_tool.Result("Failed to resolve", false)
+		communication.OnPacket(ctx, internal_type.LLMToolResultPacket{
+			ToolID: toolId, Name: t.Name(), ContextID: contextID,
+			Result: internal_tool.ErrorResult("Failed to resolve"),
+		})
+		return
 	}
-	if ivk.GetSuccess() {
-		if data := ivk.GetData(); len(data) > 0 {
-			var contentData map[string]interface{}
-			if err := json.Unmarshal([]byte(data[0]), &contentData); err != nil {
-				return internal_tool.Result(data[0], true)
-			}
-			return internal_tool.JustResult(contentData)
-		}
-
+	if !ivk.GetSuccess() {
+		communication.OnPacket(ctx, internal_type.LLMToolResultPacket{
+			ToolID: toolId, Name: t.Name(), ContextID: contextID,
+			Result: internal_tool.ErrorResult("Failed to resolve"),
+		})
+		return
 	}
-	return internal_tool.Result("Failed to resolve", false)
-}
-
-func (md *endpointToolCaller) Parse(
-	mapping map[string]string,
-	args map[string]interface{},
-	communication internal_type.Communication,
-) map[string]interface{} {
-	arguments := make(map[string]interface{})
-	for key, value := range mapping {
-		if k, ok := strings.CutPrefix(key, "tool."); ok {
-			switch k {
-			case "name":
-				arguments[value] = md.Name()
-			case "argument":
-				arguments[value] = args
-			}
-		}
-		if k, ok := strings.CutPrefix(key, "assistant."); ok {
-			switch k {
-			case "id":
-				arguments[value] = fmt.Sprintf("%d", communication.Assistant().Id)
-			case "version":
-				arguments[value] = fmt.Sprintf("vrsn_%d", communication.Assistant().AssistantProviderModel.Id)
-			}
-		}
-		if k, ok := strings.CutPrefix(key, "conversation."); ok {
-			switch k {
-			case "id":
-				arguments[value] = fmt.Sprintf("%d", communication.Conversation().Id)
-			case "messages":
-				arguments[value] = md.SimplifyHistory(communication.GetHistories())
-			}
-		}
-		if k, ok := strings.CutPrefix(key, "argument."); ok {
-			if aArg, ok := communication.GetArgs()[k]; ok {
-				arguments[value] = aArg
-			}
-		}
-		if k, ok := strings.CutPrefix(key, "metadata."); ok {
-			if mtd, ok := communication.GetMetadata()[k]; ok {
-				arguments[value] = mtd
-			}
-		}
-		if k, ok := strings.CutPrefix(key, "option."); ok {
-			if ot, ok := communication.GetOptions()[k]; ok {
-				arguments[value] = ot
-			}
-		}
+	data := ivk.GetData()
+	if len(data) == 0 {
+		communication.OnPacket(ctx, internal_type.LLMToolResultPacket{
+			ToolID: toolId, Name: t.Name(), ContextID: contextID,
+			Result: internal_tool.ErrorResult("Failed to resolve"),
+		})
+		return
 	}
-	return arguments
-}
-
-func (md *endpointToolCaller) SimplifyHistory(msgs []internal_type.MessagePacket) []map[string]string {
-	out := make([]map[string]string, 0)
-	for _, msg := range msgs {
-		out = append(out, map[string]string{
-			"role":    msg.Role(),
-			"message": msg.Content(),
+	var contentData map[string]interface{}
+	if err := json.Unmarshal([]byte(data[0]), &contentData); err != nil {
+		communication.OnPacket(ctx, internal_type.LLMToolResultPacket{
+			ToolID: toolId, Name: t.Name(), ContextID: contextID,
+			Result: internal_tool.Result(data[0], true),
+		})
+	} else {
+		communication.OnPacket(ctx, internal_type.LLMToolResultPacket{
+			ToolID: toolId, Name: t.Name(), ContextID: contextID,
+			Result: internal_tool.JustResult(contentData),
 		})
 	}
-	return out
 }

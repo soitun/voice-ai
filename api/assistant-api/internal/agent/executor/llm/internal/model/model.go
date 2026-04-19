@@ -48,6 +48,7 @@ package internal_model
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -91,9 +92,17 @@ type modelAssistantExecutor struct {
 	// (to send) and the listener goroutine (to receive); synchronized via mu.
 	stream grpc.BidiStreamingClient[protos.ChatRequest, protos.ChatResponse]
 
-	// mu guards currentPacket, history, stream, and turn timing fields.
+	// mu guards currentPacket, history, stream, pendingTools, and turn timing fields.
 	mu            sync.RWMutex
 	currentPacket *internal_type.NormalizedUserTextPacket
+
+	// pendingTools tracks how many tool results are expected for the current turn.
+	// Set by stageToolFollowUp, decremented by Execute(LLMToolResultPacket).
+	// ToolFollowUpPipeline fires only when pendingTools reaches 0.
+	pendingTools     int
+	pendingToolCtxID string
+	pendingToolMsg   *protos.Message
+	toolMsgAppended  bool
 
 	ctx       context.Context
 	ctxCancel context.CancelFunc
@@ -204,6 +213,42 @@ func (e *modelAssistantExecutor) Execute(ctx context.Context, communication inte
 				}},
 			},
 		})
+	case internal_type.LLMToolCallPacket:
+		e.mu.Lock()
+		if !e.toolMsgAppended && e.pendingToolMsg != nil {
+			e.history = append(e.history, e.pendingToolMsg)
+			e.toolMsgAppended = true
+		}
+		e.mu.Unlock()
+		return nil
+
+	case internal_type.LLMToolResultPacket:
+		resultJSON, _ := json.Marshal(p.Result)
+		toolMsg := &protos.Message{
+			Role: "tool",
+			Message: &protos.Message_Tool{
+				Tool: &protos.ToolMessage{
+					Tools: []*protos.ToolMessage_Tool{
+						{Name: p.Name, Id: p.ToolID, Content: string(resultJSON)},
+					},
+				},
+			},
+		}
+		if err := e.Pipeline(ctx, communication, LocalHistoryPipeline{Message: toolMsg}); err != nil {
+			return err
+		}
+
+		e.mu.Lock()
+		e.pendingTools--
+		remaining := e.pendingTools
+		ctxID := e.pendingToolCtxID
+		e.mu.Unlock()
+
+		if remaining > 0 {
+			return nil
+		}
+		return e.Pipeline(ctx, communication, ToolFollowUpPipeline{ContextID: ctxID})
+
 	case internal_type.InterruptionDetectedPacket:
 		e.mu.Lock()
 		e.currentPacket = nil
@@ -553,9 +598,6 @@ func (e *modelAssistantExecutor) emitCompletion(ctx context.Context, communicati
 	hasToolCalls := len(pipeline.Output.GetAssistant().GetToolCalls()) > 0
 	responseText := strings.Join(pipeline.Output.GetAssistant().GetContents(), "")
 
-	// For non-tool completions, append the final assembled message to history.
-	// Tool-call completions defer this to executeToolCalls so tool results are
-	// appended atomically with the assistant message.
 	if !hasToolCalls {
 		e.mu.Lock()
 		e.history = append(e.history, pipeline.Output)
@@ -647,47 +689,26 @@ func (e *modelAssistantExecutor) emitStreamingChunk(ctx context.Context, communi
 	return nil
 }
 
-// stageToolFollowUp executes tool calls if present on the completion message.
+// stageToolFollowUp executes each tool call. The tool pushes its own result
+// (ToolResultPacket) or directive via OnPacket. The dispatch layer receives
+// ToolResultPacket, logs it, and calls Execute(ToolResultPacket) which appends
+// to history and triggers the next LLM call when all results are in.
 func (e *modelAssistantExecutor) stageToolFollowUp(ctx context.Context, communication internal_type.Communication, pipeline LLMResponsePipeline) error {
-	if len(pipeline.Output.GetAssistant().GetToolCalls()) == 0 {
+	toolCalls := pipeline.Output.GetAssistant().GetToolCalls()
+	if len(toolCalls) == 0 {
 		return nil
 	}
 	contextID := pipeline.Response.GetRequestId()
-	if err := e.executeToolCalls(ctx, communication, contextID, pipeline.Output); err != nil {
-		communication.OnPacket(ctx, internal_type.LLMErrorPacket{
-			ContextID: contextID,
-			Error:     fmt.Errorf("tool call follow-up failed: %w", err),
-		})
-	}
-	return nil
-}
 
-// executeToolCalls executes all requested tool calls and sends the follow-up
-// chat with both the assistant message and tool results appended atomically.
-// The assistant message is NOT yet in e.history — we add both together to
-// prevent a concurrent user message from seeing tool_calls without results
-// (which causes OpenAI 400 errors).
-func (e *modelAssistantExecutor) executeToolCalls(ctx context.Context, communication internal_type.Communication, contextID string, output *protos.Message) error {
-	toolExecution := e.toolExecutor.ExecuteAll(ctx, contextID, output.GetAssistant().GetToolCalls(), communication)
 	e.mu.Lock()
-	if e.currentPacket != nil && e.currentPacket.ContextId() != contextID {
-		e.mu.Unlock()
-		return nil
-	}
-	history := make([]*protos.Message, len(e.history))
-	copy(history, e.history)
-	e.history = append(e.history, output, toolExecution)
-	activePacket := e.currentPacket
+	e.pendingTools = len(toolCalls)
+	e.pendingToolCtxID = contextID
+	e.pendingToolMsg = pipeline.Output
+	e.toolMsgAppended = false
 	e.mu.Unlock()
-	if activePacket == nil {
-		return e.chatWithHistory(ctx, communication, contextID, map[string]interface{}{})
-	}
-	return e.Pipeline(ctx, communication, ArgumentationPipeline{
-		Packet:       *activePacket,
-		History:      history,
-		PromptArgs:   map[string]interface{}{},
-		ToolFollowUp: true,
-	})
+
+	e.toolExecutor.ExecuteAll(ctx, contextID, toolCalls, communication)
+	return nil
 }
 
 // =============================================================================

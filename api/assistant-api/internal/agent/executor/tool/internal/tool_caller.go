@@ -28,6 +28,14 @@ func JustResult(data map[string]interface{}) ToolCallResult {
 	return ToolCallResult(data)
 }
 
+// ErrorResult creates an error result map
+func ErrorResult(errorMsg string) ToolCallResult {
+	return ToolCallResult{
+		"status": "FAIL",
+		"error":  errorMsg,
+	}
+}
+
 func (rt ToolCallResult) Result() string {
 	bytes, err := json.Marshal(rt)
 	if err != nil {
@@ -37,33 +45,13 @@ func (rt ToolCallResult) Result() string {
 	return string(bytes)
 }
 
-// ToolCaller defines the contract for invoking a tool/function that can be
-// executed by the agent runtime. Implementations encapsulate tool metadata,
-// execution semantics, and request/response handling.
-//
-// A ToolCaller is responsible for:
-//   - Exposing a unique identifier and human-readable name
-//   - Providing a function definition consumable by the LLM/runtime
-//   - Declaring the execution method (e.g., sync, async, streaming)
-//   - Executing the tool call and returning response packets
+// ToolCaller defines the contract for invoking a tool/function.
+// Call executes the tool — the tool pushes its result (ToolResultPacket)
+// or directive (DirectivePacket) via communication.OnPacket.
 type ToolCaller interface {
-	// Id returns the unique identifier of the tool.
 	Id() uint64
-
-	// Name returns the human-readable name of the tool.
 	Name() string
-
-	// Definition returns the function definition describing the tool's
-	// input parameters and behavior, or an error if the definition
-	// cannot be constructed.
 	Definition() (*protos.FunctionDefinition, error)
-
-	// ExecutionMethod returns the execution strategy used by the tool
-	// (for example, synchronous or asynchronous execution).
 	ExecutionMethod() string
-
-	// Call executes the tool with the given arguments and communication
-	// context. It returns a slice of Packets representing the tool's
-	// response(s) to be consumed by the agent runtime.
-	Call(ctx context.Context, messageId string, toolId string, args map[string]interface{}, communication internal_type.Communication) ToolCallResult
+	Call(ctx context.Context, contextID string, toolId string, args map[string]interface{}, communication internal_type.Communication)
 }

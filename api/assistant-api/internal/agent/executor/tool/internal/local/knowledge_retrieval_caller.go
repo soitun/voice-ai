@@ -40,51 +40,58 @@ func (tc *knowledgeRetrievalToolCaller) argument(input map[string]interface{}) (
 	return utils.Ptr(queryOrContext), input, nil
 }
 
-func (afkTool *knowledgeRetrievalToolCaller) Call(ctx context.Context, contextID, toolId string, args map[string]interface{}, communication internal_type.Communication) internal_tool.ToolCallResult {
-	in, v, err := afkTool.argument(args)
-
+func (t *knowledgeRetrievalToolCaller) Call(ctx context.Context, contextID, toolId string, args map[string]interface{}, communication internal_type.Communication) {
+	communication.OnPacket(ctx, internal_type.LLMToolCallPacket{
+		ToolID: toolId, Name: t.Name(), ContextID: contextID, Arguments: args,
+	})
+	in, v, err := t.argument(args)
 	if err != nil || in == nil {
-		return internal_tool.Result("Required argument is missing or query, context is missing from argument list", false)
-	} else {
-		knowledges, err := communication.RetrieveToolKnowledge(
-			ctx,
-			afkTool.knowledge, contextID, *in, v, &internal_type.KnowledgeRetrieveOption{
-				EmbeddingProviderCredential: afkTool.providerCredential,
-				RetrievalMethod:             afkTool.searchType,
-				TopK:                        afkTool.topK,
-				ScoreThreshold:              float32(afkTool.scoreThreshold),
-			})
-
-		if len(knowledges) == 0 || err != nil {
-			return internal_tool.Result("Not able to find anything in knowledge from given documents.", true)
-		} else {
-			var contextTemplateBuilder strings.Builder
-			for _, knowledge := range knowledges {
-				contextTemplateBuilder.WriteString(knowledge.Content)
-				contextTemplateBuilder.WriteString("\n")
-			}
-			contextString := contextTemplateBuilder.String()
-			return internal_tool.Result(contextString, true)
-		}
+		communication.OnPacket(ctx, internal_type.LLMToolResultPacket{
+			ToolID: toolId, Name: t.Name(), ContextID: contextID,
+			Result: internal_tool.ErrorResult("Required argument is missing or query, context is missing from argument list"),
+		})
+		return
 	}
-
+	knowledges, err := communication.RetrieveToolKnowledge(ctx,
+		t.knowledge, contextID, *in, v, &internal_type.KnowledgeRetrieveOption{
+			EmbeddingProviderCredential: t.providerCredential,
+			RetrievalMethod:             t.searchType,
+			TopK:                        t.topK,
+			ScoreThreshold:              float32(t.scoreThreshold),
+		})
+	if len(knowledges) == 0 || err != nil {
+		communication.OnPacket(ctx, internal_type.LLMToolResultPacket{
+			ToolID: toolId, Name: t.Name(), ContextID: contextID,
+			Result: internal_tool.ErrorResult("Not able to find anything in knowledge from given documents."),
+		})
+		return
+	}
+	var contextBuilder strings.Builder
+	for _, knowledge := range knowledges {
+		contextBuilder.WriteString(knowledge.Content)
+		contextBuilder.WriteString("\n")
+	}
+	communication.OnPacket(ctx, internal_type.LLMToolResultPacket{
+		ToolID: toolId, Name: t.Name(), ContextID: contextID,
+		Result: internal_tool.Result(contextBuilder.String(), true),
+	})
 }
 
 func NewKnowledgeRetrievalToolCaller(
 	ctx context.Context,
 	logger commons.Logger,
 	toolOptions *internal_assistant_entity.AssistantTool,
-	communcation internal_type.Communication,
+	communication internal_type.Communication,
 ) (internal_tool.ToolCaller, error) {
 	opts := toolOptions.GetOptions()
 	searchType, err := opts.GetString("tool.search_type")
 	if err != nil {
-		return nil, fmt.Errorf("tool.search_type is not a recognized type, got %T", err)
+		return nil, fmt.Errorf("tool.search_type is required: %v", err)
 	}
 
 	topK, err := opts.GetUint32("tool.top_k")
 	if err != nil {
-		return nil, fmt.Errorf("tool.top_k is not a recognized type, got %T", err)
+		return nil, fmt.Errorf("tool.top_k is required: %v", err)
 	}
 
 	scoreThreshold, err := opts.GetFloat64("tool.score_threshold")
@@ -97,7 +104,7 @@ func NewKnowledgeRetrievalToolCaller(
 		return nil, fmt.Errorf("tool.knowledge_id is not a valid number: %v", err)
 	}
 
-	knowledge, err := communcation.GetKnowledge(ctx, knowledgeID)
+	knowledge, err := communication.GetKnowledge(ctx, knowledgeID)
 	if err != nil {
 		logger.Errorf("error while getting knowledge %v", err)
 		return nil, err
@@ -108,11 +115,11 @@ func NewKnowledgeRetrievalToolCaller(
 		logger.Errorf("error while getting knowledge credentials, check the setup %v", err)
 		return nil, err
 	}
-	providerCredential, err := communcation.
+	providerCredential, err := communication.
 		VaultCaller().
 		GetCredential(
 			ctx,
-			communcation.Auth(),
+			communication.Auth(),
 			credentialId,
 		)
 

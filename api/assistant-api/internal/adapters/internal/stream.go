@@ -117,6 +117,31 @@ func (t *genericRequestor) Talk(_ context.Context, auth types.SimplePrinciple) e
 				}
 			}
 
+		case *protos.ConversationToolResult:
+			if initialized {
+				result := make(map[string]interface{})
+				if payload.Success {
+					result["status"] = "SUCCESS"
+				} else {
+					result["status"] = "FAIL"
+				}
+				if argsMap, err := utils.AnyMapToInterfaceMap(payload.Args); err == nil {
+					for k, v := range argsMap {
+						result[k] = v
+					}
+				}
+				contextID := payload.Id
+				if contextID == "" {
+					contextID = t.GetID()
+				}
+				t.OnPacket(t.streamer.Context(), internal_type.LLMToolResultPacket{
+					ToolID:    payload.ToolId,
+					Name:      payload.Name,
+					ContextID: contextID,
+					Result:    result,
+				})
+			}
+
 		case *protos.ConversationBridgeUserAudio:
 			if initialized {
 				t.OnPacket(t.streamer.Context(), internal_type.RecordUserAudioPacket{ContextID: t.GetID(), Audio: payload.Audio})

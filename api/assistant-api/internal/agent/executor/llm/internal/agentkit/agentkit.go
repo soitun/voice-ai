@@ -486,6 +486,11 @@ func (e *agentkitExecutor) Execute(ctx context.Context, comm internal_type.Commu
 	}
 }
 
+// GetToolExecutor returns nil — the agentkit executor does not manage tools locally.
+func (e *agentkitExecutor) GetToolExecutor() internal_agent_executor.ToolExecutor {
+	return nil
+}
+
 // Close terminates the gRPC connection and waits for the listener goroutine to
 // exit (up to 5 s). Safe to call concurrently with listen().
 func (e *agentkitExecutor) Close(ctx context.Context) error {

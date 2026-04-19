@@ -90,8 +90,10 @@ func (t *WebSocketTransport) Start(ctx context.Context) error {
 	return nil
 }
 
-// readLoop continuously reads messages from the WebSocket connection
+// readLoop continuously reads messages from the WebSocket connection.
+// Exits on context cancellation, close, or persistent read errors.
 func (t *WebSocketTransport) readLoop() {
+	consecutiveErrors := 0
 	for {
 		select {
 		case <-t.readCtx.Done():
@@ -102,10 +104,14 @@ func (t *WebSocketTransport) readLoop() {
 				if t.closed.Load() {
 					return
 				}
-				// Connection error, try to handle gracefully
+				consecutiveErrors++
+				if consecutiveErrors > 10 {
+					return
+				}
+				time.Sleep(time.Duration(consecutiveErrors*100) * time.Millisecond)
 				continue
 			}
-
+			consecutiveErrors = 0
 			t.handleMessage(message)
 		}
 	}
@@ -167,7 +173,10 @@ func (t *WebSocketTransport) SendRequest(ctx context.Context, request transport.
 		return nil, fmt.Errorf("failed to marshal request: %w", err)
 	}
 
-	if err := t.conn.WriteMessage(websocket.TextMessage, data); err != nil {
+	t.mu.Lock()
+	err = t.conn.WriteMessage(websocket.TextMessage, data)
+	t.mu.Unlock()
+	if err != nil {
 		return nil, fmt.Errorf("failed to send request: %w", err)
 	}
 
@@ -191,7 +200,10 @@ func (t *WebSocketTransport) SendNotification(ctx context.Context, notification 
 		return fmt.Errorf("failed to marshal notification: %w", err)
 	}
 
-	if err := t.conn.WriteMessage(websocket.TextMessage, data); err != nil {
+	t.mu.Lock()
+	err = t.conn.WriteMessage(websocket.TextMessage, data)
+	t.mu.Unlock()
+	if err != nil {
 		return fmt.Errorf("failed to send notification: %w", err)
 	}
 
@@ -215,10 +227,13 @@ func (t *WebSocketTransport) Close() error {
 		t.readCancel()
 	}
 
-	if t.conn != nil {
-		// Send close message
-		t.conn.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
-		return t.conn.Close()
+	t.mu.Lock()
+	conn := t.conn
+	t.conn = nil
+	t.mu.Unlock()
+	if conn != nil {
+		conn.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
+		return conn.Close()
 	}
 
 	return nil

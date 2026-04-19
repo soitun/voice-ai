@@ -170,9 +170,15 @@ func (s *Streamer) Send(response internal_type.Stream) error {
 				s.Logger.Warnw("Transfer directive missing 'to' target")
 				return nil
 			}
+			toolID := s.extractArgString(data.GetArgs(), "tool_id")
+			contextID := s.extractArgString(data.GetArgs(), "context_id")
 			s.mu.RLock()
 			if s.session != nil {
 				s.session.SetMetadata(sip_infra.MetadataBridgeTransferTarget, to)
+				if toolID != "" {
+					s.session.SetMetadata("tool_id", toolID)
+					s.session.SetMetadata("tool_context_id", contextID)
+				}
 			}
 			s.mu.RUnlock()
 			s.EnterTransferMode(to)
@@ -263,6 +269,22 @@ func (s *Streamer) PushBridgeOperatorAudio(audio []byte) {
 	s.audio.PushOperatorAudio(audio)
 }
 
+func (s *Streamer) PushToolResult(contextID, toolID, name string, success bool, data map[string]interface{}) {
+	args := make(map[string]*anypb.Any)
+	if data != nil {
+		if converted, err := rapida_utils.InterfaceMapToAnyMap(data); err == nil {
+			args = converted
+		}
+	}
+	s.PushInput(&protos.ConversationToolResult{
+		Id:      contextID,
+		ToolId:  toolID,
+		Name:    name,
+		Success: success,
+		Args:    args,
+	})
+}
+
 func (s *Streamer) SetOnTransferInitiated(fn func(target string)) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -299,6 +321,10 @@ func (s *Streamer) Close() error {
 }
 
 func (s *Streamer) extractTransferTarget(args map[string]*anypb.Any) string {
+	return s.extractArgString(args, "to")
+}
+
+func (s *Streamer) extractArgString(args map[string]*anypb.Any, key string) string {
 	if args == nil {
 		return ""
 	}
@@ -306,8 +332,8 @@ func (s *Streamer) extractTransferTarget(args map[string]*anypb.Any) string {
 	if err != nil {
 		return ""
 	}
-	if to, ok := iface["to"].(string); ok {
-		return to
+	if v, ok := iface[key].(string); ok {
+		return v
 	}
 	return ""
 }

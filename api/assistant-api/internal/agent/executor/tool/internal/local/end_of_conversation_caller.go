@@ -19,12 +19,22 @@ type endOfConversationCaller struct {
 	toolCaller
 }
 
-func (afkTool *endOfConversationCaller) Call(ctx context.Context, contextID, toolId string, args map[string]interface{}, communication internal_type.Communication) internal_tool.ToolCallResult {
-	communication.OnPacket(ctx, internal_type.DirectivePacket{Directive: protos.ConversationDirective_END_CONVERSATION, Arguments: args, ContextID: contextID})
-	return internal_tool.Result("Disconnected successfully.", true)
+func (t *endOfConversationCaller) Call(ctx context.Context, contextID, toolId string, args map[string]interface{}, communication internal_type.Communication) {
+	communication.OnPacket(ctx, internal_type.LLMToolCallPacket{
+		ToolID: toolId, Name: t.Name(), ContextID: contextID, Arguments: args,
+	})
+	communication.OnPacket(ctx,
+		internal_type.DirectivePacket{
+			Directive: protos.ConversationDirective_END_CONVERSATION,
+			Arguments: map[string]interface{}{
+				"tool_id": toolId,
+			},
+			ContextID: contextID,
+		},
+	)
 }
 
-func NewEndOfConversationCaller(ctx context.Context, logger commons.Logger, toolOptions *internal_assistant_entity.AssistantTool, communcation internal_type.Communication,
+func NewEndOfConversationCaller(ctx context.Context, logger commons.Logger, toolOptions *internal_assistant_entity.AssistantTool, communication internal_type.Communication,
 ) (internal_tool.ToolCaller, error) {
 	return &endOfConversationCaller{
 		toolCaller: toolCaller{

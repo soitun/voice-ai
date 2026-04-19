@@ -276,6 +276,11 @@ func (e *websocketExecutor) Execute(ctx context.Context, comm internal_type.Comm
 	}
 }
 
+// GetToolExecutor returns nil — the websocket executor does not manage tools locally.
+func (e *websocketExecutor) GetToolExecutor() internal_agent_executor.ToolExecutor {
+	return nil
+}
+
 // Close terminates the WebSocket connection.
 func (e *websocketExecutor) Close(ctx context.Context) error {
 	e.writeMu.Lock()

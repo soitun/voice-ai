@@ -39,13 +39,13 @@ making it easier to maintain and evolve the codebase over time.
 
 type AssistantExecutor interface {
 
-	// init after creation to intilize all fields
+	// Initialize sets up all fields after creation
 	Initialize(ctx context.Context, communication internal_type.Communication, cfg *protos.ConversationInitialization) error
 
 	// name
 	Name() string
 
-	// when tigger a message
+	// Execute processes an incoming packet
 	Execute(ctx context.Context, communication internal_type.Communication, pctk internal_type.Packet) error
 
 	// disconnect
@@ -76,18 +76,10 @@ type ToolExecutor interface {
 	 */
 	GetFunctionDefinitions() []*protos.FunctionDefinition
 
-	/**
-	* ExecuteAll executes multiple tool calls and returns the results
-	*
-	* Parameters:
-	*   - calls: A slice of ToolCall pointers to be executed
-	*   - com: A Communication object for handling requests
-	*
-	* Returns:
-	*   - A slice of Content pointers containing the results of the tool calls
-	*   - An error if any occurred during execution
-	 */
-	ExecuteAll(ctx context.Context, contextID string, calls []*protos.ToolCall, communication internal_type.Communication) *protos.Message
+	// ExecuteAll resolves and executes each tool call. Each tool pushes its
+	// own packets (LLMToolCallPacket, LLMToolResultPacket, DirectivePacket)
+	// via communication.OnPacket. Execution is concurrent per tool.
+	ExecuteAll(ctx context.Context, contextID string, calls []*protos.ToolCall, communication internal_type.Communication)
 
 	// clean up resources
 	Close(ctx context.Context) error

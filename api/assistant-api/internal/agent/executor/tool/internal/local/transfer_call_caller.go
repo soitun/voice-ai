@@ -21,14 +21,20 @@ type transferCallCaller struct {
 	transferTo string
 }
 
-func (tc *transferCallCaller) Call(ctx context.Context, contextID, toolId string, args map[string]interface{}, communication internal_type.Communication) internal_tool.ToolCallResult {
-	args["to"] = tc.transferTo
-	communication.OnPacket(ctx, internal_type.DirectivePacket{
-		Directive: protos.ConversationDirective_TRANSFER_CONVERSATION,
-		Arguments: args,
-		ContextID: contextID,
+func (tc *transferCallCaller) Call(ctx context.Context, contextID, toolId string, args map[string]interface{}, communication internal_type.Communication) {
+	communication.OnPacket(ctx, internal_type.LLMToolCallPacket{
+		ToolID: toolId, Name: tc.Name(), ContextID: contextID, Arguments: args,
 	})
-	return internal_tool.Result(fmt.Sprintf("Call transferred to %s.", tc.transferTo), true)
+	communication.OnPacket(ctx, internal_type.DirectivePacket{
+			Directive: protos.ConversationDirective_TRANSFER_CONVERSATION,
+			Arguments: map[string]interface{}{
+				"to":         tc.transferTo,
+				"tool_id":    toolId,
+				"context_id": contextID,
+			},
+			ContextID: contextID,
+		},
+	)
 }
 
 func NewTransferCallCaller(ctx context.Context, logger commons.Logger, toolOptions *internal_assistant_entity.AssistantTool, communication internal_type.Communication,
@@ -38,6 +44,7 @@ func NewTransferCallCaller(ctx context.Context, logger commons.Logger, toolOptio
 	if err != nil {
 		return nil, fmt.Errorf("tool.transfer_to is required: %v", err)
 	}
+
 	return &transferCallCaller{
 		toolCaller: toolCaller{
 			logger:      logger,

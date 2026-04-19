@@ -221,7 +221,7 @@ func (m *noModeCommunication) GetMetadata() map[string]interface{} {
 // =============================================================================
 
 type mockToolExecutor struct {
-	executeFn   func(ctx context.Context, contextID string, calls []*protos.ToolCall, comm internal_type.Communication) *protos.Message
+	executeFn   func(ctx context.Context, contextID string, calls []*protos.ToolCall, comm internal_type.Communication)
 	closeCalled bool
 }
 
@@ -235,11 +235,10 @@ func (m *mockToolExecutor) GetFunctionDefinitions() []*protos.FunctionDefinition
 	return nil
 }
 
-func (m *mockToolExecutor) ExecuteAll(ctx context.Context, contextID string, calls []*protos.ToolCall, comm internal_type.Communication) *protos.Message {
+func (m *mockToolExecutor) ExecuteAll(ctx context.Context, contextID string, calls []*protos.ToolCall, comm internal_type.Communication) {
 	if m.executeFn != nil {
-		return m.executeFn(ctx, contextID, calls, comm)
+		m.executeFn(ctx, contextID, calls, comm)
 	}
-	return &protos.Message{Role: "tool"}
 }
 
 func (m *mockToolExecutor) Close(context.Context) error {
@@ -920,15 +919,8 @@ func TestHandleResponse_FinalWithoutToolCalls(t *testing.T) {
 
 func TestHandleResponse_FinalWithToolCalls(t *testing.T) {
 	e := newTestExecutor()
-	// Set stream to nil so chatWithHistory (inside executeToolCalls) fails
 	e.stream = nil
-	e.currentPacket = &internal_type.NormalizedUserTextPacket{ContextID: "req-4"} // match the response requestId so it's not dropped as stale
-	toolMsg := &protos.Message{Role: "tool"}
-	e.toolExecutor = &mockToolExecutor{
-		executeFn: func(_ context.Context, _ string, _ []*protos.ToolCall, _ internal_type.Communication) *protos.Message {
-			return toolMsg
-		},
-	}
+	e.currentPacket = &internal_type.NormalizedUserTextPacket{ContextID: "req-4"}
 
 	comm, collector := newTestComm()
 
@@ -940,7 +932,7 @@ func TestHandleResponse_FinalWithToolCalls(t *testing.T) {
 			Message: &protos.Message_Assistant{
 				Assistant: &protos.AssistantMessage{
 					Contents:  []string{"calling tool"},
-					ToolCalls: []*protos.ToolCall{{Id: "tc1", Type: "function"}},
+					ToolCalls: []*protos.ToolCall{{Id: "tc1", Type: "function", Function: &protos.FunctionCall{Name: "get_weather", Arguments: "{}"}}},
 				},
 			},
 		},
@@ -949,37 +941,31 @@ func TestHandleResponse_FinalWithToolCalls(t *testing.T) {
 	e.handleResponse(context.Background(), comm, resp)
 
 	pkts := collector.all()
-	// Should have: LLMResponseDonePacket, ConversationEventPacket(completed), AssistantMessageMetricPacket, LLMErrorPacket(tool call follow-up failed)
+	// Should have: LLMResponseDonePacket, ConversationEventPacket(completed), AssistantMessageMetricPacket, LLMToolCallPacket
 	require.GreaterOrEqual(t, len(pkts), 4)
 
 	done, ok := findPacket[internal_type.LLMResponseDonePacket](pkts)
 	require.True(t, ok)
 	assert.Equal(t, "calling tool", done.Text)
 
-	errPkts := findPackets[internal_type.LLMErrorPacket](pkts)
-	require.Len(t, errPkts, 1)
-	assert.Contains(t, errPkts[0].Error.Error(), "tool call follow-up failed")
+	// stageToolFollowUp now emits LLMToolCallPacket for the dispatch layer to handle
+	toolCallPkts := findPackets[internal_type.LLMToolCallPacket](pkts)
+	require.Len(t, toolCallPkts, 1)
+	assert.Equal(t, "tc1", toolCallPkts[0].ToolID)
+	assert.Equal(t, "get_weather", toolCallPkts[0].Name)
+	assert.Equal(t, "req-4", toolCallPkts[0].ContextID)
 
-	// Verify history: output + toolExecution were appended atomically
+	// Verify history: assistant message appended (tool result comes from dispatch layer later)
 	snapshot := historySnapshot(e)
-	require.Len(t, snapshot, 2, "assistant msg + tool result should be in history")
+	require.Len(t, snapshot, 1, "only assistant msg in history; tool result comes externally")
 }
 
-func TestHandleResponse_ToolFollowUpRetainsUserMessageContext(t *testing.T) {
+func TestHandleResponse_ToolFollowUpEmitsToolCallPacket(t *testing.T) {
 	e := newTestExecutor()
 	stream := newMockStream()
 	e.stream = stream
 	fr := mustLanguage(t, "fr")
-	e.toolExecutor = &mockToolExecutor{
-		executeFn: func(_ context.Context, _ string, _ []*protos.ToolCall, _ internal_type.Communication) *protos.Message {
-			return &protos.Message{
-				Role: "tool",
-				Message: &protos.Message_Tool{Tool: &protos.ToolMessage{
-					Tools: []*protos.ToolMessage_Tool{{Id: "tc1", Name: "fn", Content: "{}"}},
-				}},
-			}
-		},
-	}
+
 	comm, collector := newTestComm()
 	comm.metadata = map[string]interface{}{"client.language": "fr"}
 	comm.assistant.AssistantProviderModel.Template = gorm_types.PromptMap{
@@ -1007,7 +993,7 @@ func TestHandleResponse_ToolFollowUpRetainsUserMessageContext(t *testing.T) {
 			Message: &protos.Message_Assistant{
 				Assistant: &protos.AssistantMessage{
 					Contents:  []string{"tooling"},
-					ToolCalls: []*protos.ToolCall{{Id: "tc1", Type: "function"}},
+					ToolCalls: []*protos.ToolCall{{Id: "tc1", Type: "function", Function: &protos.FunctionCall{Name: "fn", Arguments: "{}"}}},
 				},
 			},
 		},
@@ -1015,13 +1001,17 @@ func TestHandleResponse_ToolFollowUpRetainsUserMessageContext(t *testing.T) {
 	}
 	e.handleResponse(context.Background(), comm, resp)
 
+	// Only the initial user message send — no follow-up chat (tool execution is external now)
 	stream.mu.Lock()
 	defer stream.mu.Unlock()
-	require.Len(t, stream.sendCalls, 2, "initial send + tool follow-up send")
-	require.NotNil(t, stream.sendCalls[0].GetConversations()[0].GetSystem())
-	require.NotNil(t, stream.sendCalls[1].GetConversations()[0].GetSystem())
-	assert.Equal(t, "lang="+fr.Name+" text=bonjour", stream.sendCalls[0].GetConversations()[0].GetSystem().GetContent())
-	assert.Equal(t, "lang="+fr.Name+" text=bonjour", stream.sendCalls[1].GetConversations()[0].GetSystem().GetContent(), "tool follow-up must preserve original user packet context")
+	require.Len(t, stream.sendCalls, 1, "only initial send; tool follow-up is external")
+
+	// Verify LLMToolCallPacket was emitted for dispatch layer
+	toolCallPkts := findPackets[internal_type.LLMToolCallPacket](collector.all())
+	require.Len(t, toolCallPkts, 1)
+	assert.Equal(t, "tc1", toolCallPkts[0].ToolID)
+	assert.Equal(t, "fn", toolCallPkts[0].Name)
+	assert.Equal(t, "req-tool", toolCallPkts[0].ContextID)
 
 	errPkts := findPackets[internal_type.LLMErrorPacket](collector.all())
 	assert.Empty(t, errPkts)
@@ -1700,16 +1690,7 @@ func TestE2E_ToolCallRoundTrip(t *testing.T) {
 	stream := newMockStream()
 	e.stream = stream
 	en := mustLanguage(t, "en")
-	e.toolExecutor = &mockToolExecutor{
-		executeFn: func(_ context.Context, _ string, _ []*protos.ToolCall, _ internal_type.Communication) *protos.Message {
-			return &protos.Message{
-				Role: "tool",
-				Message: &protos.Message_Tool{Tool: &protos.ToolMessage{
-					Tools: []*protos.ToolMessage_Tool{{Id: "tc1", Name: "get_weather", Content: `{"temp":"20C"}`}},
-				}},
-			}
-		},
-	}
+
 	comm, collector := newTestComm()
 
 	// 1. User asks about weather
@@ -1728,29 +1709,34 @@ func TestE2E_ToolCallRoundTrip(t *testing.T) {
 			Role: "assistant",
 			Message: &protos.Message_Assistant{Assistant: &protos.AssistantMessage{
 				Contents:  []string{"Let me check"},
-				ToolCalls: []*protos.ToolCall{{Id: "tc1", Type: "function", Function: &protos.FunctionCall{Name: "get_weather"}}},
+				ToolCalls: []*protos.ToolCall{{Id: "tc1", Type: "function", Function: &protos.FunctionCall{Name: "get_weather", Arguments: "{}"}}},
 			}},
 		},
 		Metrics: []*protos.Metric{{Name: "tokens", Value: "10"}},
 	})
 
-	// Verify: history has user + assistant(tool_call) + tool result
+	// Verify: history has user + assistant(tool_call) only — tool result comes externally
 	snap := historySnapshot(e)
-	require.Len(t, snap, 3, "user + assistant(tool_call) + tool result")
+	require.Len(t, snap, 2, "user + assistant(tool_call); tool result is external")
 	assert.Equal(t, "user", snap[0].Role)
 	assert.Equal(t, "assistant", snap[1].Role)
 	assert.Len(t, snap[1].GetAssistant().GetToolCalls(), 1)
-	assert.Equal(t, "tool", snap[2].Role)
 
-	// Verify: stream got 2 sends (initial + tool follow-up)
+	// Verify: stream got 1 send (initial only; tool follow-up is now external)
 	stream.mu.Lock()
-	assert.Len(t, stream.sendCalls, 2, "initial + tool follow-up")
+	assert.Len(t, stream.sendCalls, 1, "only initial send")
 	stream.mu.Unlock()
 
 	// Verify: done packet emitted despite tool calls
 	dones := findPackets[internal_type.LLMResponseDonePacket](collector.all())
 	require.Len(t, dones, 1)
 	assert.Equal(t, "Let me check", dones[0].Text)
+
+	// Verify: LLMToolCallPacket emitted for dispatch layer to handle
+	toolCallPkts := findPackets[internal_type.LLMToolCallPacket](collector.all())
+	require.Len(t, toolCallPkts, 1)
+	assert.Equal(t, "tc1", toolCallPkts[0].ToolID)
+	assert.Equal(t, "get_weather", toolCallPkts[0].Name)
 }
 
 func TestE2E_InterruptDuringStreaming(t *testing.T) {
@@ -2031,12 +2017,8 @@ func TestDeadlock_ToolCallWithConcurrentInterrupt(t *testing.T) {
 
 	toolDelay := make(chan struct{})
 	e.toolExecutor = &mockToolExecutor{
-		executeFn: func(_ context.Context, _ string, _ []*protos.ToolCall, _ internal_type.Communication) *protos.Message {
+		executeFn: func(_ context.Context, _ string, _ []*protos.ToolCall, _ internal_type.Communication) {
 			<-toolDelay // block until signaled
-			return &protos.Message{
-				Role:    "tool",
-				Message: &protos.Message_Tool{Tool: &protos.ToolMessage{Tools: []*protos.ToolMessage_Tool{{Id: "tc1", Name: "fn", Content: "{}"}}}},
-			}
 		},
 	}
 
@@ -2151,23 +2133,14 @@ func TestConsistency_SnapshotIsolation(t *testing.T) {
 	assert.Len(t, historySnapshot(e), 10)
 }
 
-// TestConsistency_ToolCallAtomicAppend verifies that the assistant message
-// and tool result are appended atomically — no interleaving.
-func TestConsistency_ToolCallAtomicAppend(t *testing.T) {
+// TestConsistency_ToolCallAppendsAssistantMessage verifies that the assistant
+// message with tool_calls is appended to history and LLMToolCallPacket is emitted.
+func TestConsistency_ToolCallAppendsAssistantMessage(t *testing.T) {
 	e := newTestExecutor()
 	stream := newMockStream()
 	e.stream = stream
-	comm, _ := newTestComm()
+	comm, collector := newTestComm()
 	en := mustLanguage(t, "en")
-
-	e.toolExecutor = &mockToolExecutor{
-		executeFn: func(_ context.Context, _ string, _ []*protos.ToolCall, _ internal_type.Communication) *protos.Message {
-			return &protos.Message{
-				Role:    "tool",
-				Message: &protos.Message_Tool{Tool: &protos.ToolMessage{Tools: []*protos.ToolMessage_Tool{{Id: "tc1", Name: "fn", Content: "ok"}}}},
-			}
-		},
-	}
 
 	_ = e.Execute(context.Background(), comm, internal_type.NormalizedUserTextPacket{
 		ContextID: "atomic-test",
@@ -2182,19 +2155,23 @@ func TestConsistency_ToolCallAtomicAppend(t *testing.T) {
 			Role: "assistant",
 			Message: &protos.Message_Assistant{Assistant: &protos.AssistantMessage{
 				Contents:  []string{"calling"},
-				ToolCalls: []*protos.ToolCall{{Id: "tc1", Type: "function"}},
+				ToolCalls: []*protos.ToolCall{{Id: "tc1", Type: "function", Function: &protos.FunctionCall{Name: "fn", Arguments: "{}"}}},
 			}},
 		},
 		Metrics: []*protos.Metric{{Name: "t", Value: "1"}},
 	})
 
 	snap := historySnapshot(e)
-	// Must have: user, assistant(tool_call), tool — and assistant+tool are adjacent.
-	require.Len(t, snap, 3)
+	// user + assistant(tool_call) — tool result comes from dispatch layer externally
+	require.Len(t, snap, 2)
 	assert.Equal(t, "user", snap[0].Role)
 	assert.Equal(t, "assistant", snap[1].Role)
 	assert.Len(t, snap[1].GetAssistant().GetToolCalls(), 1, "assistant must have tool_calls")
-	assert.Equal(t, "tool", snap[2].Role)
+
+	// Verify LLMToolCallPacket emitted
+	toolCallPkts := findPackets[internal_type.LLMToolCallPacket](collector.all())
+	require.Len(t, toolCallPkts, 1)
+	assert.Equal(t, "tc1", toolCallPkts[0].ToolID)
 }
 
 // TestConsistency_StaleContextDoesNotMutateHistory verifies that a response
@@ -2405,12 +2382,8 @@ func TestConcurrency_ToolCallWithConcurrentExecute(t *testing.T) {
 	comm, _ := newTestComm()
 
 	e.toolExecutor = &mockToolExecutor{
-		executeFn: func(_ context.Context, _ string, _ []*protos.ToolCall, _ internal_type.Communication) *protos.Message {
-			time.Sleep(time.Millisecond) // simulate tool latency
-			return &protos.Message{
-				Role:    "tool",
-				Message: &protos.Message_Tool{Tool: &protos.ToolMessage{Tools: []*protos.ToolMessage_Tool{{Id: "tc1", Name: "fn", Content: "ok"}}}},
-			}
+		executeFn: func(_ context.Context, _ string, _ []*protos.ToolCall, _ internal_type.Communication) {
+			time.Sleep(time.Millisecond)
 		},
 	}
 

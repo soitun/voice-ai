@@ -15,11 +15,16 @@ import (
 	"github.com/rapidaai/protos"
 )
 
+// toolExecutor abstracts the MCP client's Execute method for testability.
+type toolExecutor interface {
+	Execute(ctx context.Context, toolName string, args map[string]interface{}) (*ToolResponse, error)
+}
+
 // MCPToolCaller implements the ToolCaller interface for MCP server tools.
 // It forwards tool calls to the connected MCP server.
 type MCPToolCaller struct {
 	logger         commons.Logger
-	client         *Client
+	client         toolExecutor
 	toolId         uint64
 	toolName       string
 	toolDefinition *protos.FunctionDefinition
@@ -60,32 +65,45 @@ func (m *MCPToolCaller) ExecutionMethod() string {
 	return "mcp"
 }
 
-// Call executes the MCP tool with the given arguments and returns the response
+// Call executes the MCP tool with the given arguments and pushes the result via communication.OnPacket.
 func (m *MCPToolCaller) Call(
 	ctx context.Context,
 	contextID,
 	toolId string,
 	args map[string]interface{},
 	communication internal_type.Communication,
-) internal_tool.ToolCallResult {
+) {
+	communication.OnPacket(ctx, internal_type.LLMToolCallPacket{
+		ToolID: toolId, Name: m.toolName, ContextID: contextID, Arguments: args,
+	})
 	response, err := m.client.Execute(ctx, m.toolName, args)
 	if err != nil {
-		m.logger.Errorf("MCP tool execution failed for %s: %v", m.toolName, err)
-		return m.errorPacket(contextID, fmt.Sprintf("tool execution failed: %v", err))
+		communication.OnPacket(ctx, internal_type.LLMToolResultPacket{
+			ToolID: toolId, Name: m.toolName, ContextID: contextID,
+			Result: internal_tool.ErrorResult(fmt.Sprintf("tool execution failed: %v", err)),
+		})
+		return
+	}
+	if response == nil {
+		communication.OnPacket(ctx, internal_type.LLMToolResultPacket{
+			ToolID: toolId, Name: m.toolName, ContextID: contextID,
+			Result: internal_tool.ErrorResult("tool execution failed: empty response"),
+		})
+		return
 	}
 	if response.Error != "" {
-		return m.errorPacket(contextID, response.Error)
+		communication.OnPacket(ctx, internal_type.LLMToolResultPacket{
+			ToolID: toolId, Name: m.toolName, ContextID: contextID,
+			Result: internal_tool.ErrorResult(response.Error),
+		})
+		return
 	}
-	return internal_tool.JustResult(map[string]interface{}{
-		"status": "SUCCESS",
-		"result": response.Result,
+	communication.OnPacket(ctx, internal_type.LLMToolResultPacket{
+		ToolID: toolId, Name: m.toolName, ContextID: contextID,
+		Result: internal_tool.JustResult(map[string]interface{}{
+			"status": "SUCCESS",
+			"result": response.Result,
+		}),
 	})
-}
 
-// errorPacket creates an error response packet
-func (m *MCPToolCaller) errorPacket(contextId, errorMsg string) internal_tool.ToolCallResult {
-	return internal_tool.JustResult(map[string]interface{}{
-		"status": "FAIL",
-		"error":  errorMsg,
-	})
 }

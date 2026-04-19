@@ -117,6 +117,10 @@ const (
 	EventPeerConnected    = "peer_connected"
 	EventPeerDisconnected = "peer_disconnected"
 
+	// --- Tool ---
+	EventToolCallStarted   = "tool_call_started"
+	EventToolCallCompleted = "tool_call_completed"
+
 	// --- Recording ---
 	EventRecordingStarted = "recording_started"
 	EventRecordingStopped = "recording_stopped"
