@@ -12,60 +12,71 @@ from typing import ClassVar as _ClassVar, Optional as _Optional, Union as _Union
 
 DESCRIPTOR: _descriptor.FileDescriptor
 
+class ToolCallAction(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
+    __slots__ = ()
+    TOOL_CALL_ACTION_UNSPECIFIED: _ClassVar[ToolCallAction]
+    TOOL_CALL_ACTION_END_CONVERSATION: _ClassVar[ToolCallAction]
+    TOOL_CALL_ACTION_TRANSFER_CONVERSATION: _ClassVar[ToolCallAction]
+
 class StreamMode(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     __slots__ = ()
     STREAM_MODE_UNSPECIFIED: _ClassVar[StreamMode]
     STREAM_MODE_TEXT: _ClassVar[StreamMode]
     STREAM_MODE_AUDIO: _ClassVar[StreamMode]
     STREAM_MODE_BOTH: _ClassVar[StreamMode]
+TOOL_CALL_ACTION_UNSPECIFIED: ToolCallAction
+TOOL_CALL_ACTION_END_CONVERSATION: ToolCallAction
+TOOL_CALL_ACTION_TRANSFER_CONVERSATION: ToolCallAction
 STREAM_MODE_UNSPECIFIED: StreamMode
 STREAM_MODE_TEXT: StreamMode
 STREAM_MODE_AUDIO: StreamMode
 STREAM_MODE_BOTH: StreamMode
 
 class ConversationToolCall(_message.Message):
-    __slots__ = ("id", "toolId", "name", "args", "time")
+    __slots__ = ("id", "toolId", "name", "action", "args", "time")
     class ArgsEntry(_message.Message):
         __slots__ = ("key", "value")
         KEY_FIELD_NUMBER: _ClassVar[int]
         VALUE_FIELD_NUMBER: _ClassVar[int]
         key: str
-        value: _any_pb2.Any
-        def __init__(self, key: _Optional[str] = ..., value: _Optional[_Union[_any_pb2.Any, _Mapping]] = ...) -> None: ...
+        value: str
+        def __init__(self, key: _Optional[str] = ..., value: _Optional[str] = ...) -> None: ...
     ID_FIELD_NUMBER: _ClassVar[int]
     TOOLID_FIELD_NUMBER: _ClassVar[int]
     NAME_FIELD_NUMBER: _ClassVar[int]
+    ACTION_FIELD_NUMBER: _ClassVar[int]
     ARGS_FIELD_NUMBER: _ClassVar[int]
     TIME_FIELD_NUMBER: _ClassVar[int]
     id: str
     toolId: str
     name: str
-    args: _containers.MessageMap[str, _any_pb2.Any]
+    action: ToolCallAction
+    args: _containers.ScalarMap[str, str]
     time: _timestamp_pb2.Timestamp
-    def __init__(self, id: _Optional[str] = ..., toolId: _Optional[str] = ..., name: _Optional[str] = ..., args: _Optional[_Mapping[str, _any_pb2.Any]] = ..., time: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ...) -> None: ...
+    def __init__(self, id: _Optional[str] = ..., toolId: _Optional[str] = ..., name: _Optional[str] = ..., action: _Optional[_Union[ToolCallAction, str]] = ..., args: _Optional[_Mapping[str, str]] = ..., time: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ...) -> None: ...
 
-class ConversationToolResult(_message.Message):
-    __slots__ = ("id", "toolId", "name", "args", "success", "time")
-    class ArgsEntry(_message.Message):
+class ConversationToolCallResult(_message.Message):
+    __slots__ = ("id", "toolId", "name", "action", "result", "time")
+    class ResultEntry(_message.Message):
         __slots__ = ("key", "value")
         KEY_FIELD_NUMBER: _ClassVar[int]
         VALUE_FIELD_NUMBER: _ClassVar[int]
         key: str
-        value: _any_pb2.Any
-        def __init__(self, key: _Optional[str] = ..., value: _Optional[_Union[_any_pb2.Any, _Mapping]] = ...) -> None: ...
+        value: str
+        def __init__(self, key: _Optional[str] = ..., value: _Optional[str] = ...) -> None: ...
     ID_FIELD_NUMBER: _ClassVar[int]
     TOOLID_FIELD_NUMBER: _ClassVar[int]
     NAME_FIELD_NUMBER: _ClassVar[int]
-    ARGS_FIELD_NUMBER: _ClassVar[int]
-    SUCCESS_FIELD_NUMBER: _ClassVar[int]
+    ACTION_FIELD_NUMBER: _ClassVar[int]
+    RESULT_FIELD_NUMBER: _ClassVar[int]
     TIME_FIELD_NUMBER: _ClassVar[int]
     id: str
     toolId: str
     name: str
-    args: _containers.MessageMap[str, _any_pb2.Any]
-    success: bool
+    action: ToolCallAction
+    result: _containers.ScalarMap[str, str]
     time: _timestamp_pb2.Timestamp
-    def __init__(self, id: _Optional[str] = ..., toolId: _Optional[str] = ..., name: _Optional[str] = ..., args: _Optional[_Mapping[str, _any_pb2.Any]] = ..., success: bool = ..., time: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ...) -> None: ...
+    def __init__(self, id: _Optional[str] = ..., toolId: _Optional[str] = ..., name: _Optional[str] = ..., action: _Optional[_Union[ToolCallAction, str]] = ..., result: _Optional[_Mapping[str, str]] = ..., time: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ...) -> None: ...
 
 class ConversationMetric(_message.Message):
     __slots__ = ("assistantConversationId", "metrics")
@@ -83,32 +94,17 @@ class ConversationMetadata(_message.Message):
     metadata: _containers.RepeatedCompositeFieldContainer[_common_pb2.Metadata]
     def __init__(self, assistantConversationId: _Optional[int] = ..., metadata: _Optional[_Iterable[_Union[_common_pb2.Metadata, _Mapping]]] = ...) -> None: ...
 
-class ConversationDirective(_message.Message):
-    __slots__ = ("id", "type", "args", "time")
-    class DirectiveType(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
-        __slots__ = ()
-        DIRECTIVE_TYPE_UNSPECIFIED: _ClassVar[ConversationDirective.DirectiveType]
-        END_CONVERSATION: _ClassVar[ConversationDirective.DirectiveType]
-        TRANSFER_CONVERSATION: _ClassVar[ConversationDirective.DirectiveType]
-    DIRECTIVE_TYPE_UNSPECIFIED: ConversationDirective.DirectiveType
-    END_CONVERSATION: ConversationDirective.DirectiveType
-    TRANSFER_CONVERSATION: ConversationDirective.DirectiveType
-    class ArgsEntry(_message.Message):
-        __slots__ = ("key", "value")
-        KEY_FIELD_NUMBER: _ClassVar[int]
-        VALUE_FIELD_NUMBER: _ClassVar[int]
-        key: str
-        value: _any_pb2.Any
-        def __init__(self, key: _Optional[str] = ..., value: _Optional[_Union[_any_pb2.Any, _Mapping]] = ...) -> None: ...
-    ID_FIELD_NUMBER: _ClassVar[int]
-    TYPE_FIELD_NUMBER: _ClassVar[int]
-    ARGS_FIELD_NUMBER: _ClassVar[int]
-    TIME_FIELD_NUMBER: _ClassVar[int]
-    id: str
-    type: ConversationDirective.DirectiveType
-    args: _containers.MessageMap[str, _any_pb2.Any]
-    time: _timestamp_pb2.Timestamp
-    def __init__(self, id: _Optional[str] = ..., type: _Optional[_Union[ConversationDirective.DirectiveType, str]] = ..., args: _Optional[_Mapping[str, _any_pb2.Any]] = ..., time: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ...) -> None: ...
+class ConversationBridgeUserAudio(_message.Message):
+    __slots__ = ("audio",)
+    AUDIO_FIELD_NUMBER: _ClassVar[int]
+    audio: bytes
+    def __init__(self, audio: _Optional[bytes] = ...) -> None: ...
+
+class ConversationBridgeOperatorAudio(_message.Message):
+    __slots__ = ("audio",)
+    AUDIO_FIELD_NUMBER: _ClassVar[int]
+    audio: bytes
+    def __init__(self, audio: _Optional[bytes] = ...) -> None: ...
 
 class ConversationError(_message.Message):
     __slots__ = ("assistantConversationId", "message", "details")
@@ -117,15 +113,15 @@ class ConversationError(_message.Message):
         KEY_FIELD_NUMBER: _ClassVar[int]
         VALUE_FIELD_NUMBER: _ClassVar[int]
         key: str
-        value: _any_pb2.Any
-        def __init__(self, key: _Optional[str] = ..., value: _Optional[_Union[_any_pb2.Any, _Mapping]] = ...) -> None: ...
+        value: str
+        def __init__(self, key: _Optional[str] = ..., value: _Optional[str] = ...) -> None: ...
     ASSISTANTCONVERSATIONID_FIELD_NUMBER: _ClassVar[int]
     MESSAGE_FIELD_NUMBER: _ClassVar[int]
     DETAILS_FIELD_NUMBER: _ClassVar[int]
     assistantConversationId: int
     message: str
-    details: _containers.MessageMap[str, _any_pb2.Any]
-    def __init__(self, assistantConversationId: _Optional[int] = ..., message: _Optional[str] = ..., details: _Optional[_Mapping[str, _any_pb2.Any]] = ...) -> None: ...
+    details: _containers.ScalarMap[str, str]
+    def __init__(self, assistantConversationId: _Optional[int] = ..., message: _Optional[str] = ..., details: _Optional[_Mapping[str, str]] = ...) -> None: ...
 
 class ConversationEvent(_message.Message):
     __slots__ = ("id", "name", "data", "time")
@@ -316,23 +312,29 @@ class ConversationModeChange(_message.Message):
     def __init__(self, mode: _Optional[_Union[ConversationModeChange.ModeType, str]] = ..., time: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ...) -> None: ...
 
 class AssistantTalkRequest(_message.Message):
-    __slots__ = ("initialization", "configuration", "message", "metadata", "metric", "disconnection")
+    __slots__ = ("initialization", "configuration", "message", "metadata", "metric", "disconnection", "toolCallResult", "bridgeOperatorAudio", "bridgeUserAudio")
     INITIALIZATION_FIELD_NUMBER: _ClassVar[int]
     CONFIGURATION_FIELD_NUMBER: _ClassVar[int]
     MESSAGE_FIELD_NUMBER: _ClassVar[int]
     METADATA_FIELD_NUMBER: _ClassVar[int]
     METRIC_FIELD_NUMBER: _ClassVar[int]
     DISCONNECTION_FIELD_NUMBER: _ClassVar[int]
+    TOOLCALLRESULT_FIELD_NUMBER: _ClassVar[int]
+    BRIDGEOPERATORAUDIO_FIELD_NUMBER: _ClassVar[int]
+    BRIDGEUSERAUDIO_FIELD_NUMBER: _ClassVar[int]
     initialization: ConversationInitialization
     configuration: ConversationConfiguration
     message: ConversationUserMessage
     metadata: ConversationMetadata
     metric: ConversationMetric
     disconnection: ConversationDisconnection
-    def __init__(self, initialization: _Optional[_Union[ConversationInitialization, _Mapping]] = ..., configuration: _Optional[_Union[ConversationConfiguration, _Mapping]] = ..., message: _Optional[_Union[ConversationUserMessage, _Mapping]] = ..., metadata: _Optional[_Union[ConversationMetadata, _Mapping]] = ..., metric: _Optional[_Union[ConversationMetric, _Mapping]] = ..., disconnection: _Optional[_Union[ConversationDisconnection, _Mapping]] = ...) -> None: ...
+    toolCallResult: ConversationToolCallResult
+    bridgeOperatorAudio: ConversationBridgeOperatorAudio
+    bridgeUserAudio: ConversationBridgeUserAudio
+    def __init__(self, initialization: _Optional[_Union[ConversationInitialization, _Mapping]] = ..., configuration: _Optional[_Union[ConversationConfiguration, _Mapping]] = ..., message: _Optional[_Union[ConversationUserMessage, _Mapping]] = ..., metadata: _Optional[_Union[ConversationMetadata, _Mapping]] = ..., metric: _Optional[_Union[ConversationMetric, _Mapping]] = ..., disconnection: _Optional[_Union[ConversationDisconnection, _Mapping]] = ..., toolCallResult: _Optional[_Union[ConversationToolCallResult, _Mapping]] = ..., bridgeOperatorAudio: _Optional[_Union[ConversationBridgeOperatorAudio, _Mapping]] = ..., bridgeUserAudio: _Optional[_Union[ConversationBridgeUserAudio, _Mapping]] = ...) -> None: ...
 
 class AssistantTalkResponse(_message.Message):
-    __slots__ = ("code", "success", "initialization", "configuration", "interruption", "user", "assistant", "toolCall", "toolResult", "directive", "metadata", "metric", "disconnection", "event", "error")
+    __slots__ = ("code", "success", "initialization", "configuration", "interruption", "user", "assistant", "toolCall", "toolCallResult", "metadata", "metric", "disconnection", "event", "error")
     CODE_FIELD_NUMBER: _ClassVar[int]
     SUCCESS_FIELD_NUMBER: _ClassVar[int]
     INITIALIZATION_FIELD_NUMBER: _ClassVar[int]
@@ -341,8 +343,7 @@ class AssistantTalkResponse(_message.Message):
     USER_FIELD_NUMBER: _ClassVar[int]
     ASSISTANT_FIELD_NUMBER: _ClassVar[int]
     TOOLCALL_FIELD_NUMBER: _ClassVar[int]
-    TOOLRESULT_FIELD_NUMBER: _ClassVar[int]
-    DIRECTIVE_FIELD_NUMBER: _ClassVar[int]
+    TOOLCALLRESULT_FIELD_NUMBER: _ClassVar[int]
     METADATA_FIELD_NUMBER: _ClassVar[int]
     METRIC_FIELD_NUMBER: _ClassVar[int]
     DISCONNECTION_FIELD_NUMBER: _ClassVar[int]
@@ -356,14 +357,13 @@ class AssistantTalkResponse(_message.Message):
     user: ConversationUserMessage
     assistant: ConversationAssistantMessage
     toolCall: ConversationToolCall
-    toolResult: ConversationToolResult
-    directive: ConversationDirective
+    toolCallResult: ConversationToolCallResult
     metadata: ConversationMetadata
     metric: ConversationMetric
     disconnection: ConversationDisconnection
     event: ConversationEvent
     error: ConversationError
-    def __init__(self, code: _Optional[int] = ..., success: bool = ..., initialization: _Optional[_Union[ConversationInitialization, _Mapping]] = ..., configuration: _Optional[_Union[ConversationConfiguration, _Mapping]] = ..., interruption: _Optional[_Union[ConversationInterruption, _Mapping]] = ..., user: _Optional[_Union[ConversationUserMessage, _Mapping]] = ..., assistant: _Optional[_Union[ConversationAssistantMessage, _Mapping]] = ..., toolCall: _Optional[_Union[ConversationToolCall, _Mapping]] = ..., toolResult: _Optional[_Union[ConversationToolResult, _Mapping]] = ..., directive: _Optional[_Union[ConversationDirective, _Mapping]] = ..., metadata: _Optional[_Union[ConversationMetadata, _Mapping]] = ..., metric: _Optional[_Union[ConversationMetric, _Mapping]] = ..., disconnection: _Optional[_Union[ConversationDisconnection, _Mapping]] = ..., event: _Optional[_Union[ConversationEvent, _Mapping]] = ..., error: _Optional[_Union[ConversationError, _Mapping]] = ...) -> None: ...
+    def __init__(self, code: _Optional[int] = ..., success: bool = ..., initialization: _Optional[_Union[ConversationInitialization, _Mapping]] = ..., configuration: _Optional[_Union[ConversationConfiguration, _Mapping]] = ..., interruption: _Optional[_Union[ConversationInterruption, _Mapping]] = ..., user: _Optional[_Union[ConversationUserMessage, _Mapping]] = ..., assistant: _Optional[_Union[ConversationAssistantMessage, _Mapping]] = ..., toolCall: _Optional[_Union[ConversationToolCall, _Mapping]] = ..., toolCallResult: _Optional[_Union[ConversationToolCallResult, _Mapping]] = ..., metadata: _Optional[_Union[ConversationMetadata, _Mapping]] = ..., metric: _Optional[_Union[ConversationMetric, _Mapping]] = ..., disconnection: _Optional[_Union[ConversationDisconnection, _Mapping]] = ..., event: _Optional[_Union[ConversationEvent, _Mapping]] = ..., error: _Optional[_Union[ConversationError, _Mapping]] = ...) -> None: ...
 
 class CreateMessageMetricRequest(_message.Message):
     __slots__ = ("assistantId", "assistantConversationId", "messageId", "metrics")

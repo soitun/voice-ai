@@ -161,6 +161,13 @@ func (tws *twilioWebsocketStreamer) Send(response internal_type.Stream) error {
 				client, err := twilioClient(tws.VaultCredential())
 				if err != nil {
 					tws.Logger.Errorf("Error creating Twilio client:", err)
+					tws.Input(&protos.ConversationToolCallResult{
+						Id:     data.GetId(),
+						ToolId: data.GetToolId(),
+						Name:   data.GetName(),
+						Action: data.GetAction(),
+						Result: map[string]string{"status": "failed", "reason": fmt.Sprintf("twilio client error: %v", err)},
+					})
 					tws.Cancel()
 					return nil
 				}
@@ -168,10 +175,24 @@ func (tws *twilioWebsocketStreamer) Send(response internal_type.Stream) error {
 				params.SetStatus("completed")
 				if _, err := client.Api.UpdateCall(tws.GetConversationUuid(), params); err != nil {
 					tws.Logger.Errorf("Error ending Twilio call:", err)
+					tws.Input(&protos.ConversationToolCallResult{
+						Id:     data.GetId(),
+						ToolId: data.GetToolId(),
+						Name:   data.GetName(),
+						Action: data.GetAction(),
+						Result: map[string]string{"status": "failed", "reason": fmt.Sprintf("end call failed: %v", err)},
+					})
 					tws.Cancel()
 					return nil
 				}
 			}
+			tws.Input(&protos.ConversationToolCallResult{
+				Id:     data.GetId(),
+				ToolId: data.GetToolId(),
+				Name:   data.GetName(),
+				Action: data.GetAction(),
+				Result: map[string]string{"status": "completed"},
+			})
 			tws.Cancel()
 		case protos.ToolCallAction_TOOL_CALL_ACTION_TRANSFER_CONVERSATION:
 			to := data.GetArgs()["to"]

@@ -223,6 +223,13 @@ func (aws *asteriskWebsocketStreamer) Send(response internal_type.Stream) error 
 					}
 				}
 			}
+			aws.Input(&protos.ConversationToolCallResult{
+				Id:     data.GetId(),
+				ToolId: data.GetToolId(),
+				Name:   data.GetName(),
+				Action: data.GetAction(),
+				Result: map[string]string{"status": "completed"},
+			})
 			aws.Cancel()
 		case protos.ToolCallAction_TOOL_CALL_ACTION_TRANSFER_CONVERSATION:
 			to := data.GetArgs()["to"]

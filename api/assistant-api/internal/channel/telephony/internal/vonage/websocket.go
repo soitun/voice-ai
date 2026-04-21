@@ -9,6 +9,7 @@ package internal_vonage_telephony
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"sync"
 	"sync/atomic"
 
@@ -149,25 +150,38 @@ func (vng *vonageWebsocketStreamer) Send(response internal_type.Stream) error {
 				cAuth, err := vonageAuth(vng.VaultCredential())
 				if err != nil {
 					vng.Logger.Errorf("Error creating Vonage client:", err)
+					vng.Input(&protos.ConversationToolCallResult{
+						Id: data.GetId(), ToolId: data.GetToolId(), Name: data.GetName(), Action: data.GetAction(),
+						Result: map[string]string{"status": "failed", "reason": fmt.Sprintf("vonage client error: %v", err)},
+					})
 					vng.Cancel()
 					return nil
 				}
 				if _, _, err := vonage.NewVoiceClient(cAuth).Hangup(vng.GetConversationUuid()); err != nil {
 					vng.Logger.Errorf("Error ending Vonage call:", err)
+					vng.Input(&protos.ConversationToolCallResult{
+						Id: data.GetId(), ToolId: data.GetToolId(), Name: data.GetName(), Action: data.GetAction(),
+						Result: map[string]string{"status": "failed", "reason": fmt.Sprintf("hangup failed: %v", err)},
+					})
 					vng.Cancel()
 					return nil
 				}
 			}
+			vng.Input(&protos.ConversationToolCallResult{
+				Id:     data.GetId(),
+				ToolId: data.GetToolId(),
+				Name:   data.GetName(),
+				Action: data.GetAction(),
+				Result: map[string]string{"status": "completed"},
+			})
 			vng.Cancel()
 		case protos.ToolCallAction_TOOL_CALL_ACTION_TRANSFER_CONVERSATION:
 			vng.Logger.Warnw("Vonage call transfer not yet implemented", "to", data.GetArgs()["to"])
-			if data.GetToolId() != "" {
-				vng.Input(&protos.ConversationToolCallResult{
-					Id:     data.GetId(),
-					ToolId: data.GetToolId(), Name: data.GetName(), Action: data.GetAction(),
-					Result: map[string]string{"status": "failed", "reason": "transfer not supported for Vonage"},
-				})
-			}
+			vng.Input(&protos.ConversationToolCallResult{
+				Id:     data.GetId(),
+				ToolId: data.GetToolId(), Name: data.GetName(), Action: data.GetAction(),
+				Result: map[string]string{"status": "failed", "reason": "transfer not supported for Vonage"},
+			})
 		}
 	}
 	return nil

@@ -169,6 +169,9 @@ func (s *Streamer) Send(response internal_type.Stream) error {
 			to := data.GetArgs()["to"]
 			if to == "" {
 				s.Logger.Warnw("Transfer tool call missing 'to' target")
+				s.PushToolCallResult(data.GetId(), data.GetToolId(), data.GetName(), data.GetAction(), map[string]string{
+					"status": "failed", "reason": "missing transfer target",
+				})
 				return nil
 			}
 			s.mu.RLock()

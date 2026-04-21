@@ -797,7 +797,8 @@ func (s *webrtcStreamer) Send(response internal_type.Stream) error {
 		s.Output(data)
 	case *protos.ConversationToolCall:
 		s.Output(data)
-		if data.GetAction() == protos.ToolCallAction_TOOL_CALL_ACTION_END_CONVERSATION {
+		switch data.GetAction() {
+		case protos.ToolCallAction_TOOL_CALL_ACTION_END_CONVERSATION:
 			s.Input(&protos.ConversationToolCallResult{
 				Id:     data.GetId(),
 				ToolId: data.GetToolId(),
@@ -808,6 +809,14 @@ func (s *webrtcStreamer) Send(response internal_type.Stream) error {
 			if disc := s.Disconnect(protos.ConversationDisconnection_DISCONNECTION_TYPE_TOOL); disc != nil {
 				s.Input(disc)
 			}
+		case protos.ToolCallAction_TOOL_CALL_ACTION_TRANSFER_CONVERSATION:
+			s.Input(&protos.ConversationToolCallResult{
+				Id:     data.GetId(),
+				ToolId: data.GetToolId(),
+				Name:   data.GetName(),
+				Action: data.GetAction(),
+				Result: map[string]string{"status": "failed", "reason": "transfer not supported for WebRTC"},
+			})
 		}
 	case *protos.ConversationError:
 		s.Output(data)

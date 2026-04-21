@@ -219,17 +219,22 @@ func (as *Streamer) Send(response internal_type.Stream) error {
 	case *protos.ConversationToolCall:
 		switch data.GetAction() {
 		case protos.ToolCallAction_TOOL_CALL_ACTION_END_CONVERSATION:
+			as.Input(&protos.ConversationToolCallResult{
+				Id:     data.GetId(),
+				ToolId: data.GetToolId(),
+				Name:   data.GetName(),
+				Action: data.GetAction(),
+				Result: map[string]string{"status": "completed"},
+			})
 			_ = as.writeFrame(FrameTypeHangup, nil)
 			return as.close()
 		case protos.ToolCallAction_TOOL_CALL_ACTION_TRANSFER_CONVERSATION:
 			as.Logger.Warnw("Call transfer not supported for AudioSocket")
-			if data.GetToolId() != "" {
-				as.Input(&protos.ConversationToolCallResult{
-					Id:     data.GetId(),
-					ToolId: data.GetToolId(), Name: data.GetName(), Action: data.GetAction(),
-					Result: map[string]string{"status": "failed", "reason": "transfer not supported for AudioSocket"},
-				})
-			}
+			as.Input(&protos.ConversationToolCallResult{
+				Id:     data.GetId(),
+				ToolId: data.GetToolId(), Name: data.GetName(), Action: data.GetAction(),
+				Result: map[string]string{"status": "failed", "reason": "transfer not supported for AudioSocket"},
+			})
 		}
 	}
 

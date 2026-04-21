@@ -12,7 +12,11 @@ import (
 	"testing"
 
 	"github.com/gin-gonic/gin"
+	"github.com/gorilla/websocket"
+	callcontext "github.com/rapidaai/api/assistant-api/internal/callcontext"
+	internal_telephony_base "github.com/rapidaai/api/assistant-api/internal/channel/telephony/internal/base"
 	internal_type "github.com/rapidaai/api/assistant-api/internal/type"
+	"github.com/rapidaai/pkg/commons"
 	"github.com/rapidaai/protos"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -206,6 +210,161 @@ func TestReceiveCall(t *testing.T) {
 				tt.checkCallInfo(t, callInfo)
 			}
 		})
+	}
+}
+
+// TestSend_EndConversation_PushesToolCallResult verifies that the END_CONVERSATION
+// tool-call action pushes a ConversationToolCallResult with status "completed"
+// into the critical channel before cancelling the streamer.
+func TestSend_EndConversation_PushesToolCallResult(t *testing.T) {
+	// Set up a minimal WebSocket server so the streamer has a non-nil connection.
+	upgrader := websocket.Upgrader{}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		conn, err := upgrader.Upgrade(w, r, nil)
+		if err != nil {
+			t.Logf("test server upgrade error: %v", err)
+			return
+		}
+		defer conn.Close()
+		// Keep the server alive until the test finishes.
+		for {
+			if _, _, err := conn.ReadMessage(); err != nil {
+				return
+			}
+		}
+	}))
+	defer srv.Close()
+
+	// Dial the test server.
+	wsURL := "ws" + srv.URL[len("http"):]
+	conn, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	// Build a vonageWebsocketStreamer with empty ChannelUUID so the Vonage API
+	// call is skipped (the if-block on GetConversationUuid() != "" is false).
+	cc := &callcontext.CallContext{} // empty ChannelUUID
+	logger, _ := commons.NewApplicationLogger()
+	vng := &vonageWebsocketStreamer{
+		BaseTelephonyStreamer: internal_telephony_base.NewBaseTelephonyStreamer(logger, cc, nil),
+		connection:            conn,
+	}
+
+	toolCall := &protos.ConversationToolCall{
+		Id:     "tc-123",
+		ToolId: "tool-456",
+		Name:   "end_conversation",
+		Action: protos.ToolCallAction_TOOL_CALL_ACTION_END_CONVERSATION,
+	}
+
+	err = vng.Send(toolCall)
+	assert.NoError(t, err)
+
+	// The Input call routes ConversationToolCallResult to CriticalCh.
+	select {
+	case msg := <-vng.CriticalCh:
+		result, ok := msg.(*protos.ConversationToolCallResult)
+		require.True(t, ok, "expected *protos.ConversationToolCallResult, got %T", msg)
+		assert.Equal(t, "tc-123", result.GetId())
+		assert.Equal(t, "tool-456", result.GetToolId())
+		assert.Equal(t, "end_conversation", result.GetName())
+		assert.Equal(t, protos.ToolCallAction_TOOL_CALL_ACTION_END_CONVERSATION, result.GetAction())
+		assert.Equal(t, map[string]string{"status": "completed"}, result.GetResult())
+	default:
+		t.Fatal("expected a ConversationToolCallResult on CriticalCh, but channel was empty")
+	}
+
+	// Verify the streamer was cancelled.
+	select {
+	case <-vng.Ctx.Done():
+		// expected
+	default:
+		t.Fatal("expected streamer context to be cancelled after END_CONVERSATION")
+	}
+}
+
+// TestSend_EndConversation_NilConnection verifies that Send returns early
+// without panicking when the connection is nil (e.g. already closed).
+func TestSend_EndConversation_NilConnection(t *testing.T) {
+	cc := &callcontext.CallContext{}
+	logger, _ := commons.NewApplicationLogger()
+	vng := &vonageWebsocketStreamer{
+		BaseTelephonyStreamer: internal_telephony_base.NewBaseTelephonyStreamer(logger, cc, nil),
+		connection:            nil,
+	}
+
+	toolCall := &protos.ConversationToolCall{
+		Id:     "tc-999",
+		ToolId: "tool-888",
+		Name:   "end_conversation",
+		Action: protos.ToolCallAction_TOOL_CALL_ACTION_END_CONVERSATION,
+	}
+
+	err := vng.Send(toolCall)
+	assert.NoError(t, err)
+
+	// CriticalCh should be empty since Send returned early.
+	select {
+	case msg := <-vng.CriticalCh:
+		t.Fatalf("expected empty CriticalCh, but got %T", msg)
+	default:
+		// expected
+	}
+}
+
+// TestSend_TransferConversation_PushesFailedResult verifies that the
+// TRANSFER_CONVERSATION tool-call action pushes a "failed" result.
+func TestSend_TransferConversation_PushesFailedResult(t *testing.T) {
+	upgrader := websocket.Upgrader{}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		conn, err := upgrader.Upgrade(w, r, nil)
+		if err != nil {
+			return
+		}
+		defer conn.Close()
+		for {
+			if _, _, err := conn.ReadMessage(); err != nil {
+				return
+			}
+		}
+	}))
+	defer srv.Close()
+
+	wsURL := "ws" + srv.URL[len("http"):]
+	conn, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	cc := &callcontext.CallContext{}
+	logger, _ := commons.NewApplicationLogger()
+	vng := &vonageWebsocketStreamer{
+		BaseTelephonyStreamer: internal_telephony_base.NewBaseTelephonyStreamer(logger, cc, nil),
+		connection:            conn,
+	}
+
+	toolCall := &protos.ConversationToolCall{
+		Id:     "tc-transfer",
+		ToolId: "tool-xfer",
+		Name:   "transfer_call",
+		Action: protos.ToolCallAction_TOOL_CALL_ACTION_TRANSFER_CONVERSATION,
+		Args:   map[string]string{"to": "+15551234567"},
+	}
+
+	err = vng.Send(toolCall)
+	assert.NoError(t, err)
+
+	select {
+	case msg := <-vng.CriticalCh:
+		result, ok := msg.(*protos.ConversationToolCallResult)
+		require.True(t, ok, "expected *protos.ConversationToolCallResult, got %T", msg)
+		assert.Equal(t, "tc-transfer", result.GetId())
+		assert.Equal(t, "tool-xfer", result.GetToolId())
+		assert.Equal(t, "transfer_call", result.GetName())
+		assert.Equal(t, protos.ToolCallAction_TOOL_CALL_ACTION_TRANSFER_CONVERSATION, result.GetAction())
+		assert.Equal(t, "failed", result.GetResult()["status"])
+		assert.Contains(t, result.GetResult()["reason"], "transfer not supported for Vonage")
+	default:
+		t.Fatal("expected a ConversationToolCallResult on CriticalCh, but channel was empty")
 	}
 }
 
