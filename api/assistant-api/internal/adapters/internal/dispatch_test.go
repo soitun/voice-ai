@@ -1097,7 +1097,7 @@ func TestHandleLLMError_EmitsMetricAndTransitions(t *testing.T) {
 	r.interactionState = LLMGenerating
 	r.assistantConversation = &internal_conversation_entity.AssistantConversation{Audited: gorm_model.Audited{Id: 1}}
 
-	r.handleLLMError(context.Background(), internal_type.LLMErrorPacket{
+	r.handleErrorPacket(context.Background(), internal_type.LLMErrorPacket{
 		ContextID: "ctx-1",
 		Error:     assert.AnError,
 	})

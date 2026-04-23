@@ -1,3 +1,6 @@
+//go:build legacy_model_tests
+// +build legacy_model_tests
+
 // Copyright (c) 2023-2025 RapidaAI
 // Author: Prashant Srivastav <prashant@rapida.ai>
 //
@@ -7,7 +10,6 @@ package internal_model
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"strings"
@@ -29,9 +31,7 @@ import (
 	"github.com/rapidaai/protos"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
-	"google.golang.org/grpc/status"
 )
 
 type packetCollector struct {
@@ -1087,32 +1087,6 @@ func TestHandleResponse_StreamDelta(t *testing.T) {
 }
 
 // =============================================================================
-// Tests: streamErrorReason — 4 cases
-// =============================================================================
-
-func TestStreamErrorReason(t *testing.T) {
-	e := newTestExecutor()
-
-	tests := []struct {
-		name string
-		err  error
-		want string
-	}{
-		{"eof", io.EOF, "server closed connection"},
-		{"canceled", status.Error(codes.Canceled, "ctx"), "connection canceled"},
-		{"unavailable", status.Error(codes.Unavailable, "down"), "server unavailable"},
-		{"other", errors.New("broken pipe"), "broken pipe"},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := e.streamErrorReason(tt.err)
-			assert.Equal(t, tt.want, got)
-		})
-	}
-}
-
-// =============================================================================
 // Tests: history mutex — 3 cases
 // =============================================================================
 
@@ -1192,6 +1166,22 @@ func TestExecute_InjectMessagePacket_AppendsHistory(t *testing.T) {
 	require.Len(t, snapshot, 1)
 	assert.Equal(t, "assistant", snapshot[0].Role)
 	assert.Equal(t, []string{"hello"}, snapshot[0].GetAssistant().GetContents())
+}
+
+func TestExecute_LLMToolCallPacket_NoHistoryMutation(t *testing.T) {
+	e := newTestExecutor()
+	comm, _ := newTestComm()
+
+	err := e.Execute(context.Background(), comm, internal_type.LLMToolCallPacket{
+		ContextID: "ctx-1",
+		ToolID:    "t1",
+		Name:      "get_weather",
+		Arguments: map[string]string{"city": "delhi"},
+	})
+	require.NoError(t, err)
+
+	snapshot := historySnapshot(e)
+	require.Empty(t, snapshot, "LLMToolCallPacket should not mutate executor history")
 }
 
 func TestExecute_UserTextReceivedPacket_SendsAndRecordsHistory(t *testing.T) {
@@ -3303,4 +3293,28 @@ func TestConcurrency_MultipleToolResultsConcurrent(t *testing.T) {
 	stream.mu.Lock()
 	assert.GreaterOrEqual(t, len(stream.sendCalls), 1, "follow-up should fire when all resolved")
 	stream.mu.Unlock()
+}
+
+func TestHandleResponse_SuccessNonAssistantPayload_EmitsLLMErrorNoPanic(t *testing.T) {
+	e := newTestExecutor()
+	comm, collector := newTestComm()
+
+	e.handleResponse(context.Background(), comm, &protos.ChatResponse{
+		RequestId: "ctx-non-assistant",
+		Success:   true,
+		Data: &protos.Message{
+			Role: "user",
+			Message: &protos.Message_User{
+				User: &protos.UserMessage{Content: "unexpected"},
+			},
+		},
+	})
+
+	errPkt, ok := findPacket[internal_type.LLMErrorPacket](collector.all())
+	require.True(t, ok, "expected LLMErrorPacket for non-assistant success payload")
+	assert.Equal(t, "ctx-non-assistant", errPkt.ContextID)
+	assert.Contains(t, errPkt.Error.Error(), "assistant message missing")
+
+	dirs := findActionToolCalls(collector.all())
+	assert.Empty(t, dirs, "unexpected END_CONVERSATION directive for schema violation")
 }

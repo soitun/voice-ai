@@ -11,47 +11,14 @@ import (
 	"time"
 
 	internal_type "github.com/rapidaai/api/assistant-api/internal/type"
+	"github.com/rapidaai/pkg/commons"
 	"github.com/rapidaai/protos"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"go.uber.org/zap/zapcore"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 )
-
-// =============================================================================
-// Mock: nopLogger — satisfies commons.Logger with no-ops
-// =============================================================================
-
-type nopLogger struct{}
-
-func (nopLogger) Level() zapcore.Level                           { return zapcore.DebugLevel }
-func (nopLogger) Debug(...interface{})                           {}
-func (nopLogger) Debugf(string, ...interface{})                  {}
-func (nopLogger) Debugw(string, ...interface{})                  {}
-func (nopLogger) Info(...interface{})                            {}
-func (nopLogger) Infof(string, ...interface{})                   {}
-func (nopLogger) Infow(string, ...interface{})                   {}
-func (nopLogger) Warn(...interface{})                            {}
-func (nopLogger) Warnf(string, ...interface{})                   {}
-func (nopLogger) Warnw(string, ...interface{})                   {}
-func (nopLogger) Error(...interface{})                           {}
-func (nopLogger) Errorf(string, ...interface{})                  {}
-func (nopLogger) Errorw(string, ...interface{})                  {}
-func (nopLogger) DPanic(...interface{})                          {}
-func (nopLogger) DPanicf(string, ...interface{})                 {}
-func (nopLogger) Panic(...interface{})                           {}
-func (nopLogger) Panicf(string, ...interface{})                  {}
-func (nopLogger) Fatal(...interface{})                           {}
-func (nopLogger) Fatalf(string, ...interface{})                  {}
-func (nopLogger) Benchmark(string, time.Duration)                {}
-func (nopLogger) Tracef(context.Context, string, ...interface{}) {}
-func (nopLogger) Sync() error                                    { return nil }
-
-// =============================================================================
-// Mock: packetCollector — thread-safe packet recorder
-// =============================================================================
 
 type packetCollector struct {
 	mu   sync.Mutex
@@ -146,7 +113,8 @@ func (m *mockCommunication) OnPacket(ctx context.Context, pkts ...internal_type.
 // =============================================================================
 
 func newTestExecutor() *agentkitExecutor {
-	return &agentkitExecutor{logger: nopLogger{}}
+	lgr, _ := commons.NewApplicationLogger()
+	return &agentkitExecutor{logger: lgr}
 }
 
 func newTestComm() (*mockCommunication, *packetCollector) {
@@ -384,7 +352,7 @@ func TestHandleResponse(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			e := newTestExecutor()
 			comm, collector := newTestComm()
-			e.handleResponse(context.Background(), tt.resp, comm)
+			e.handleResponse(context.Background(), comm, tt.resp)
 			tt.wantFunc(t, collector.all())
 		})
 	}
@@ -820,7 +788,7 @@ func TestHandleResponse_CompletedTextContextID(t *testing.T) {
 			},
 		},
 	}
-	e.handleResponse(context.Background(), resp, comm)
+	e.handleResponse(context.Background(), comm, resp)
 
 	pkts := collector.all()
 	done, ok := findPacket[internal_type.LLMResponseDonePacket](pkts)
@@ -849,7 +817,7 @@ func TestHandleResponse_ToolResultFailed(t *testing.T) {
 			},
 		},
 	}
-	e.handleResponse(context.Background(), resp, comm)
+	e.handleResponse(context.Background(), comm, resp)
 
 	evs := findPackets[internal_type.ConversationEventPacket](collector.all())
 	require.Len(t, evs, 1)
@@ -918,7 +886,7 @@ func TestHandleResponse_ErrorMessageFormat(t *testing.T) {
 			},
 		},
 	}
-	e.handleResponse(context.Background(), resp, comm)
+	e.handleResponse(context.Background(), comm, resp)
 
 	errPkts := findPackets[internal_type.LLMErrorPacket](collector.all())
 	require.Len(t, errPkts, 1)
@@ -939,7 +907,7 @@ func TestHandleResponse_StaleContext_Dropped(t *testing.T) {
 			},
 		},
 	}
-	e.handleResponse(context.Background(), resp, comm)
+	e.handleResponse(context.Background(), comm, resp)
 	assert.Empty(t, collector.all())
 }
 
@@ -1035,24 +1003,24 @@ func TestE2E_FullConversationTurn(t *testing.T) {
 	assert.Equal(t, "executing", evs[0].Data["type"])
 
 	// 2. Simulate streaming deltas from agent
-	e.handleResponse(context.Background(), &protos.TalkOutput{
+	e.handleResponse(context.Background(), comm, &protos.TalkOutput{
 		Data: &protos.TalkOutput_Assistant{Assistant: &protos.ConversationAssistantMessage{
 			Id: "turn-1", Message: &protos.ConversationAssistantMessage_Text{Text: "Go is"},
 		}},
-	}, comm)
-	e.handleResponse(context.Background(), &protos.TalkOutput{
+	})
+	e.handleResponse(context.Background(), comm, &protos.TalkOutput{
 		Data: &protos.TalkOutput_Assistant{Assistant: &protos.ConversationAssistantMessage{
 			Id: "turn-1", Message: &protos.ConversationAssistantMessage_Text{Text: " a language"},
 		}},
-	}, comm)
+	})
 
 	// 3. Final response
-	e.handleResponse(context.Background(), &protos.TalkOutput{
+	e.handleResponse(context.Background(), comm, &protos.TalkOutput{
 		Data: &protos.TalkOutput_Assistant{Assistant: &protos.ConversationAssistantMessage{
 			Id: "turn-1", Completed: true,
 			Message: &protos.ConversationAssistantMessage_Text{Text: "Go is a language"},
 		}},
-	}, comm)
+	})
 
 	pkts := collector.all()
 	deltas := findPackets[internal_type.LLMResponseDeltaPacket](pkts)
@@ -1075,12 +1043,12 @@ func TestE2E_MultiTurnConversation(t *testing.T) {
 		_ = e.Execute(context.Background(), comm, internal_type.NormalizedUserTextPacket{
 			ContextID: ctxID, Text: fmt.Sprintf("msg-%d", turn),
 		})
-		e.handleResponse(context.Background(), &protos.TalkOutput{
+		e.handleResponse(context.Background(), comm, &protos.TalkOutput{
 			Data: &protos.TalkOutput_Assistant{Assistant: &protos.ConversationAssistantMessage{
 				Id: ctxID, Completed: true,
 				Message: &protos.ConversationAssistantMessage_Text{Text: fmt.Sprintf("reply-%d", turn)},
 			}},
-		}, comm)
+		})
 	}
 
 	dones := findPackets[internal_type.LLMResponseDonePacket](collector.all())
@@ -1106,11 +1074,11 @@ func TestE2E_InterruptDuringStreaming(t *testing.T) {
 	})
 
 	// Delta arrives
-	e.handleResponse(context.Background(), &protos.TalkOutput{
+	e.handleResponse(context.Background(), comm, &protos.TalkOutput{
 		Data: &protos.TalkOutput_Assistant{Assistant: &protos.ConversationAssistantMessage{
 			Id: "ctx-1", Message: &protos.ConversationAssistantMessage_Text{Text: "Once upon"},
 		}},
-	}, comm)
+	})
 
 	// Interrupt
 	_ = e.Execute(context.Background(), comm, internal_type.InterruptionDetectedPacket{ContextID: "ctx-1"})
@@ -1122,12 +1090,12 @@ func TestE2E_InterruptDuringStreaming(t *testing.T) {
 	})
 
 	// Stale delta from ctx-1 — rejected (currentID="ctx-2")
-	e.handleResponse(context.Background(), &protos.TalkOutput{
+	e.handleResponse(context.Background(), comm, &protos.TalkOutput{
 		Data: &protos.TalkOutput_Assistant{Assistant: &protos.ConversationAssistantMessage{
 			Id: "ctx-1", Completed: true,
 			Message: &protos.ConversationAssistantMessage_Text{Text: "stale"},
 		}},
-	}, comm)
+	})
 
 	dones := findPackets[internal_type.LLMResponseDonePacket](collector.all())
 	assert.Empty(t, dones, "stale completed response should be dropped")
@@ -1139,26 +1107,26 @@ func TestE2E_ToolCallAndResult(t *testing.T) {
 	e.currentID = "ctx-1"
 
 	// Tool call
-	e.handleResponse(context.Background(), &protos.TalkOutput{
+	e.handleResponse(context.Background(), comm, &protos.TalkOutput{
 		Data: &protos.TalkOutput_ToolCall{ToolCall: &protos.ConversationToolCall{
 			Id: "ctx-1", ToolId: "tool-1", Name: "get_weather",
 		}},
-	}, comm)
+	})
 
 	// Tool result
-	e.handleResponse(context.Background(), &protos.TalkOutput{
+	e.handleResponse(context.Background(), comm, &protos.TalkOutput{
 		Data: &protos.TalkOutput_ToolCallResult{ToolCallResult: &protos.ConversationToolCallResult{
 			Id: "ctx-1", ToolId: "tool-1", Name: "get_weather",
 		}},
-	}, comm)
+	})
 
 	// Final response after tool
-	e.handleResponse(context.Background(), &protos.TalkOutput{
+	e.handleResponse(context.Background(), comm, &protos.TalkOutput{
 		Data: &protos.TalkOutput_Assistant{Assistant: &protos.ConversationAssistantMessage{
 			Id: "ctx-1", Completed: true,
 			Message: &protos.ConversationAssistantMessage_Text{Text: "It's 20C"},
 		}},
-	}, comm)
+	})
 
 	pkts := collector.all()
 
@@ -1186,11 +1154,11 @@ func TestE2E_ErrorEndsConversation(t *testing.T) {
 	e := newTestExecutor()
 	comm, collector := newTestComm()
 
-	e.handleResponse(context.Background(), &protos.TalkOutput{
+	e.handleResponse(context.Background(), comm, &protos.TalkOutput{
 		Data: &protos.TalkOutput_Error{Error: &protos.Error{
 			ErrorCode: 500, ErrorMessage: "agent crashed",
 		}},
-	}, comm)
+	})
 
 	pkts := collector.all()
 	errPkts := findPackets[internal_type.LLMErrorPacket](pkts)
@@ -1271,12 +1239,12 @@ func TestDeadlock_ExecuteAndResponseConcurrent(t *testing.T) {
 	go func() {
 		defer wg.Done()
 		for i := 0; i < 50; i++ {
-			e.handleResponse(ctx, &protos.TalkOutput{
+			e.handleResponse(ctx, comm, &protos.TalkOutput{
 				Data: &protos.TalkOutput_Assistant{Assistant: &protos.ConversationAssistantMessage{
 					Id: fmt.Sprintf("ctx-%d", i), Completed: true,
 					Message: &protos.ConversationAssistantMessage_Text{Text: "resp"},
 				}},
-			}, comm)
+			})
 		}
 	}()
 
@@ -1402,12 +1370,12 @@ func TestConcurrency_ResponseAndInterruptRace(t *testing.T) {
 	go func() {
 		defer wg.Done()
 		for i := 0; i < 100; i++ {
-			e.handleResponse(context.Background(), &protos.TalkOutput{
+			e.handleResponse(context.Background(), comm, &protos.TalkOutput{
 				Data: &protos.TalkOutput_Assistant{Assistant: &protos.ConversationAssistantMessage{
 					Id:      fmt.Sprintf("ctx-%d", i),
 					Message: &protos.ConversationAssistantMessage_Text{Text: "resp"},
 				}},
-			}, comm)
+			})
 		}
 	}()
 
@@ -1431,7 +1399,7 @@ func TestConsistency_StaleContextDoesNotEmitPackets(t *testing.T) {
 	e := newTestExecutor()
 	comm, collector := newTestComm()
 
-	e.setCurrentContextID("ctx-active")
+	e.currentID = "ctx-active"
 
 	// Stale responses should not emit
 	staleTypes := []*protos.TalkOutput{
@@ -1446,7 +1414,7 @@ func TestConsistency_StaleContextDoesNotEmitPackets(t *testing.T) {
 	}
 
 	for _, resp := range staleTypes {
-		e.handleResponse(context.Background(), resp, comm)
+		e.handleResponse(context.Background(), comm, resp)
 	}
 
 	assert.Empty(t, collector.all(), "all stale context responses should be dropped")

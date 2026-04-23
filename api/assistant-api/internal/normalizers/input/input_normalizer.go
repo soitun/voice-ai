@@ -8,7 +8,6 @@ package internal_input_normalizers
 
 import (
 	"context"
-	"fmt"
 	"strings"
 
 	internal_type "github.com/rapidaai/api/assistant-api/internal/type"
@@ -18,13 +17,11 @@ import (
 )
 
 type inputNormalizer struct {
-	logger commons.Logger
-
+	logger   commons.Logger
 	onPacket func(...internal_type.Packet) error
 	parser   rapida_language.Parser
 }
 
-// NewInputNormalizer builds an input normalizer with internal pipeline routing.
 func NewInputNormalizer(logger commons.Logger) InputNormalizer {
 	return &inputNormalizer{
 		logger: logger,
@@ -42,75 +39,73 @@ func (n *inputNormalizer) Close(_ context.Context) error {
 	return nil
 }
 
-// Normalize routes packet groups through InputPipeline -> DetectLanguageProcessPipeline -> OutputPipeline.
 func (n *inputNormalizer) Normalize(ctx context.Context, packets ...internal_type.Packet) error {
 	for _, pkt := range packets {
 		switch p := pkt.(type) {
 		case internal_type.EndOfSpeechPacket:
-			pipelinePacket := PipelinePacket{
+			n.Run(ctx, InputPipeline{
 				ContextID: p.ContextID,
 				Speech:    p.Speech,
 				Speechs:   p.Speechs,
-			}
-			if err := n.Pipeline(ctx, InputPipeline{PipelinePacket: pipelinePacket}); err != nil {
-				return err
-			}
+			})
 		case internal_type.UserTextReceivedPacket:
-			pipelinePacket := PipelinePacket{
+			input := InputPipeline{
 				ContextID: p.ContextID,
 				Speech:    p.Text,
 			}
 			if p.Language != "" {
-				pipelinePacket.Speechs = []internal_type.SpeechToTextPacket{{
+				input.Speechs = []internal_type.SpeechToTextPacket{{
 					ContextID: p.ContextID,
 					Script:    p.Text,
 					Language:  p.Language,
 				}}
 			}
-			if err := n.Pipeline(ctx, InputPipeline{PipelinePacket: pipelinePacket}); err != nil {
-				return err
-			}
+			n.Run(ctx, input)
 		}
 	}
 	return nil
 }
 
-// Pipeline rotates typed pipeline packets until OutputPipeline or stop.
-func (n *inputNormalizer) Pipeline(ctx context.Context, v PipelineType) error {
-	switch p := v.(type) {
+func (n *inputNormalizer) Run(ctx context.Context, p NormalizerPipeline) {
+	switch v := p.(type) {
 	case InputPipeline:
-		return n.Pipeline(ctx, DetectLanguageProcessPipeline{ProcessPipeline: ProcessPipeline{PipelinePacket: p.PipelinePacket}})
+		language := n.detectLanguage(v.Speech, v.Speechs)
+		n.Run(ctx, OutputPipeline{
+			ContextID: v.ContextID,
+			Speech:    v.Speech,
+			Language:  language,
+		})
 
-	case DetectLanguageProcessPipeline:
-		language := n.detectLanguage(p.PipelinePacket)
-		return n.Pipeline(ctx, OutputPipeline{
-			PipelinePacket: p.PipelinePacket,
-			Language:       language,
+	case DetectLanguagePipeline:
+		language := n.detectLanguage(v.Speech, v.Speechs)
+		n.Run(ctx, OutputPipeline{
+			ContextID: v.ContextID,
+			Speech:    v.Speech,
+			Language:  language,
 		})
 
 	case OutputPipeline:
-		if n.onPacket == nil {
-			return nil
+		if n.onPacket != nil {
+			n.onPacket(internal_type.NormalizedUserTextPacket{
+				ContextID: v.ContextID,
+				Text:      v.Speech,
+				Language:  v.Language,
+			})
 		}
-		return n.onPacket(internal_type.NormalizedUserTextPacket{
-			ContextID: p.ContextID,
-			Text:      p.Speech,
-			Language:  p.Language,
-		})
 
 	default:
-		return fmt.Errorf("unsupported input-normalizer pipeline type: %T", v)
+		n.logger.Errorf("unknown normalizer pipeline type: %T", p)
 	}
 }
 
-func (n *inputNormalizer) detectLanguage(p PipelinePacket) rapida_types.Language {
-	if code := n.consensusLanguageCode(p.Speechs); code != "" {
+func (n *inputNormalizer) detectLanguage(speech string, speechs []internal_type.SpeechToTextPacket) rapida_types.Language {
+	if code := n.consensusLanguageCode(speechs); code != "" {
 		return rapida_types.LookupLanguage(code)
 	}
-	if strings.TrimSpace(p.Speech) == "" {
+	if strings.TrimSpace(speech) == "" {
 		return rapida_types.UNKNOWN_LANGUAGE
 	}
-	parsed, _ := n.parser.Parse(p.Speech)
+	parsed, _ := n.parser.Parse(speech)
 	return parsed
 }
 
@@ -122,7 +117,7 @@ func (n *inputNormalizer) consensusLanguageCode(speeches []internal_type.SpeechT
 	bestCode := ""
 	bestCount := 0
 	for _, s := range speeches {
-		code := n.normalizeLanguageCode(s.Language)
+		code := normalizeLanguageCode(s.Language)
 		if code == "" {
 			continue
 		}
@@ -135,7 +130,7 @@ func (n *inputNormalizer) consensusLanguageCode(speeches []internal_type.SpeechT
 	return bestCode
 }
 
-func (n *inputNormalizer) normalizeLanguageCode(v string) string {
+func normalizeLanguageCode(v string) string {
 	clean := strings.TrimSpace(strings.ToLower(v))
 	if clean == "" {
 		return ""
@@ -146,6 +141,5 @@ func (n *inputNormalizer) normalizeLanguageCode(v string) string {
 	if len(clean) != 2 {
 		return ""
 	}
-	canonical := rapida_types.LookupLanguage(clean)
-	return canonical.ISO639_1
+	return rapida_types.LookupLanguage(clean).ISO639_1
 }

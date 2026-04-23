@@ -65,7 +65,7 @@ func (r *genericRequestor) OnPacket(ctx context.Context, pkts ...internal_type.P
 		case internal_type.ExecuteLLMPacket,
 			internal_type.LLMResponseDeltaPacket,
 			internal_type.LLMResponseDonePacket,
-			internal_type.LLMErrorPacket,
+			internal_type.ErrorPacket,
 			internal_type.AggregateTextPacket,
 			internal_type.InjectMessagePacket,
 			internal_type.SpeakTextPacket,
@@ -256,8 +256,8 @@ func (r *genericRequestor) dispatch(ctx context.Context, p internal_type.Packet)
 		r.handleLLMDelta(ctx, vl)
 	case internal_type.LLMResponseDonePacket:
 		r.handleLLMDone(ctx, vl)
-	case internal_type.LLMErrorPacket:
-		r.handleLLMError(ctx, vl)
+	case internal_type.ErrorPacket:
+		r.handleErrorPacket(ctx, vl)
 
 		// Text aggregation
 	case internal_type.AggregateTextPacket:
@@ -701,17 +701,33 @@ func (talking *genericRequestor) handleLLMDone(ctx context.Context, vl internal_
 	)
 }
 
-func (talking *genericRequestor) handleLLMError(ctx context.Context, vl internal_type.LLMErrorPacket) {
+func (talking *genericRequestor) handleErrorPacket(ctx context.Context, vl internal_type.ErrorPacket) {
+	switch vl.(type) {
+	case internal_type.LLMErrorPacket:
+		talking.OnPacket(ctx, internal_type.UserMessageMetricPacket{
+			ContextID: vl.ContextId(),
+			Metrics: []*protos.Metric{{
+				Name:        "llm_error",
+				Value:       vl.ErrMessage(),
+				Description: "An error occurred during LLM processing"}},
+		})
+		talking.Transition(LLMGenerated)
+
+	}
+	if !vl.IsRecoverable() {
+		talking.Notify(ctx,
+			&protos.ConversationError{
+				AssistantConversationId: talking.Conversation().Id,
+				Message:                 vl.ErrMessage(),
+			}, &protos.ConversationDisconnection{
+				Type: protos.ConversationDisconnection_DISCONNECTION_TYPE_UNSPECIFIED,
+			})
+		return
+	}
 	_ = talking.Notify(ctx, &protos.ConversationError{
 		AssistantConversationId: talking.Conversation().Id,
-		Message:                 fmt.Sprintf("llm: %v", vl.Error),
+		Message:                 vl.ErrMessage(),
 	})
-
-	talking.OnPacket(ctx, internal_type.UserMessageMetricPacket{
-		ContextID: vl.ContextID,
-		Metrics:   []*protos.Metric{{Name: "llm_error", Value: fmt.Sprintf("llm: %v", vl.Error), Description: "An error occurred during LLM processing"}},
-	})
-	talking.Transition(LLMGenerated)
 }
 
 // =============================================================================

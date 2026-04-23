@@ -52,6 +52,13 @@ type LLMToolPacket interface {
 	ToolId() string
 }
 
+type ErrorPacket interface {
+	Packet
+	IsRecoverable() bool
+	Err() error
+	ErrMessage() string
+}
+
 // =============================================================================
 // Input Pipeline — user -> denoise -> VAD -> STT -> EOS -> normalize
 // =============================================================================
@@ -254,12 +261,36 @@ func (f LLMResponseDonePacket) Role() string      { return "assistant" }
 func (f LLMResponseDonePacket) ContextId() string { return f.ContextID }
 
 // LLMErrorPacket signals that the LLM encountered an error during generation.
+
+type LLMErrorType int
+
+const (
+	// UnknownError is the default zero-value fallback
+	UnknownError LLMErrorType = iota
+
+	// Recoverable errors (e.g., API rate limits, temporary network drops)
+	LLMRateLimit
+	LLMNetworkTimeout
+
+	// Non-Recoverable LLMors (e.g., bad API keys, invalid prompt formats)
+	LLMAuthentication
+	LLMInvalidInput
+	LLMSystemPanic
+)
+
+// When IsRecoverable is true, the conversation should be gracefully terminated.
 type LLMErrorPacket struct {
 	ContextID string
 	Error     error
+	Type      LLMErrorType
 }
 
 func (f LLMErrorPacket) ContextId() string { return f.ContextID }
+func (f LLMErrorPacket) IsRecoverable() bool {
+	return f.Type == LLMRateLimit || f.Type == LLMNetworkTimeout
+}
+func (f LLMErrorPacket) Err() error         { return f.Error }
+func (f LLMErrorPacket) ErrMessage() string { return fmt.Sprintf("llm: %s", f.Error.Error()) }
 
 // LLMToolCallPacket signals that a tool was invoked.
 // Action determines whether the client/channel needs to act (e.g. end call, transfer).
@@ -276,11 +307,11 @@ func (f LLMToolCallPacket) ToolId() string    { return f.ToolID }
 
 func (f LLMToolCallPacket) MarshalJSON() ([]byte, error) {
 	return json.Marshal(map[string]interface{}{
-		"tool_id":   f.ToolID,
-		"name":      f.Name,
+		"tool_id":    f.ToolID,
+		"name":       f.Name,
 		"context_id": f.ContextID,
-		"action":    f.Action.String(),
-		"arguments": f.Arguments,
+		"action":     f.Action.String(),
+		"arguments":  f.Arguments,
 	})
 }
 

@@ -20,46 +20,32 @@ const (
 	LanguageAttributeSource  = "language.source"
 )
 
-// PipelineType matches the model-executor pattern: each packet type controls the next transition.
-type PipelineType interface {
+type NormalizerPipeline interface {
+	normalizerPipeline()
 }
 
-// PipelinePacket carries shared state across normalization pipeline stages.
-type PipelinePacket struct {
-	PipelineType
-
-	//
-	ContextID string
-
-	// speech
-	Speech string
-
-	// language attributes for language detection/canonicalization stages to populate and downstream stages to consume.
-	Speechs []internal_type.SpeechToTextPacket
-}
-
-// InputPipeline is the first stage for each input packet.
 type InputPipeline struct {
-	PipelinePacket
+	ContextID string
+	Speech    string
+	Speechs   []internal_type.SpeechToTextPacket
 }
 
-// ProcessPipeline is the common base for normalization process stages.
-type ProcessPipeline struct {
-	PipelinePacket
+type DetectLanguagePipeline struct {
+	ContextID string
+	Speech    string
+	Speechs   []internal_type.SpeechToTextPacket
 }
 
-// DetectLanguageProcessPipeline canonicalizes/detects language on user text packets.
-type DetectLanguageProcessPipeline struct {
-	ProcessPipeline
-}
-
-// OutputPipeline emits normalized packet to downstream OnPacket callback.
 type OutputPipeline struct {
-	PipelinePacket
-	Language types.Language
+	ContextID string
+	Speech    string
+	Language  types.Language
 }
 
-// InputNormalizer normalizes input packets and emits them via OnPacket at OutputPipeline.
+func (InputPipeline) normalizerPipeline()          {}
+func (DetectLanguagePipeline) normalizerPipeline() {}
+func (OutputPipeline) normalizerPipeline()         {}
+
 type InputNormalizer interface {
 	Initialize(ctx context.Context, onPacket func(...internal_type.Packet) error) error
 	Normalize(ctx context.Context, packets ...internal_type.Packet) error

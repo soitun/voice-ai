@@ -7,7 +7,6 @@ package internal_input_normalizers
 
 import (
 	"context"
-	"errors"
 	"testing"
 
 	internal_type "github.com/rapidaai/api/assistant-api/internal/type"
@@ -25,8 +24,6 @@ func (p *parserStub) Parse(_ string) (rapida_types.Language, float64) {
 	p.calls++
 	return p.out, p.conf
 }
-
-type unknownPipeline struct{}
 
 func newTestNormalizer(t *testing.T, onPacket func(...internal_type.Packet) error) *inputNormalizer {
 	t.Helper()
@@ -150,7 +147,6 @@ func TestInputNormalizer_Normalize_UnknownChunkLanguageFallsBackToUnknownOnTie(t
 	if parser.calls != 0 {
 		t.Fatalf("expected parser not called when valid chunk language exists, got %d", parser.calls)
 	}
-
 	out := emitted[0].(internal_type.NormalizedUserTextPacket)
 	if out.Language.ISO639_1 != "unknown" {
 		t.Fatalf("expected language unknown, got %q", out.Language.ISO639_1)
@@ -178,66 +174,44 @@ func TestInputNormalizer_Normalize_ParserNoMatchUsesUnknownLanguage(t *testing.T
 	}
 }
 
-func TestInputNormalizer_Pipeline_InputToOutputEmitsPacket(t *testing.T) {
+func TestInputNormalizer_Run_InputToOutputEmitsPacket(t *testing.T) {
 	emitted := make([]internal_type.Packet, 0)
 	n := newTestNormalizer(t, func(pkts ...internal_type.Packet) error {
 		emitted = append(emitted, pkts...)
 		return nil
 	})
-	err := n.Pipeline(context.Background(), InputPipeline{PipelinePacket: PipelinePacket{ContextID: "ctx", Speech: "hello"}})
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
+	n.Run(context.Background(), InputPipeline{ContextID: "ctx", Speech: "hello"})
 	if len(emitted) != 1 {
 		t.Fatalf("expected one emission, got %d", len(emitted))
 	}
 }
 
-func TestInputNormalizer_Pipeline_ProcessToOutputEmitsPacket(t *testing.T) {
+func TestInputNormalizer_Run_DetectLanguageToOutputEmitsPacket(t *testing.T) {
 	emitted := make([]internal_type.Packet, 0)
 	n := newTestNormalizer(t, func(pkts ...internal_type.Packet) error {
 		emitted = append(emitted, pkts...)
 		return nil
 	})
-	err := n.Pipeline(context.Background(), DetectLanguageProcessPipeline{ProcessPipeline: ProcessPipeline{PipelinePacket: PipelinePacket{ContextID: "ctx", Speech: "hello"}}})
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
+	n.Run(context.Background(), DetectLanguagePipeline{ContextID: "ctx", Speech: "hello"})
 	if len(emitted) != 1 {
 		t.Fatalf("expected one emission, got %d", len(emitted))
 	}
 }
 
-func TestInputNormalizer_Pipeline_OutputEmitsPacket(t *testing.T) {
+func TestInputNormalizer_Run_OutputEmitsPacket(t *testing.T) {
 	emitted := make([]internal_type.Packet, 0)
 	n := newTestNormalizer(t, func(pkts ...internal_type.Packet) error {
 		emitted = append(emitted, pkts...)
 		return nil
 	})
-	err := n.Pipeline(context.Background(), OutputPipeline{PipelinePacket: PipelinePacket{ContextID: "ctx", Speech: "hello"}, Language: mustLanguage(t, "en")})
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
+	n.Run(context.Background(), OutputPipeline{ContextID: "ctx", Speech: "hello", Language: mustLanguage(t, "en")})
 	if len(emitted) != 1 {
 		t.Fatalf("expected one emission, got %d", len(emitted))
 	}
 }
 
-func TestInputNormalizer_Pipeline_OutputPropagatesOnPacketError(t *testing.T) {
-	errExpected := errors.New("on packet failed")
-	n := newTestNormalizer(t, func(...internal_type.Packet) error {
-		return errExpected
-	})
-	err := n.Pipeline(context.Background(), OutputPipeline{PipelinePacket: PipelinePacket{ContextID: "ctx", Speech: "hello"}, Language: mustLanguage(t, "en")})
-	if !errors.Is(err, errExpected) {
-		t.Fatalf("expected onPacket error %v, got %v", errExpected, err)
-	}
-}
-
-func TestInputNormalizer_Pipeline_RejectsUnsupportedPipelineType(t *testing.T) {
+func TestInputNormalizer_Run_NilOnPacketNoOp(t *testing.T) {
 	n := newTestNormalizer(t, nil)
-	err := n.Pipeline(context.Background(), &unknownPipeline{})
-	if err == nil {
-		t.Fatalf("expected unsupported pipeline type error")
-	}
+	n.onPacket = nil
+	n.Run(context.Background(), OutputPipeline{ContextID: "ctx", Speech: "hello", Language: mustLanguage(t, "en")})
 }
