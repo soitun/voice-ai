@@ -130,6 +130,7 @@ func (st *awsSTT) transcribe(audioData []byte, ctxID string) {
 	body, err := json.Marshal(payload)
 	if err != nil {
 		st.logger.Errorf("aws-stt: error marshalling request: %v", err)
+		st.onPacket(internal_type.STTErrorPacket{ContextID: ctxID, Error: fmt.Errorf("aws-stt: marshal failed: %w", err), Type: internal_type.STTNetworkTimeout})
 		return
 	}
 
@@ -137,6 +138,7 @@ func (st *awsSTT) transcribe(audioData []byte, ctxID string) {
 	req, err := http.NewRequestWithContext(st.ctx, "POST", endpoint, bytes.NewReader(body))
 	if err != nil {
 		st.logger.Errorf("aws-stt: error creating request: %v", err)
+		st.onPacket(internal_type.STTErrorPacket{ContextID: ctxID, Error: fmt.Errorf("aws-stt: request creation failed: %w", err), Type: internal_type.STTNetworkTimeout})
 		return
 	}
 	req.Header.Set("Content-Type", "application/x-amz-json-1.1")
@@ -147,6 +149,7 @@ func (st *awsSTT) transcribe(audioData []byte, ctxID string) {
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		st.logger.Errorf("aws-stt: error sending request: %v", err)
+		st.onPacket(internal_type.STTErrorPacket{ContextID: ctxID, Error: fmt.Errorf("aws-stt: request failed: %w", err), Type: internal_type.STTNetworkTimeout})
 		return
 	}
 	defer resp.Body.Close()
@@ -154,6 +157,7 @@ func (st *awsSTT) transcribe(audioData []byte, ctxID string) {
 	if resp.StatusCode != http.StatusOK {
 		respBody, _ := io.ReadAll(resp.Body)
 		st.logger.Errorf("aws-stt: unexpected status code: %d, body: %s", resp.StatusCode, string(respBody))
+		st.onPacket(internal_type.STTErrorPacket{ContextID: ctxID, Error: fmt.Errorf("aws-stt: status %d", resp.StatusCode), Type: internal_type.STTNetworkTimeout})
 		return
 	}
 
@@ -166,6 +170,7 @@ func (st *awsSTT) transcribe(audioData []byte, ctxID string) {
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		st.logger.Errorf("aws-stt: error decoding response: %v", err)
+		st.onPacket(internal_type.STTErrorPacket{ContextID: ctxID, Error: fmt.Errorf("aws-stt: decode failed: %w", err), Type: internal_type.STTNetworkTimeout})
 		return
 	}
 

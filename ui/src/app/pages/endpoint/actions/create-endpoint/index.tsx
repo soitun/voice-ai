@@ -22,6 +22,7 @@ import ConfirmDialog from '@/app/components/base/modal/confirm-ui';
 import { create_endpoint_success_message } from '@/utils/messages';
 import {
   GetDefaultTextProviderConfigIfInvalid,
+  GetDefaultTextProviderConfigOnProviderSwitch,
   TextProvider,
   ValidateTextProviderDefaultOptions,
 } from '@/app/components/providers/text';
@@ -73,14 +74,11 @@ export function CreateEndpointPage() {
   });
 
   const onChangeTextProvider = (providerName: string) => {
-    const parametersWithoutCredential = textProviderModel.parameters.filter(
-      p => p.getKey() !== 'rapida.credential_id',
-    );
     setTextProviderModel({
       provider: providerName,
-      parameters: GetDefaultTextProviderConfigIfInvalid(
+      parameters: GetDefaultTextProviderConfigOnProviderSwitch(
         providerName,
-        parametersWithoutCredential,
+        textProviderModel.parameters,
       ),
     });
   };

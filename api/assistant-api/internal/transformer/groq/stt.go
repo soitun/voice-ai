@@ -15,7 +15,6 @@ import (
 	"mime/multipart"
 	"net/http"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	groq_internal "github.com/rapidaai/api/assistant-api/internal/transformer/groq/internal"
@@ -35,7 +34,7 @@ type groqSTT struct {
 	contextId      string
 	sttConnectedAt time.Time
 	audioBuffer    bytes.Buffer
-	startedAtNano  atomic.Int64
+	startedAt      time.Time
 
 	logger   commons.Logger
 	onPacket func(pkt ...internal_type.Packet) error
@@ -89,10 +88,12 @@ func (st *groqSTT) Transform(ctx context.Context, in internal_type.Packet) error
 		st.contextId = pkt.ContextID
 		st.mu.Unlock()
 		return nil
-	case internal_type.InterruptionDetectedPacket:
-		if pkt.Source == internal_type.InterruptionSourceVad {
-			st.startedAtNano.Store(time.Now().UnixNano())
+	case internal_type.STTInterruptPacket:
+		st.mu.Lock()
+		if st.startedAt.IsZero() {
+			st.startedAt = time.Now()
 		}
+		st.mu.Unlock()
 		return nil
 	case internal_type.UserAudioReceivedPacket:
 		st.mu.Lock()
@@ -117,6 +118,7 @@ func (st *groqSTT) transcribe(audioData []byte, ctxId string) {
 	part, err := writer.CreateFormFile("file", "audio.wav")
 	if err != nil {
 		st.logger.Errorf("groq-stt: error creating form file: %v", err)
+		st.onPacket(internal_type.STTErrorPacket{ContextID: ctxId, Error: fmt.Errorf("groq-stt: form file failed: %w", err), Type: internal_type.STTNetworkTimeout})
 		return
 	}
 
@@ -133,6 +135,7 @@ func (st *groqSTT) transcribe(audioData []byte, ctxId string) {
 	req, err := http.NewRequestWithContext(st.ctx, "POST", GROQ_STT_URL, &body)
 	if err != nil {
 		st.logger.Errorf("groq-stt: error creating request: %v", err)
+		st.onPacket(internal_type.STTErrorPacket{ContextID: ctxId, Error: fmt.Errorf("groq-stt: request creation failed: %w", err), Type: internal_type.STTNetworkTimeout})
 		return
 	}
 	req.Header.Set("Authorization", "Bearer "+st.GetKey())
@@ -141,6 +144,7 @@ func (st *groqSTT) transcribe(audioData []byte, ctxId string) {
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		st.logger.Errorf("groq-stt: error sending request: %v", err)
+		st.onPacket(internal_type.STTErrorPacket{ContextID: ctxId, Error: fmt.Errorf("groq-stt: request failed: %w", err), Type: internal_type.STTNetworkTimeout})
 		return
 	}
 	defer resp.Body.Close()
@@ -148,26 +152,26 @@ func (st *groqSTT) transcribe(audioData []byte, ctxId string) {
 	if resp.StatusCode != http.StatusOK {
 		respBody, _ := io.ReadAll(resp.Body)
 		st.logger.Errorf("groq-stt: unexpected status code: %d, body: %s", resp.StatusCode, string(respBody))
+		st.onPacket(internal_type.STTErrorPacket{ContextID: ctxId, Error: fmt.Errorf("groq-stt: status %d", resp.StatusCode), Type: internal_type.STTNetworkTimeout})
 		return
 	}
 
 	var result groq_internal.GroqTranscriptionResponse
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		st.logger.Errorf("groq-stt: error decoding response: %v", err)
+		st.onPacket(internal_type.STTErrorPacket{ContextID: ctxId, Error: fmt.Errorf("groq-stt: decode failed: %w", err), Type: internal_type.STTNetworkTimeout})
 		return
 	}
 
 	if result.Text != "" {
-		startedNano := st.startedAtNano.Swap(0)
-		if startedNano > 0 {
-			st.onPacket(internal_type.UserMessageMetricPacket{
-				ContextID: ctxId,
-				Metrics: []*protos.Metric{{
-					Name:  "stt_latency_ms",
-					Value: fmt.Sprintf("%d", (time.Now().UnixNano()-startedNano)/int64(time.Millisecond)),
-				}},
-			})
+		now := time.Now()
+		var latencyMs int64
+		st.mu.Lock()
+		if !st.startedAt.IsZero() {
+			latencyMs = now.Sub(st.startedAt).Milliseconds()
+			st.startedAt = time.Time{}
 		}
+		st.mu.Unlock()
 
 		st.onPacket(
 			internal_type.InterruptionDetectedPacket{ContextID: ctxId, Source: "word"},
@@ -180,7 +184,11 @@ func (st *groqSTT) transcribe(audioData []byte, ctxId string) {
 				ContextID: ctxId,
 				Name:      "stt",
 				Data:      map[string]string{"type": "completed"},
-				Time:      time.Now(),
+				Time:      now,
+			},
+			internal_type.UserMessageMetricPacket{
+				ContextID: ctxId,
+				Metrics:   []*protos.Metric{{Name: "stt_latency_ms", Value: fmt.Sprintf("%d", latencyMs)}},
 			},
 		)
 	}

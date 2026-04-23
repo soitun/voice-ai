@@ -4,7 +4,7 @@
 // Licensed under GPL-2.0 with Rapida Additional Terms.
 // See LICENSE.md or contact sales@rapida.ai for commercial usage.
 
-package internal_transformer_nvidia
+package nvidia_internal
 
 import (
 	internal_type "github.com/rapidaai/api/assistant-api/internal/type"

@@ -29,6 +29,7 @@ import { ErrorContainer } from '@/app/components/error-container';
 import { ChatCompletePrompt, Prompt } from '@/utils/prompt';
 import {
   GetDefaultTextProviderConfigIfInvalid,
+  GetDefaultTextProviderConfigOnProviderSwitch,
   TextProvider,
 } from '@/app/components/providers/text';
 import { randomString } from '@/utils';
@@ -121,14 +122,11 @@ const CreateNewVersion: FC<{ assistantId: string }> = ({ assistantId }) => {
   const { providerCredentials } = useAllProviderCredentials();
 
   const onChangeProvider = (providerName: string) => {
-    const parametersWithoutCredential = selectedModel.parameters.filter(
-      p => p.getKey() !== 'rapida.credential_id',
-    );
     setSelectedModel({
       provider: providerName,
-      parameters: GetDefaultTextProviderConfigIfInvalid(
+      parameters: GetDefaultTextProviderConfigOnProviderSwitch(
         providerName,
-        parametersWithoutCredential,
+        selectedModel.parameters,
       ),
     });
   };

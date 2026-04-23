@@ -115,6 +115,11 @@ func (t *awsTTS) synthesize(text string, ctxId string) {
 	body, err := json.Marshal(payload)
 	if err != nil {
 		t.logger.Errorf("aws-tts: error marshalling request: %v", err)
+		t.onPacket(internal_type.TTSErrorPacket{
+			ContextID: ctxId,
+			Error:     fmt.Errorf("aws-tts: error marshalling request: %w", err),
+			Type:      internal_type.TTSNetworkTimeout,
+		})
 		return
 	}
 
@@ -122,6 +127,11 @@ func (t *awsTTS) synthesize(text string, ctxId string) {
 	req, err := http.NewRequestWithContext(t.ctx, "POST", endpoint, bytes.NewReader(body))
 	if err != nil {
 		t.logger.Errorf("aws-tts: error creating request: %v", err)
+		t.onPacket(internal_type.TTSErrorPacket{
+			ContextID: ctxId,
+			Error:     fmt.Errorf("aws-tts: error creating request: %w", err),
+			Type:      internal_type.TTSNetworkTimeout,
+		})
 		return
 	}
 	req.Header.Set("Content-Type", "application/json")
@@ -131,6 +141,11 @@ func (t *awsTTS) synthesize(text string, ctxId string) {
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.logger.Errorf("aws-tts: error sending request: %v", err)
+		t.onPacket(internal_type.TTSErrorPacket{
+			ContextID: ctxId,
+			Error:     fmt.Errorf("aws-tts: error sending request: %w", err),
+			Type:      internal_type.TTSNetworkTimeout,
+		})
 		return
 	}
 	defer resp.Body.Close()
@@ -138,6 +153,11 @@ func (t *awsTTS) synthesize(text string, ctxId string) {
 	if resp.StatusCode != http.StatusOK {
 		respBody, _ := io.ReadAll(resp.Body)
 		t.logger.Errorf("aws-tts: unexpected status code: %d, body: %s", resp.StatusCode, string(respBody))
+		t.onPacket(internal_type.TTSErrorPacket{
+			ContextID: ctxId,
+			Error:     fmt.Errorf("aws-tts: unexpected status code: %d", resp.StatusCode),
+			Type:      internal_type.TTSNetworkTimeout,
+		})
 		return
 	}
 
@@ -179,6 +199,11 @@ func (t *awsTTS) synthesize(text string, ctxId string) {
 		if err != nil {
 			if err != io.EOF {
 				t.logger.Errorf("aws-tts: error reading response body: %v", err)
+				t.onPacket(internal_type.TTSErrorPacket{
+					ContextID: ctxId,
+					Error:     fmt.Errorf("aws-tts: error reading response body: %w", err),
+					Type:      internal_type.TTSNetworkTimeout,
+				})
 			}
 			break
 		}

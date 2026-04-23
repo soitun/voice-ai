@@ -4,7 +4,7 @@
 // Licensed under GPL-2.0 with Rapida Additional Terms.
 // See LICENSE.md or contact sales@rapida.ai for commercial usage.
 
-package internal_transformer_groq
+package nvidia_internal
 
 import (
 	"testing"
@@ -15,18 +15,18 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestNewGroqNormalizer(t *testing.T) {
+func TestNewNvidiaNormalizer(t *testing.T) {
 	logger, err := commons.NewApplicationLogger()
 	require.NoError(t, err)
-	normalizer := NewGroqNormalizer(logger, utils.Option{})
+	normalizer := NewNvidiaNormalizer(logger, utils.Option{})
 	require.NotNil(t, normalizer)
-	_, ok := normalizer.(*groqNormalizer)
+	_, ok := normalizer.(*nvidiaNormalizer)
 	assert.True(t, ok)
 }
 
 func TestNormalize_Passthrough(t *testing.T) {
 	logger, _ := commons.NewApplicationLogger()
-	normalizer := NewGroqNormalizer(logger, utils.Option{})
+	normalizer := NewNvidiaNormalizer(logger, utils.Option{})
 
 	tests := []struct {
 		name  string
@@ -49,7 +49,7 @@ func TestNormalize_Passthrough(t *testing.T) {
 
 func TestNormalize_NoSSML(t *testing.T) {
 	logger, _ := commons.NewApplicationLogger()
-	normalizer := NewGroqNormalizer(logger, utils.Option{})
+	normalizer := NewNvidiaNormalizer(logger, utils.Option{})
 
 	result := normalizer.Normalize("Tom & Jerry")
 	assert.NotContains(t, result, "&amp;")
@@ -58,7 +58,7 @@ func TestNormalize_NoSSML(t *testing.T) {
 
 func BenchmarkNormalize(b *testing.B) {
 	logger, _ := commons.NewApplicationLogger()
-	normalizer := NewGroqNormalizer(logger, utils.Option{})
+	normalizer := NewNvidiaNormalizer(logger, utils.Option{})
 	text := "Hello, this is a simple text for TTS processing."
 
 	b.ResetTimer()

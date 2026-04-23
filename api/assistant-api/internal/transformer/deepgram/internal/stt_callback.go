@@ -9,7 +9,6 @@ package deepgram_internal
 import (
 	"fmt"
 	"strings"
-	"sync/atomic"
 	"time"
 
 	msginterfaces "github.com/deepgram/deepgram-go-sdk/v3/pkg/api/listen/v1/websocket/interfaces"
@@ -21,26 +20,26 @@ import (
 
 // Implement the LiveMessageCallback interface
 type deepgramSttCallback struct {
-	logger        commons.Logger
-	onPacket      func(pkt ...internal_type.Packet) error
-	options       utils.Option
-	startedAtNano *atomic.Int64 // shared with parent deepgramSTT; 0 = not started
-	contextID     func() string
+	logger      commons.Logger
+	onPacket    func(pkt ...internal_type.Packet) error
+	options     utils.Option
+	swapStarted func() time.Time
+	contextID   func() string
 }
 
 func NewDeepgramSttCallback(
 	logger commons.Logger,
 	onPacket func(pkt ...internal_type.Packet) error,
 	options utils.Option,
-	startedAtNano *atomic.Int64,
+	swapStarted func() time.Time,
 	contextID func() string,
 ) msginterfaces.LiveMessageCallback {
 	return &deepgramSttCallback{
-		logger:        logger,
-		onPacket:      onPacket,
-		options:       options,
-		startedAtNano: startedAtNano,
-		contextID:     contextID,
+		logger:      logger,
+		onPacket:    onPacket,
+		options:     options,
+		swapStarted: swapStarted,
+		contextID:   contextID,
 	}
 }
 
@@ -80,12 +79,10 @@ func (d *deepgramSttCallback) Message(mr *msginterfaces.MessageResponse) error {
 		}
 
 		if mr.IsFinal {
-			// Final transcript — emit completed event + latency metric.
-			// Swap resets startedAtNano to 0 atomically so the next utterance starts fresh.
 			now := time.Now()
 			var latencyMs int64
-			if startNano := d.startedAtNano.Swap(0); startNano != 0 {
-				latencyMs = (now.UnixNano() - startNano) / 1_000_000
+			if started := d.swapStarted(); !started.IsZero() {
+				latencyMs = now.Sub(started).Milliseconds()
 			}
 			wordCount := len(strings.Fields(alternative.Transcript))
 			ctxID := d.contextID()

@@ -12,7 +12,6 @@ import (
 	"fmt"
 	"net/http"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -34,7 +33,7 @@ type speechmaticsSTT struct {
 	writeMu        sync.Mutex // serializes all WebSocket writes
 	contextId      string
 	sttConnectedAt time.Time
-	startedAtNano  atomic.Int64
+	startedAt      time.Time
 
 	logger     commons.Logger
 	connection *websocket.Conn
@@ -176,6 +175,11 @@ func (st *speechmaticsSTT) readLoop(conn *websocket.Conn) {
 			st.mu.Unlock()
 			if !intentional {
 				st.logger.Errorf("speechmatics-stt: connection lost: %v", err)
+				st.onPacket(internal_type.STTErrorPacket{
+					ContextID: st.contextId,
+					Error:     fmt.Errorf("speechmatics-stt: connection lost: %w", err),
+					Type:      internal_type.STTNetworkTimeout,
+				})
 			}
 			return
 		}
@@ -212,16 +216,14 @@ func (st *speechmaticsSTT) readLoop(conn *websocket.Conn) {
 		case "AddTranscript":
 			transcript := response.Metadata.Transcript
 			if transcript != "" && ctxId != "" {
-				startedNano := st.startedAtNano.Swap(0)
-				if startedNano > 0 {
-					st.onPacket(internal_type.UserMessageMetricPacket{
-						ContextID: ctxId,
-						Metrics: []*protos.Metric{{
-							Name:  "stt_latency_ms",
-							Value: fmt.Sprintf("%d", (time.Now().UnixNano()-startedNano)/int64(time.Millisecond)),
-						}},
-					})
+				now := time.Now()
+				var latencyMs int64
+				st.mu.Lock()
+				if !st.startedAt.IsZero() {
+					latencyMs = now.Sub(st.startedAt).Milliseconds()
+					st.startedAt = time.Time{}
 				}
+				st.mu.Unlock()
 				st.onPacket(
 					internal_type.InterruptionDetectedPacket{ContextID: ctxId, Source: "word"},
 					internal_type.SpeechToTextPacket{
@@ -233,17 +235,20 @@ func (st *speechmaticsSTT) readLoop(conn *websocket.Conn) {
 						ContextID: ctxId,
 						Name:      "stt",
 						Data:      map[string]string{"type": "completed"},
-						Time:      time.Now(),
+						Time:      now,
+					},
+					internal_type.UserMessageMetricPacket{
+						ContextID: ctxId,
+						Metrics:   []*protos.Metric{{Name: "stt_latency_ms", Value: fmt.Sprintf("%d", latencyMs)}},
 					},
 				)
 			}
 		case "Error":
 			st.logger.Errorf("speechmatics-stt: server error: %s", string(msg))
-			st.onPacket(internal_type.ConversationEventPacket{
+			st.onPacket(internal_type.STTErrorPacket{
 				ContextID: ctxId,
-				Name:      "stt",
-				Data:      map[string]string{"type": "error"},
-				Time:      time.Now(),
+				Error:     fmt.Errorf("speechmatics-stt: server error"),
+				Type:      internal_type.STTNetworkTimeout,
 			})
 		case "AudioAdded", "EndOfTranscript", "Info":
 			// Acknowledged — no action needed.
@@ -260,10 +265,12 @@ func (st *speechmaticsSTT) Transform(ctx context.Context, in internal_type.Packe
 		st.contextId = pkt.ContextID
 		st.mu.Unlock()
 		return nil
-	case internal_type.InterruptionDetectedPacket:
-		if pkt.Source == internal_type.InterruptionSourceVad {
-			st.startedAtNano.Store(time.Now().UnixNano())
+	case internal_type.STTInterruptPacket:
+		st.mu.Lock()
+		if st.startedAt.IsZero() {
+			st.startedAt = time.Now()
 		}
+		st.mu.Unlock()
 		return nil
 	case internal_type.UserAudioReceivedPacket:
 		st.mu.Lock()
@@ -271,7 +278,7 @@ func (st *speechmaticsSTT) Transform(ctx context.Context, in internal_type.Packe
 		st.mu.Unlock()
 
 		if conn == nil {
-			return fmt.Errorf("speechmatics-stt: websocket connection is not initialized")
+			return nil
 		}
 
 		st.writeMu.Lock()
@@ -279,7 +286,12 @@ func (st *speechmaticsSTT) Transform(ctx context.Context, in internal_type.Packe
 		st.writeMu.Unlock()
 		if err != nil {
 			st.logger.Errorf("speechmatics-stt: error sending audio: %v", err)
-			return err
+			st.onPacket(internal_type.STTErrorPacket{
+				ContextID: st.contextId,
+				Error:     fmt.Errorf("speechmatics-stt: send failed: %w", err),
+				Type:      internal_type.STTNetworkTimeout,
+			})
+			return nil
 		}
 		return nil
 	default:

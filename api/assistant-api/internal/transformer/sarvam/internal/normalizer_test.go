@@ -4,37 +4,38 @@
 // Licensed under GPL-2.0 with Rapida Additional Terms.
 // See LICENSE.md or contact sales@rapida.ai for commercial usage.
 
-package internal_transformer_speechmatics
+package sarvam_internal
 
 import (
 	"testing"
 
+	testutil "github.com/rapidaai/api/assistant-api/internal/transformer/internal/testutil"
 	"github.com/rapidaai/pkg/commons"
 	"github.com/rapidaai/pkg/utils"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-func TestNewSpeechmaticsNormalizer(t *testing.T) {
+func TestNewSarvamNormalizer(t *testing.T) {
 	tests := []struct {
 		name         string
 		opts         utils.Option
 		expectedLang string
 	}{
 		{
-			name:         "default language",
+			name:         "default language (Hindi)",
 			opts:         utils.Option{},
-			expectedLang: "en",
+			expectedLang: "hi-IN",
 		},
 		{
 			name:         "explicit language",
-			opts:         utils.Option{"speaker.language": "de"},
-			expectedLang: "de",
+			opts:         utils.Option{"speaker.language": "ta-IN"},
+			expectedLang: "ta-IN",
 		},
 		{
-			name:         "empty language defaults to en",
+			name:         "empty language defaults to hi-IN",
 			opts:         utils.Option{"speaker.language": ""},
-			expectedLang: "en",
+			expectedLang: "hi-IN",
 		},
 	}
 
@@ -42,9 +43,9 @@ func TestNewSpeechmaticsNormalizer(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			logger, err := commons.NewApplicationLogger()
 			require.NoError(t, err)
-			normalizer := NewSpeechmaticsNormalizer(logger, tt.opts)
+			normalizer := NewSarvamNormalizer(logger, tt.opts)
 			require.NotNil(t, normalizer)
-			sn, ok := normalizer.(*speechmaticsNormalizer)
+			sn, ok := normalizer.(*sarvamNormalizer)
 			require.True(t, ok)
 			assert.Equal(t, tt.expectedLang, sn.language)
 		})
@@ -52,8 +53,8 @@ func TestNewSpeechmaticsNormalizer(t *testing.T) {
 }
 
 func TestNormalize_Passthrough(t *testing.T) {
-	logger, _ := commons.NewApplicationLogger()
-	normalizer := NewSpeechmaticsNormalizer(logger, utils.Option{})
+	logger := testutil.NewTestLogger()
+	normalizer := NewSarvamNormalizer(logger, utils.Option{})
 
 	tests := []struct {
 		name  string
@@ -61,6 +62,7 @@ func TestNormalize_Passthrough(t *testing.T) {
 	}{
 		{"empty string", ""},
 		{"simple text", "Hello world"},
+		{"hindi text", "नमस्ते दुनिया"},
 		{"markdown preserved", "# Header **bold**"},
 		{"xml chars preserved", "Tom & Jerry a < b > c"},
 		{"whitespace preserved", "Hello    world"},
@@ -75,8 +77,8 @@ func TestNormalize_Passthrough(t *testing.T) {
 }
 
 func TestNormalize_NoSSML(t *testing.T) {
-	logger, _ := commons.NewApplicationLogger()
-	normalizer := NewSpeechmaticsNormalizer(logger, utils.Option{})
+	logger := testutil.NewTestLogger()
+	normalizer := NewSarvamNormalizer(logger, utils.Option{})
 
 	result := normalizer.Normalize("Tom & Jerry")
 	assert.NotContains(t, result, "&amp;")
@@ -84,8 +86,8 @@ func TestNormalize_NoSSML(t *testing.T) {
 }
 
 func BenchmarkNormalize(b *testing.B) {
-	logger, _ := commons.NewApplicationLogger()
-	normalizer := NewSpeechmaticsNormalizer(logger, utils.Option{})
+	logger := testutil.NewTestLogger()
+	normalizer := NewSarvamNormalizer(logger, utils.Option{})
 	text := "Hello, this is a simple text for TTS processing."
 
 	b.ResetTimer()

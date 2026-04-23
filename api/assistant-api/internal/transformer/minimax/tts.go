@@ -115,12 +115,22 @@ func (t *minimaxTTS) streamHTTPTTS(text string, ctxId string) {
 	body, err := json.Marshal(payload)
 	if err != nil {
 		t.logger.Errorf("minimax-tts: error marshalling request: %v", err)
+		t.onPacket(internal_type.TTSErrorPacket{
+			ContextID: ctxId,
+			Error:     fmt.Errorf("minimax-tts: error marshalling request: %w", err),
+			Type:      internal_type.TTSNetworkTimeout,
+		})
 		return
 	}
 
 	req, err := http.NewRequestWithContext(t.ctx, "POST", t.GetAPIURL(), bytes.NewReader(body))
 	if err != nil {
 		t.logger.Errorf("minimax-tts: error creating request: %v", err)
+		t.onPacket(internal_type.TTSErrorPacket{
+			ContextID: ctxId,
+			Error:     fmt.Errorf("minimax-tts: error creating request: %w", err),
+			Type:      internal_type.TTSNetworkTimeout,
+		})
 		return
 	}
 	req.Header.Set("Authorization", "Bearer "+t.GetKey())
@@ -129,12 +139,22 @@ func (t *minimaxTTS) streamHTTPTTS(text string, ctxId string) {
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.logger.Errorf("minimax-tts: error sending request: %v", err)
+		t.onPacket(internal_type.TTSErrorPacket{
+			ContextID: ctxId,
+			Error:     fmt.Errorf("minimax-tts: error sending request: %w", err),
+			Type:      internal_type.TTSNetworkTimeout,
+		})
 		return
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		t.logger.Errorf("minimax-tts: unexpected status code: %d", resp.StatusCode)
+		t.onPacket(internal_type.TTSErrorPacket{
+			ContextID: ctxId,
+			Error:     fmt.Errorf("minimax-tts: unexpected status code: %d", resp.StatusCode),
+			Type:      internal_type.TTSNetworkTimeout,
+		})
 		return
 	}
 
@@ -207,7 +227,7 @@ func (t *minimaxTTS) Transform(ctx context.Context, in internal_type.Packet) err
 	t.mu.Unlock()
 
 	switch input := in.(type) {
-	case internal_type.InterruptionDetectedPacket:
+	case internal_type.TTSInterruptPacket:
 		if currentCtx != "" {
 			t.mu.Lock()
 			t.ttsStartedAt = time.Time{}

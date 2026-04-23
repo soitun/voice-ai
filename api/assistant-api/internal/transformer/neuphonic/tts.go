@@ -169,7 +169,7 @@ func (t *neuphonicTTS) Transform(ctx context.Context, in internal_type.Packet) e
 	t.mu.Unlock()
 
 	switch input := in.(type) {
-	case internal_type.InterruptionDetectedPacket:
+	case internal_type.TTSInterruptPacket:
 		t.mu.Lock()
 		t.contextId = ""
 		t.ttsStartedAt = time.Time{}
@@ -194,7 +194,12 @@ func (t *neuphonicTTS) Transform(ctx context.Context, in internal_type.Packet) e
 		// Fallback reconnect: handles Initialize() failure or an unintentional drop.
 		if connection == nil {
 			if err := t.Initialize(); err != nil {
-				return fmt.Errorf("neuphonic-tts: failed to connect: %w", err)
+				t.onPacket(internal_type.TTSErrorPacket{
+					ContextID: input.ContextID,
+					Error:     fmt.Errorf("neuphonic-tts: failed to connect: %w", err),
+					Type:      internal_type.TTSNetworkTimeout,
+				})
+				return nil
 			}
 			t.mu.Lock()
 			connection = t.connection
@@ -213,7 +218,12 @@ func (t *neuphonicTTS) Transform(ctx context.Context, in internal_type.Packet) e
 			"text": input.Text + " <STOP>",
 		}); err != nil {
 			t.logger.Errorf("neuphonic-tts: unable to write json for text to speech: %v", err)
-			return err
+			t.onPacket(internal_type.TTSErrorPacket{
+				ContextID: input.ContextID,
+				Error:     fmt.Errorf("neuphonic-tts: failed to write text: %w", err),
+				Type:      internal_type.TTSNetworkTimeout,
+			})
+			return nil
 		}
 		t.onPacket(internal_type.ConversationEventPacket{
 			Name: "tts",

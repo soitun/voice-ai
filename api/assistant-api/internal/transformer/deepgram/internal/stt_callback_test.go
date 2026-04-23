@@ -8,8 +8,8 @@ package deepgram_internal
 
 import (
 	"sync"
-	"sync/atomic"
 	"testing"
+	"time"
 
 	msginterfaces "github.com/deepgram/deepgram-go-sdk/v3/pkg/api/listen/v1/websocket/interfaces"
 	internal_type "github.com/rapidaai/api/assistant-api/internal/type"
@@ -60,7 +60,7 @@ func (pc *packetCollector) Clear() {
 func createTestCallback(opts utils.Option) (*packetCollector, commons.Logger, msginterfaces.LiveMessageCallback) {
 	logger, _ := commons.NewApplicationLogger()
 	collector := newPacketCollector()
-	callback := NewDeepgramSttCallback(logger, collector.OnPacket, opts, new(atomic.Int64), func() string { return "ctx-test" })
+	callback := NewDeepgramSttCallback(logger, collector.OnPacket, opts, func() time.Time { return time.Time{} }, func() string { return "ctx-test" })
 	return collector, logger, callback
 }
 

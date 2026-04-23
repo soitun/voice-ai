@@ -19,6 +19,17 @@ export const GetDefaultTextProviderConfigIfInvalid = (
   return getDefaultsFromConfig(config, 'text', normalizedParameters, provider);
 };
 
+export const GetDefaultTextProviderConfigOnProviderSwitch = (
+  provider: string,
+  parameters: Metadata[],
+): Metadata[] => {
+  const resetParameters = parameters.filter(
+    p => p.getKey() !== 'rapida.credential_id' && !p.getKey().startsWith('model.'),
+  );
+
+  return GetDefaultTextProviderConfigIfInvalid(provider, resetParameters);
+};
+
 export const ValidateTextProviderDefaultOptions = (
   provider: string,
   parameters: Metadata[],

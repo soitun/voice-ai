@@ -107,12 +107,22 @@ func (t *groqTTS) streamHTTPTTS(text string, ctxId string) {
 	body, err := json.Marshal(payload)
 	if err != nil {
 		t.logger.Errorf("groq-tts: error marshalling request: %v", err)
+		t.onPacket(internal_type.TTSErrorPacket{
+			ContextID: ctxId,
+			Error:     fmt.Errorf("groq-tts: error marshalling request: %w", err),
+			Type:      internal_type.TTSNetworkTimeout,
+		})
 		return
 	}
 
 	req, err := http.NewRequestWithContext(t.ctx, "POST", GROQ_TTS_URL, bytes.NewReader(body))
 	if err != nil {
 		t.logger.Errorf("groq-tts: error creating request: %v", err)
+		t.onPacket(internal_type.TTSErrorPacket{
+			ContextID: ctxId,
+			Error:     fmt.Errorf("groq-tts: error creating request: %w", err),
+			Type:      internal_type.TTSNetworkTimeout,
+		})
 		return
 	}
 	req.Header.Set("Authorization", "Bearer "+t.GetKey())
@@ -121,6 +131,11 @@ func (t *groqTTS) streamHTTPTTS(text string, ctxId string) {
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.logger.Errorf("groq-tts: error sending request: %v", err)
+		t.onPacket(internal_type.TTSErrorPacket{
+			ContextID: ctxId,
+			Error:     fmt.Errorf("groq-tts: error sending request: %w", err),
+			Type:      internal_type.TTSNetworkTimeout,
+		})
 		return
 	}
 	defer resp.Body.Close()
@@ -128,6 +143,11 @@ func (t *groqTTS) streamHTTPTTS(text string, ctxId string) {
 	if resp.StatusCode != http.StatusOK {
 		respBody, _ := io.ReadAll(resp.Body)
 		t.logger.Errorf("groq-tts: unexpected status code: %d, body: %s", resp.StatusCode, string(respBody))
+		t.onPacket(internal_type.TTSErrorPacket{
+			ContextID: ctxId,
+			Error:     fmt.Errorf("groq-tts: unexpected status code: %d", resp.StatusCode),
+			Type:      internal_type.TTSNetworkTimeout,
+		})
 		return
 	}
 
@@ -169,6 +189,11 @@ func (t *groqTTS) streamHTTPTTS(text string, ctxId string) {
 		if err != nil {
 			if err != io.EOF {
 				t.logger.Errorf("groq-tts: error reading response body: %v", err)
+				t.onPacket(internal_type.TTSErrorPacket{
+					ContextID: ctxId,
+					Error:     fmt.Errorf("groq-tts: error reading response body: %w", err),
+					Type:      internal_type.TTSNetworkTimeout,
+				})
 			}
 			break
 		}
@@ -196,7 +221,7 @@ func (t *groqTTS) Transform(ctx context.Context, in internal_type.Packet) error 
 	t.mu.Unlock()
 
 	switch input := in.(type) {
-	case internal_type.InterruptionDetectedPacket:
+	case internal_type.TTSInterruptPacket:
 		if currentCtx != "" {
 			t.mu.Lock()
 			t.ttsStartedAt = time.Time{}

@@ -39,6 +39,7 @@ import { TagInput } from '@/app/components/form/tag-input';
 import { AssistantTag } from '@/app/components/form/tag-input/assistant-tags';
 import {
   GetDefaultTextProviderConfigIfInvalid,
+  GetDefaultTextProviderConfigOnProviderSwitch,
   TextProvider,
   ValidateTextProviderDefaultOptions,
 } from '@/app/components/providers/text';
@@ -210,14 +211,11 @@ export function CreateAssistantPage() {
     setTags(tags.filter(t => t !== tag));
   };
   const onChangeProvider = (providerName: string) => {
-    const parametersWithoutCredential = selectedModel.parameters.filter(
-      p => p.getKey() !== 'rapida.credential_id',
-    );
     setSelectedModel({
       provider: providerName,
-      parameters: GetDefaultTextProviderConfigIfInvalid(
+      parameters: GetDefaultTextProviderConfigOnProviderSwitch(
         providerName,
-        parametersWithoutCredential,
+        selectedModel.parameters,
       ),
     });
   };

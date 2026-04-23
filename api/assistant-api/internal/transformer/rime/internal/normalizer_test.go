@@ -4,11 +4,12 @@
 // Licensed under GPL-2.0 with Rapida Additional Terms.
 // See LICENSE.md or contact sales@rapida.ai for commercial usage.
 
-package internal_transformer_rime
+package rime_internal
 
 import (
 	"testing"
 
+	testutil "github.com/rapidaai/api/assistant-api/internal/transformer/internal/testutil"
 	"github.com/rapidaai/pkg/commons"
 	"github.com/rapidaai/pkg/utils"
 	"github.com/stretchr/testify/assert"
@@ -21,7 +22,7 @@ import (
 
 func newTestRimeNormalizer(t *testing.T, opts utils.Option) *rimeNormalizer {
 	t.Helper()
-	logger := newTestLogger()
+	logger := testutil.NewTestLogger()
 	normalizer := NewRimeNormalizer(logger, opts)
 	rn, ok := normalizer.(*rimeNormalizer)
 	require.True(t, ok, "expected *rimeNormalizer type")

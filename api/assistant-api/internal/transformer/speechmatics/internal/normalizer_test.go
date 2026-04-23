@@ -4,7 +4,7 @@
 // Licensed under GPL-2.0 with Rapida Additional Terms.
 // See LICENSE.md or contact sales@rapida.ai for commercial usage.
 
-package internal_transformer_openai
+package speechmatics_internal
 
 import (
 	"testing"
@@ -15,14 +15,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func newTestLogger(t *testing.T) commons.Logger {
-	t.Helper()
-	logger, err := commons.NewApplicationLogger()
-	require.NoError(t, err)
-	return logger
-}
-
-func TestNewOpenAINormalizer(t *testing.T) {
+func TestNewSpeechmaticsNormalizer(t *testing.T) {
 	tests := []struct {
 		name         string
 		opts         utils.Option
@@ -35,8 +28,8 @@ func TestNewOpenAINormalizer(t *testing.T) {
 		},
 		{
 			name:         "explicit language",
-			opts:         utils.Option{"speaker.language": "fr"},
-			expectedLang: "fr",
+			opts:         utils.Option{"speaker.language": "de"},
+			expectedLang: "de",
 		},
 		{
 			name:         "empty language defaults to en",
@@ -47,19 +40,21 @@ func TestNewOpenAINormalizer(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			logger := newTestLogger(t)
-			normalizer := NewOpenAINormalizer(logger, tt.opts)
+			logger, err := commons.NewApplicationLogger()
+			require.NoError(t, err)
+			normalizer := NewSpeechmaticsNormalizer(logger, tt.opts)
 			require.NotNil(t, normalizer)
-			on, ok := normalizer.(*openaiNormalizer)
+			sn, ok := normalizer.(*speechmaticsNormalizer)
 			require.True(t, ok)
-			assert.Equal(t, tt.expectedLang, on.language)
+			assert.Equal(t, tt.expectedLang, sn.language)
 		})
 	}
 }
 
 func TestNormalize_Passthrough(t *testing.T) {
-	logger := newTestLogger(t)
-	normalizer := NewOpenAINormalizer(logger, utils.Option{})
+	logger, _ := commons.NewApplicationLogger()
+	normalizer := NewSpeechmaticsNormalizer(logger, utils.Option{})
+
 	tests := []struct {
 		name  string
 		input string
@@ -80,8 +75,9 @@ func TestNormalize_Passthrough(t *testing.T) {
 }
 
 func TestNormalize_NoSSML(t *testing.T) {
-	logger := newTestLogger(t)
-	normalizer := NewOpenAINormalizer(logger, utils.Option{})
+	logger, _ := commons.NewApplicationLogger()
+	normalizer := NewSpeechmaticsNormalizer(logger, utils.Option{})
+
 	result := normalizer.Normalize("Tom & Jerry")
 	assert.NotContains(t, result, "&amp;")
 	assert.NotContains(t, result, "<break")
@@ -89,7 +85,7 @@ func TestNormalize_NoSSML(t *testing.T) {
 
 func BenchmarkNormalize(b *testing.B) {
 	logger, _ := commons.NewApplicationLogger()
-	normalizer := NewOpenAINormalizer(logger, utils.Option{})
+	normalizer := NewSpeechmaticsNormalizer(logger, utils.Option{})
 	text := "Hello, this is a simple text for TTS processing."
 
 	b.ResetTimer()

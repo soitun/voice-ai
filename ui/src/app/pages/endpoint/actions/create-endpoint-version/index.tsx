@@ -13,6 +13,7 @@ import { useRapidaStore } from '@/hooks';
 import { useAllProviderCredentials } from '@/hooks/use-model';
 import {
   GetDefaultTextProviderConfigIfInvalid,
+  GetDefaultTextProviderConfigOnProviderSwitch,
   TextProvider,
   ValidateTextProviderDefaultOptions,
 } from '@/app/components/providers/text';
@@ -93,14 +94,11 @@ export const CreateNewVersionEndpointPage: FC = () => {
     parameters: GetDefaultTextProviderConfigIfInvalid('azure-foundry', []),
   });
   const onChangeTextProvider = (providerName: string) => {
-    const parametersWithoutCredential = textProviderModel.parameters.filter(
-      p => p.getKey() !== 'rapida.credential_id',
-    );
     setTextProviderModel({
       provider: providerName,
-      parameters: GetDefaultTextProviderConfigIfInvalid(
+      parameters: GetDefaultTextProviderConfigOnProviderSwitch(
         providerName,
-        parametersWithoutCredential,
+        textProviderModel.parameters,
       ),
     });
   };

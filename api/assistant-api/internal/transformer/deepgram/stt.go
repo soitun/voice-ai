@@ -14,7 +14,6 @@ import (
 	"fmt"
 	"io"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	interfaces "github.com/deepgram/deepgram-go-sdk/v3/pkg/client/interfaces/v1"
@@ -38,14 +37,19 @@ type deepgramSTT struct {
 	onPacket       func(pkt ...internal_type.Packet) error
 	contextId      string
 	sttConnectedAt time.Time
-	// startedAtNano stores Unix nanoseconds of when the first audio chunk was
-	// sent for the current utterance. 0 means "not started". Shared with the
-	// callback via pointer so the callback can atomically get-and-reset it.
-	startedAtNano atomic.Int64
+	startedAt      time.Time
 }
 
 func (*deepgramSTT) Name() string {
 	return "deepgram-speech-to-text"
+}
+
+func (dg *deepgramSTT) swapStartedAt() time.Time {
+	dg.mu.Lock()
+	t := dg.startedAt
+	dg.startedAt = time.Time{}
+	dg.mu.Unlock()
+	return t
 }
 
 func NewDeepgramSpeechToText(ctx context.Context, logger commons.Logger, vaultCredential *protos.VaultCredential,
@@ -74,7 +78,7 @@ func (dg *deepgramSTT) Initialize() error {
 		dg.ctx,
 		dg.GetKey(),
 		&interfaces.ClientOptions{APIKey: dg.GetKey(), EnableKeepAlive: true},
-		dg.SpeechToTextOptions(), deepgram_internal.NewDeepgramSttCallback(dg.logger, dg.onPacket, dg.deepgramOption.mdlOpts, &dg.startedAtNano, dg.getContextID))
+		dg.SpeechToTextOptions(), deepgram_internal.NewDeepgramSttCallback(dg.logger, dg.onPacket, dg.deepgramOption.mdlOpts, dg.swapStartedAt, dg.getContextID))
 	if err != nil {
 		dg.logger.Errorf("deepgram-stt: unable create dg client with error %+v", err.Error())
 		return err
@@ -116,7 +120,11 @@ func (dg *deepgramSTT) Transform(ctx context.Context, in internal_type.Packet) e
 		dg.mu.Unlock()
 		return nil
 	case internal_type.STTInterruptPacket:
-		dg.startedAtNano.CompareAndSwap(0, time.Now().UnixNano())
+		dg.mu.Lock()
+		if dg.startedAt.IsZero() {
+			dg.startedAt = time.Now()
+		}
+		dg.mu.Unlock()
 		return nil
 	case internal_type.UserAudioReceivedPacket:
 		dg.mu.Lock()

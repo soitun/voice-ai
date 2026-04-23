@@ -156,11 +156,17 @@ func (s *azureSpeechToText) Transform(_ context.Context, in internal_type.Packet
 		s.mu.Unlock()
 
 		if stream == nil {
-			return fmt.Errorf("azure-stt: transform called before initialize")
+			return nil
 		}
 
 		if err := stream.Write(pkt.Content()); err != nil {
-			return fmt.Errorf("failed to write audio data: %w", err)
+			s.logger.Errorf("azure-stt: error sending audio: %v", err)
+			s.onPacket(internal_type.STTErrorPacket{
+				ContextID: s.contextId,
+				Error:     fmt.Errorf("azure-stt: send failed: %w", err),
+				Type:      internal_type.STTNetworkTimeout,
+			})
+			return nil
 		}
 
 		return nil
@@ -314,11 +320,10 @@ func (s *azureSpeechToText) OnRecognized(event speech.SpeechRecognitionEventArgs
 
 func (s *azureSpeechToText) OnCancelled(event speech.SpeechRecognitionCanceledEventArgs) {
 	defer event.Close()
-	s.onPacket(internal_type.ConversationEventPacket{
+	s.onPacket(internal_type.STTErrorPacket{
 		ContextID: s.contextId,
-		Name:      "stt",
-		Data:      map[string]string{"type": "error", "error": "recognition cancelled"},
-		Time:      time.Now(),
+		Error:     fmt.Errorf("azure-stt: recognition cancelled"),
+		Type:      internal_type.STTNetworkTimeout,
 	})
 }
 

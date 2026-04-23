@@ -17,6 +17,7 @@ const mockConfigPrompt = jest.fn();
 const mockTextProvider = jest.fn();
 const mockValidateTextProviderDefaultOptions = jest.fn();
 const mockGetDefaultTextProviderConfigIfInvalid = jest.fn();
+const mockGetDefaultTextProviderConfigOnProviderSwitch = jest.fn();
 
 jest.mock('@rapidaai/react', () => {
   class ConnectionConfig {
@@ -163,6 +164,8 @@ jest.mock('@/app/components/form/tab-form', () => ({
 jest.mock('@/app/components/providers/text', () => ({
   GetDefaultTextProviderConfigIfInvalid: (...args: unknown[]) =>
     mockGetDefaultTextProviderConfigIfInvalid(...args),
+  GetDefaultTextProviderConfigOnProviderSwitch: (...args: unknown[]) =>
+    mockGetDefaultTextProviderConfigOnProviderSwitch(...args),
   ValidateTextProviderDefaultOptions: (...args: unknown[]) =>
     mockValidateTextProviderDefaultOptions(...args),
   TextProvider: (props: any) => {
@@ -266,8 +269,12 @@ describe('Requested create/update flow pages', () => {
     mockTextProvider.mockClear();
     mockValidateTextProviderDefaultOptions.mockReset();
     mockGetDefaultTextProviderConfigIfInvalid.mockReset();
+    mockGetDefaultTextProviderConfigOnProviderSwitch.mockReset();
     mockValidateTextProviderDefaultOptions.mockReturnValue(undefined);
     mockGetDefaultTextProviderConfigIfInvalid.mockImplementation(
+      (_provider: string, current: unknown[] = []) => current,
+    );
+    mockGetDefaultTextProviderConfigOnProviderSwitch.mockImplementation(
       (_provider: string, current: unknown[] = []) => current,
     );
 

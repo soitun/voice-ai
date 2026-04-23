@@ -15,7 +15,6 @@ import (
 	"io"
 	"net/http"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	internal_type "github.com/rapidaai/api/assistant-api/internal/type"
@@ -34,7 +33,7 @@ type nvidiaSTT struct {
 	contextId      string
 	sttConnectedAt time.Time
 	audioBuffer    bytes.Buffer
-	startedAtNano  atomic.Int64
+	startedAt      time.Time
 
 	logger   commons.Logger
 	onPacket func(pkt ...internal_type.Packet) error
@@ -88,10 +87,12 @@ func (st *nvidiaSTT) Transform(ctx context.Context, in internal_type.Packet) err
 		st.contextId = pkt.ContextID
 		st.mu.Unlock()
 		return nil
-	case internal_type.InterruptionDetectedPacket:
-		if pkt.Source == internal_type.InterruptionSourceVad {
-			st.startedAtNano.Store(time.Now().UnixNano())
+	case internal_type.STTInterruptPacket:
+		st.mu.Lock()
+		if st.startedAt.IsZero() {
+			st.startedAt = time.Now()
 		}
+		st.mu.Unlock()
 		return nil
 	case internal_type.UserAudioReceivedPacket:
 		st.mu.Lock()
@@ -122,12 +123,14 @@ func (st *nvidiaSTT) transcribe(audioData []byte, ctxId string) {
 	body, err := json.Marshal(payload)
 	if err != nil {
 		st.logger.Errorf("nvidia-stt: error marshalling request: %v", err)
+		st.onPacket(internal_type.STTErrorPacket{ContextID: ctxId, Error: fmt.Errorf("nvidia-stt: marshal failed: %w", err), Type: internal_type.STTNetworkTimeout})
 		return
 	}
 
 	req, err := http.NewRequestWithContext(st.ctx, "POST", apiURL, bytes.NewReader(body))
 	if err != nil {
 		st.logger.Errorf("nvidia-stt: error creating request: %v", err)
+		st.onPacket(internal_type.STTErrorPacket{ContextID: ctxId, Error: fmt.Errorf("nvidia-stt: request creation failed: %w", err), Type: internal_type.STTNetworkTimeout})
 		return
 	}
 	req.Header.Set("Authorization", "Bearer "+st.GetKey())
@@ -137,6 +140,7 @@ func (st *nvidiaSTT) transcribe(audioData []byte, ctxId string) {
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		st.logger.Errorf("nvidia-stt: error sending request: %v", err)
+		st.onPacket(internal_type.STTErrorPacket{ContextID: ctxId, Error: fmt.Errorf("nvidia-stt: request failed: %w", err), Type: internal_type.STTNetworkTimeout})
 		return
 	}
 	defer resp.Body.Close()
@@ -144,6 +148,7 @@ func (st *nvidiaSTT) transcribe(audioData []byte, ctxId string) {
 	if resp.StatusCode != http.StatusOK {
 		respBody, _ := io.ReadAll(resp.Body)
 		st.logger.Errorf("nvidia-stt: unexpected status code: %d, body: %s", resp.StatusCode, string(respBody))
+		st.onPacket(internal_type.STTErrorPacket{ContextID: ctxId, Error: fmt.Errorf("nvidia-stt: status %d", resp.StatusCode), Type: internal_type.STTNetworkTimeout})
 		return
 	}
 
@@ -152,20 +157,19 @@ func (st *nvidiaSTT) transcribe(audioData []byte, ctxId string) {
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		st.logger.Errorf("nvidia-stt: error decoding response: %v", err)
+		st.onPacket(internal_type.STTErrorPacket{ContextID: ctxId, Error: fmt.Errorf("nvidia-stt: decode failed: %w", err), Type: internal_type.STTNetworkTimeout})
 		return
 	}
 
 	if result.Text != "" {
-		startedNano := st.startedAtNano.Swap(0)
-		if startedNano > 0 {
-			st.onPacket(internal_type.UserMessageMetricPacket{
-				ContextID: ctxId,
-				Metrics: []*protos.Metric{{
-					Name:  "stt_latency_ms",
-					Value: fmt.Sprintf("%d", (time.Now().UnixNano()-startedNano)/int64(time.Millisecond)),
-				}},
-			})
+		now := time.Now()
+		var latencyMs int64
+		st.mu.Lock()
+		if !st.startedAt.IsZero() {
+			latencyMs = now.Sub(st.startedAt).Milliseconds()
+			st.startedAt = time.Time{}
 		}
+		st.mu.Unlock()
 
 		st.onPacket(
 			internal_type.InterruptionDetectedPacket{ContextID: ctxId, Source: "word"},
@@ -178,7 +182,11 @@ func (st *nvidiaSTT) transcribe(audioData []byte, ctxId string) {
 				ContextID: ctxId,
 				Name:      "stt",
 				Data:      map[string]string{"type": "completed"},
-				Time:      time.Now(),
+				Time:      now,
+			},
+			internal_type.UserMessageMetricPacket{
+				ContextID: ctxId,
+				Metrics:   []*protos.Metric{{Name: "stt_latency_ms", Value: fmt.Sprintf("%d", latencyMs)}},
 			},
 		)
 	}

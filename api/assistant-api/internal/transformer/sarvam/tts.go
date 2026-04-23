@@ -277,7 +277,12 @@ func (rt *sarvamTextToSpeech) Transform(ctx context.Context, in internal_type.Pa
 		// an unintentional connection drop between turns.
 		if connection == nil {
 			if err := rt.Initialize(); err != nil {
-				return fmt.Errorf("sarvam-tts: failed to connect: %w", err)
+				rt.onPacket(internal_type.TTSErrorPacket{
+					ContextID: input.ContextID,
+					Error:     fmt.Errorf("sarvam-tts: failed to connect: %w", err),
+					Type:      internal_type.TTSNetworkTimeout,
+				})
+				return nil
 			}
 			rt.mu.Lock()
 			connection = rt.connection
@@ -297,7 +302,12 @@ func (rt *sarvamTextToSpeech) Transform(ctx context.Context, in internal_type.Pa
 			"data": map[string]interface{}{"text": input.Text},
 		}); err != nil {
 			rt.logger.Errorf("sarvam-tts: write failed: %v", err)
-			return err
+			rt.onPacket(internal_type.TTSErrorPacket{
+				ContextID: input.ContextID,
+				Error:     fmt.Errorf("sarvam-tts: failed to write text: %w", err),
+				Type:      internal_type.TTSNetworkTimeout,
+			})
+			return nil
 		}
 		rt.onPacket(internal_type.ConversationEventPacket{
 			Name: "tts",
@@ -312,7 +322,12 @@ func (rt *sarvamTextToSpeech) Transform(ctx context.Context, in internal_type.Pa
 		}
 		if err := connection.WriteJSON(map[string]interface{}{"type": "flush"}); err != nil {
 			rt.logger.Errorf("sarvam-tts: flush failed: %v", err)
-			return err
+			rt.onPacket(internal_type.TTSErrorPacket{
+				ContextID: input.ContextID,
+				Error:     fmt.Errorf("sarvam-tts: flush failed: %w", err),
+				Type:      internal_type.TTSNetworkTimeout,
+			})
+			return nil
 		}
 		// TextToSpeechEndPacket is emitted by handleFlushComplete once Sarvam
 		// confirms all audio has been delivered via the "event" response.
