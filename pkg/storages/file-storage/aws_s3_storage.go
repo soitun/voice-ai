@@ -83,7 +83,8 @@ func (storage *awsFileStorage) Store(_ context.Context, key string, fileContent 
 	storage.logger.Debugf("s3.store with file path name %s storage path prefix %s", key, storage.config.StoragePathPrefix)
 	completePath := fmt.Sprintf("s3://%s/%s", storage.config.StoragePathPrefix, key)
 	reader := bytes.NewReader(fileContent)
-	uploadCtx, _ := context.WithTimeout(context.Background(), storages.FileWriteTimeout)
+	uploadCtx, cancel := context.WithTimeout(context.Background(), storages.FileWriteTimeout)
+	defer cancel()
 	_, err := storage.s3Client.PutObjectWithContext(uploadCtx, &s3.PutObjectInput{
 		Bucket:      aws.String(storage.config.StoragePathPrefix),
 		Key:         aws.String(key),

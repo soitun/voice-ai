@@ -85,7 +85,8 @@ func (az *azureBlobStorage) Name() string {
 func (az *azureBlobStorage) Store(_ context.Context, key string, fileContent []byte) storages.StorageOutput {
 	az.logger.Debugf("azure.store key=%s container=%s", key, az.config.StoragePathPrefix)
 	completePath := az.blobURL(key)
-	uploadCtx, _ := context.WithTimeout(context.Background(), storages.FileWriteTimeout)
+	uploadCtx, cancel := context.WithTimeout(context.Background(), storages.FileWriteTimeout)
+	defer cancel()
 	_, err := az.client.UploadStream(uploadCtx, az.config.StoragePathPrefix, key,
 		bytes.NewReader(fileContent), nil)
 	if err != nil {
