@@ -56,10 +56,10 @@ func TestDispatcher_RoutesTransferStages(t *testing.T) {
 	// Test that OnPipeline doesn't panic for new stage types
 	d.OnPipeline(context.Background(),
 		sip_infra.TransferInitiatedPipeline{
-			ID:        "test-transfer",
-			Session:   s,
-			TargetURI: "918031405561",
-			Config:    newTransferTestConfig(),
+			ID:          "test-transfer",
+			Session:     s,
+			TargetURI:   "918031405561",
+			Config:      newTransferTestConfig(),
 			OnConnected: func(_ *sip_infra.RTPHandler) {},
 			OnFailed:    func() { failedCount.Add(1) },
 		},
@@ -275,8 +275,8 @@ func TestTransferInitiatedPipeline_HasOnTeardownField(t *testing.T) {
 	// If the field is removed or renamed, this test fails at compile time.
 	var called bool
 	p := sip_infra.TransferInitiatedPipeline{
-		ID:        "contract-test",
-		OnFailed:  func() {},
+		ID:         "contract-test",
+		OnFailed:   func() {},
 		OnTeardown: func() { called = true },
 	}
 	// Verify the field is callable

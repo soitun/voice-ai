@@ -16,7 +16,7 @@ import (
 type toolBlockState int
 
 const (
-	toolBlockNone       toolBlockState = iota
+	toolBlockNone toolBlockState = iota
 	toolBlockOpen
 	toolBlockSuperseded
 	toolBlockResolved

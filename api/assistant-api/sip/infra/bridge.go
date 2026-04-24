@@ -86,8 +86,8 @@ type BridgeEndReason int
 const (
 	BridgeEndInboundBye  BridgeEndReason = iota // caller hung up
 	BridgeEndOutboundBye                        // operator/transfer target hung up
-	BridgeEndContext                             // context cancelled
-	BridgeEndTimeout                             // safety timeout
+	BridgeEndContext                            // context cancelled
+	BridgeEndTimeout                            // safety timeout
 )
 
 // BridgeTransfer forwards outbound→inbound RTP audio and monitors both sessions

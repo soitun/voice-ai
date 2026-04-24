@@ -345,12 +345,12 @@ type AssistantProviderWebsocket struct {
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	Id          uint64            `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
-	Description string            `protobuf:"bytes,2,opt,name=description,proto3" json:"description,omitempty"`
-	AssistantId uint64            `protobuf:"varint,3,opt,name=assistantId,proto3" json:"assistantId,omitempty"`
-	Url         string            `protobuf:"bytes,5,opt,name=url,proto3" json:"url,omitempty"`
-	Headers     map[string]string `protobuf:"bytes,6,rep,name=headers,proto3" json:"headers,omitempty" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"bytes,2,opt,name=value,proto3"`
-	Parameters  map[string]string `protobuf:"bytes,7,rep,name=parameters,proto3" json:"parameters,omitempty" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"bytes,2,opt,name=value,proto3"`
+	Id          uint64                 `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
+	Description string                 `protobuf:"bytes,2,opt,name=description,proto3" json:"description,omitempty"`
+	AssistantId uint64                 `protobuf:"varint,3,opt,name=assistantId,proto3" json:"assistantId,omitempty"`
+	Url         string                 `protobuf:"bytes,5,opt,name=url,proto3" json:"url,omitempty"`
+	Headers     map[string]string      `protobuf:"bytes,6,rep,name=headers,proto3" json:"headers,omitempty" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"bytes,2,opt,name=value,proto3"`
+	Parameters  map[string]string      `protobuf:"bytes,7,rep,name=parameters,proto3" json:"parameters,omitempty" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"bytes,2,opt,name=value,proto3"`
 	Status      string                 `protobuf:"bytes,12,opt,name=status,proto3" json:"status,omitempty"`
 	CreatedBy   uint64                 `protobuf:"varint,13,opt,name=createdBy,proto3" json:"createdBy,omitempty"`
 	CreatedUser *User                  `protobuf:"bytes,14,opt,name=createdUser,proto3" json:"createdUser,omitempty"`

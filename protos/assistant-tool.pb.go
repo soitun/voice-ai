@@ -927,22 +927,22 @@ type AssistantToolLog struct {
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	Id          uint64                 `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
-	Action      *structpb.Struct       `protobuf:"bytes,2,opt,name=action,proto3" json:"action,omitempty"`
-	Request     *structpb.Struct       `protobuf:"bytes,3,opt,name=request,proto3" json:"request,omitempty"`
-	Response    *structpb.Struct       `protobuf:"bytes,4,opt,name=response,proto3" json:"response,omitempty"`
-	Status      string                 `protobuf:"bytes,5,opt,name=status,proto3" json:"status,omitempty"`
-	CreatedDate *timestamppb.Timestamp `protobuf:"bytes,6,opt,name=createdDate,proto3" json:"createdDate,omitempty"`
-	UpdatedDate *timestamppb.Timestamp `protobuf:"bytes,7,opt,name=updatedDate,proto3" json:"updatedDate,omitempty"`
-	AssistantId                    uint64 `protobuf:"varint,8,opt,name=assistantId,proto3" json:"assistantId,omitempty"`
-	ProjectId                      uint64 `protobuf:"varint,9,opt,name=projectId,proto3" json:"projectId,omitempty"`
-	OrganizationId                 uint64 `protobuf:"varint,10,opt,name=organizationId,proto3" json:"organizationId,omitempty"`
-	AssistantConversationId        uint64 `protobuf:"varint,11,opt,name=assistantConversationId,proto3" json:"assistantConversationId,omitempty"`
-	AssistantConversationMessageId string `protobuf:"bytes,12,opt,name=assistantConversationMessageId,proto3" json:"assistantConversationMessageId,omitempty"`
-	AssetPrefix                    string `protobuf:"bytes,14,opt,name=assetPrefix,proto3" json:"assetPrefix,omitempty"`
-	TimeTaken                      uint64 `protobuf:"varint,16,opt,name=timeTaken,proto3" json:"timeTaken,omitempty"`
-	AssistantToolName              string `protobuf:"bytes,17,opt,name=assistantToolName,proto3" json:"assistantToolName,omitempty"`
-	ToolCallId                     string `protobuf:"bytes,19,opt,name=toolCallId,proto3" json:"toolCallId,omitempty"`
+	Id                             uint64                 `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
+	Action                         *structpb.Struct       `protobuf:"bytes,2,opt,name=action,proto3" json:"action,omitempty"`
+	Request                        *structpb.Struct       `protobuf:"bytes,3,opt,name=request,proto3" json:"request,omitempty"`
+	Response                       *structpb.Struct       `protobuf:"bytes,4,opt,name=response,proto3" json:"response,omitempty"`
+	Status                         string                 `protobuf:"bytes,5,opt,name=status,proto3" json:"status,omitempty"`
+	CreatedDate                    *timestamppb.Timestamp `protobuf:"bytes,6,opt,name=createdDate,proto3" json:"createdDate,omitempty"`
+	UpdatedDate                    *timestamppb.Timestamp `protobuf:"bytes,7,opt,name=updatedDate,proto3" json:"updatedDate,omitempty"`
+	AssistantId                    uint64                 `protobuf:"varint,8,opt,name=assistantId,proto3" json:"assistantId,omitempty"`
+	ProjectId                      uint64                 `protobuf:"varint,9,opt,name=projectId,proto3" json:"projectId,omitempty"`
+	OrganizationId                 uint64                 `protobuf:"varint,10,opt,name=organizationId,proto3" json:"organizationId,omitempty"`
+	AssistantConversationId        uint64                 `protobuf:"varint,11,opt,name=assistantConversationId,proto3" json:"assistantConversationId,omitempty"`
+	AssistantConversationMessageId string                 `protobuf:"bytes,12,opt,name=assistantConversationMessageId,proto3" json:"assistantConversationMessageId,omitempty"`
+	AssetPrefix                    string                 `protobuf:"bytes,14,opt,name=assetPrefix,proto3" json:"assetPrefix,omitempty"`
+	TimeTaken                      uint64                 `protobuf:"varint,16,opt,name=timeTaken,proto3" json:"timeTaken,omitempty"`
+	AssistantToolName              string                 `protobuf:"bytes,17,opt,name=assistantToolName,proto3" json:"assistantToolName,omitempty"`
+	ToolCallId                     string                 `protobuf:"bytes,19,opt,name=toolCallId,proto3" json:"toolCallId,omitempty"`
 }
 
 func (x *AssistantToolLog) Reset() {

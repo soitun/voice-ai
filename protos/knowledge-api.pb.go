@@ -1523,9 +1523,9 @@ type UpdateKnowledgeDocumentSegmentRequest struct {
 	Quantities    []string `protobuf:"bytes,7,rep,name=quantities,proto3" json:"quantities,omitempty"`
 	Locations     []string `protobuf:"bytes,8,rep,name=locations,proto3" json:"locations,omitempty"`
 	Industries    []string `protobuf:"bytes,9,rep,name=industries,proto3" json:"industries,omitempty"`
-	DocumentName string `protobuf:"bytes,10,opt,name=documentName,proto3" json:"documentName,omitempty"`
-	DocumentId   string `protobuf:"bytes,11,opt,name=documentId,proto3" json:"documentId,omitempty"`
-	Index        string `protobuf:"bytes,12,opt,name=index,proto3" json:"index,omitempty"`
+	DocumentName  string   `protobuf:"bytes,10,opt,name=documentName,proto3" json:"documentName,omitempty"`
+	DocumentId    string   `protobuf:"bytes,11,opt,name=documentId,proto3" json:"documentId,omitempty"`
+	Index         string   `protobuf:"bytes,12,opt,name=index,proto3" json:"index,omitempty"`
 }
 
 func (x *UpdateKnowledgeDocumentSegmentRequest) Reset() {

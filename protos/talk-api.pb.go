@@ -1129,10 +1129,10 @@ type ConversationInitialization struct {
 	AssistantConversationId uint64                 `protobuf:"varint,1,opt,name=assistantConversationId,proto3" json:"assistantConversationId,omitempty"`
 	Assistant               *AssistantDefinition   `protobuf:"bytes,2,opt,name=assistant,proto3" json:"assistant,omitempty"`
 	Time                    *timestamppb.Timestamp `protobuf:"bytes,3,opt,name=time,proto3" json:"time,omitempty"`
-	Metadata   map[string]*anypb.Any `protobuf:"bytes,4,rep,name=metadata,proto3" json:"metadata,omitempty" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"bytes,2,opt,name=value,proto3"`
-	Args       map[string]*anypb.Any `protobuf:"bytes,5,rep,name=args,proto3" json:"args,omitempty" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"bytes,2,opt,name=value,proto3"`
-	Options    map[string]*anypb.Any `protobuf:"bytes,6,rep,name=options,proto3" json:"options,omitempty" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"bytes,2,opt,name=value,proto3"`
-	StreamMode StreamMode            `protobuf:"varint,7,opt,name=streamMode,proto3,enum=talk_api.StreamMode" json:"streamMode,omitempty"`
+	Metadata                map[string]*anypb.Any  `protobuf:"bytes,4,rep,name=metadata,proto3" json:"metadata,omitempty" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"bytes,2,opt,name=value,proto3"`
+	Args                    map[string]*anypb.Any  `protobuf:"bytes,5,rep,name=args,proto3" json:"args,omitempty" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"bytes,2,opt,name=value,proto3"`
+	Options                 map[string]*anypb.Any  `protobuf:"bytes,6,rep,name=options,proto3" json:"options,omitempty" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"bytes,2,opt,name=value,proto3"`
+	StreamMode              StreamMode             `protobuf:"varint,7,opt,name=streamMode,proto3,enum=talk_api.StreamMode" json:"streamMode,omitempty"`
 	// Types that are assignable to UserIdentity:
 	//
 	//	*ConversationInitialization_Phone
