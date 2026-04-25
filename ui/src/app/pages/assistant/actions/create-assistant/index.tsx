@@ -44,6 +44,10 @@ import {
   ValidateTextProviderDefaultOptions,
 } from '@/app/components/providers/text';
 import { BuildinToolConfig } from '@/app/components/tools';
+import {
+  getToolConditionSource,
+  getToolConditionSourceLabel,
+} from '@/app/components/tools/common';
 import { ArrowUpRight } from 'lucide-react';
 import { BUILDIN_TOOLS } from '@/llm-tools';
 import { EmptyState } from '@/app/components/carbon/empty-state';
@@ -620,6 +624,9 @@ export function CreateAssistantPage() {
                           );
                           const isMCP = method === 'mcp';
                           const selected = selectedToolName === itm.name;
+                          const conditionSource = getToolConditionSource(
+                            itm.buildinToolConfig.parameters,
+                          );
 
                           return (
                             <TableRow
@@ -663,6 +670,14 @@ export function CreateAssistantPage() {
                                   {!methodMeta && !isMCP && (
                                     <Tag size="sm" type="gray">
                                       {(method || 'Unknown').replace(/_/g, ' ')}
+                                    </Tag>
+                                  )}
+                                  {conditionSource !== 'all' && (
+                                    <Tag size="sm" type="blue">
+                                      Source:{' '}
+                                      {getToolConditionSourceLabel(
+                                        conditionSource,
+                                      )}
                                     </Tag>
                                   )}
                                 </div>
