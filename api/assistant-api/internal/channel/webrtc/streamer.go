@@ -25,6 +25,7 @@ import (
 	internal_audio_resampler "github.com/rapidaai/api/assistant-api/internal/audio/resampler"
 	channel_base "github.com/rapidaai/api/assistant-api/internal/channel/base"
 	webrtc_internal "github.com/rapidaai/api/assistant-api/internal/channel/webrtc/internal"
+	"github.com/rapidaai/api/assistant-api/internal/observe"
 	internal_type "github.com/rapidaai/api/assistant-api/internal/type"
 	"github.com/rapidaai/pkg/commons"
 	"github.com/rapidaai/protos"
@@ -247,9 +248,9 @@ func (s *webrtcStreamer) setupPeerEventHandlers() {
 			iceLatencyMs := time.Since(s.iceStartedAt).Milliseconds()
 			s.Mu.Unlock()
 			s.Input(&protos.ConversationEvent{
-				Name: "webrtc",
+				Name: observe.ComponentWebRTC,
 				Data: map[string]string{
-					"type":           "peer_connected",
+					"type":           observe.EventPeerConnected,
 					"session_id":     s.sessionID,
 					"ice_latency_ms": fmt.Sprintf("%d", iceLatencyMs),
 				},
@@ -263,9 +264,9 @@ func (s *webrtcStreamer) setupPeerEventHandlers() {
 			// back to text mode so the conversation stays alive.
 			s.Logger.Warnw("WebRTC ICE failed, falling back to text mode", "session", s.sessionID)
 			s.Input(&protos.ConversationEvent{
-				Name: "webrtc",
+				Name: observe.ComponentWebRTC,
 				Data: map[string]string{
-					"type":       "peer_failed",
+					"type":       observe.EventICEFailed,
 					"session_id": s.sessionID,
 					"reason":     "ice_failed",
 				},
@@ -279,9 +280,9 @@ func (s *webrtcStreamer) setupPeerEventHandlers() {
 			// session can continue in text mode or reconnect.
 			s.Logger.Warnw("WebRTC peer disconnected, resetting audio", "session", s.sessionID)
 			s.Input(&protos.ConversationEvent{
-				Name: "webrtc",
+				Name: observe.ComponentWebRTC,
 				Data: map[string]string{
-					"type":       "peer_disconnected",
+					"type":       observe.EventPeerDisconnected,
 					"session_id": s.sessionID,
 				},
 				Time: timestamppb.Now(),
@@ -297,9 +298,9 @@ func (s *webrtcStreamer) setupPeerEventHandlers() {
 		}
 		s.Logger.Infow("Remote audio track received", "codec", track.Codec().MimeType)
 		s.Input(&protos.ConversationEvent{
-			Name: "webrtc",
+			Name: observe.ComponentWebRTC,
 			Data: map[string]string{
-				"type":       "audio_track_received",
+				"type":       observe.EventAudioTrackReceived,
 				"session_id": s.sessionID,
 				"codec":      track.Codec().MimeType,
 			},

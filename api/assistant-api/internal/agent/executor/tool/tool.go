@@ -9,6 +9,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 
 	internal_agent_executor "github.com/rapidaai/api/assistant-api/internal/agent/executor"
 	internal_tool "github.com/rapidaai/api/assistant-api/internal/agent/executor/tool/internal"
@@ -27,6 +28,12 @@ type toolExecutor struct {
 	tools                  map[string]internal_tool.ToolCaller
 	availableToolFunctions []*protos.FunctionDefinition
 	mcpClients             []*internal_tool_mcp.Client
+	conditionMatcher       *toolConditionMatcher
+}
+
+type toolRegistration struct {
+	caller internal_tool.ToolCaller
+	def    *protos.FunctionDefinition
 }
 
 func NewToolExecutor(logger commons.Logger) internal_agent_executor.ToolExecutor {
@@ -35,6 +42,7 @@ func NewToolExecutor(logger commons.Logger) internal_agent_executor.ToolExecutor
 		mcpClients:             make([]*internal_tool_mcp.Client, 0),
 		tools:                  make(map[string]internal_tool.ToolCaller),
 		availableToolFunctions: make([]*protos.FunctionDefinition, 0),
+		conditionMatcher:       newToolConditionMatcher(),
 	}
 }
 
@@ -68,48 +76,156 @@ func (executor *toolExecutor) initializeLocalTool(ctx context.Context, logger co
 	}
 }
 
-// initializeTools initializes all tools (local + MCP) for the assistant
-func (executor *toolExecutor) initializeTools(ctx context.Context, tools []*internal_assistant_entity.AssistantTool, communication internal_type.Communication) {
+func (executor *toolExecutor) discoverTools(communication internal_type.Communication) []*internal_assistant_entity.AssistantTool {
+	if communication.Assistant() == nil {
+		return nil
+	}
+	return communication.Assistant().AssistantTools
+}
+
+func (executor *toolExecutor) filterToolsByCondition(
+	tools []*internal_assistant_entity.AssistantTool,
+	communication internal_type.Communication,
+) []*internal_assistant_entity.AssistantTool {
+	if executor.conditionMatcher == nil {
+		executor.conditionMatcher = newToolConditionMatcher()
+	}
+
+	filtered := make([]*internal_assistant_entity.AssistantTool, 0, len(tools))
 	for _, tool := range tools {
-		switch tool.ExecutionMethod {
-		case "mcp":
-			client, err := internal_tool_mcp.NewClient(ctx, executor.logger, tool.GetOptions())
-			if err != nil {
-				executor.logger.Errorf("Failed to create MCP client for tool %s: %v", tool.Name, err)
-				continue
-			}
-			executor.mcpClients = append(executor.mcpClients, client)
-			definitions, err := client.ListTools(ctx)
-			if err != nil {
-				executor.logger.Errorf("Failed to list tools from MCP server for %s: %v", tool.Name, err)
-				continue
-			}
-			for i, def := range definitions {
-				caller := internal_tool_mcp.NewMCPToolCaller(executor.logger, client, tool.Id+uint64(i), def.Name, def)
-				executor.registerTool(caller, def)
-			}
-		default:
-			caller, err := executor.initializeLocalTool(ctx, executor.logger, tool, communication)
-			if err != nil {
-				executor.logger.Errorf("Failed to initialize local tool %s: %v", tool.Name, err)
-				continue
-			}
-
-			def, err := caller.Definition()
-			if err != nil {
-				executor.logger.Errorf("Failed to get definition for tool %s: %v", tool.Name, err)
-				continue
-			}
-
-			executor.registerTool(caller, def)
+		opts := tool.GetOptions()
+		rawCondition, err := opts.GetString("tool.condition")
+		if err != nil || rawCondition == "" {
+			filtered = append(filtered, tool)
+			continue
 		}
 
+		allowed, evalErr := executor.conditionMatcher.Evaluate(rawCondition, string(communication.GetSource()))
+		if evalErr != nil {
+			executor.logger.Warnf("invalid tool.condition for tool %s, excluding tool: %v", tool.Name, evalErr)
+			continue
+		}
+		if allowed {
+			filtered = append(filtered, tool)
+		}
+	}
+	return filtered
+}
+
+func (executor *toolExecutor) buildLocalToolRegistration(
+	ctx context.Context,
+	tool *internal_assistant_entity.AssistantTool,
+	communication internal_type.Communication,
+) ([]toolRegistration, error) {
+	caller, err := executor.initializeLocalTool(ctx, executor.logger, tool, communication)
+	if err != nil {
+		return nil, err
+	}
+	def, err := caller.Definition()
+	if err != nil {
+		return nil, err
+	}
+	return []toolRegistration{{caller: caller, def: def}}, nil
+}
+
+func (executor *toolExecutor) buildMCPToolRegistrations(
+	ctx context.Context,
+	tool *internal_assistant_entity.AssistantTool,
+) ([]toolRegistration, error) {
+	client, err := internal_tool_mcp.NewClient(ctx, executor.logger, tool.GetOptions())
+	if err != nil {
+		return nil, err
+	}
+	executor.mcpClients = append(executor.mcpClients, client)
+
+	definitions, err := client.ListTools(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	registrations := make([]toolRegistration, 0, len(definitions))
+	for i, def := range definitions {
+		caller := internal_tool_mcp.NewMCPToolCaller(executor.logger, client, tool.Id+uint64(i), def.Name, def)
+		registrations = append(registrations, toolRegistration{caller: caller, def: def})
+	}
+	return registrations, nil
+}
+
+func (executor *toolExecutor) buildToolRegistrations(
+	ctx context.Context,
+	tool *internal_assistant_entity.AssistantTool,
+	communication internal_type.Communication,
+) ([]toolRegistration, error) {
+	switch tool.ExecutionMethod {
+	case "mcp":
+		return executor.buildMCPToolRegistrations(ctx, tool)
+	default:
+		return executor.buildLocalToolRegistration(ctx, tool, communication)
+	}
+}
+
+func (executor *toolExecutor) registerToolDefinitions(registrations []toolRegistration) {
+	for _, registration := range registrations {
+		executor.registerTool(registration.caller, registration.def)
+	}
+}
+
+func (executor *toolExecutor) executeTools(ctx context.Context, contextID string, calls []*protos.ToolCall, communication internal_type.Communication) {
+	for _, call := range calls {
+		funC, ok := executor.getTool(call.GetFunction().GetName())
+		if !ok {
+			executor.logger.Errorf("No tool found for function: %s", call.GetFunction().GetName())
+			continue
+		}
+		funC.Call(ctx, contextID, call.GetId(), executor.parseArgument(call.GetFunction().GetArguments()), communication)
+	}
+}
+
+// Run dispatches strongly-typed tool pipeline stages.
+func (executor *toolExecutor) Run(ctx context.Context, pipeline ToolPipeline) error {
+	switch v := pipeline.(type) {
+	case DiscoverToolsPipeline:
+		tools := executor.discoverTools(v.Communication)
+		return executor.Run(ctx, FilterToolsPipeline{
+			Tools:         tools,
+			Communication: v.Communication,
+		})
+	case FilterToolsPipeline:
+		filtered := executor.filterToolsByCondition(v.Tools, v.Communication)
+		return executor.Run(ctx, BuildAndRegisterToolsPipeline{
+			Tools:         filtered,
+			Communication: v.Communication,
+		})
+	case BuildAndRegisterToolsPipeline:
+		for _, tool := range v.Tools {
+			registrations, err := executor.buildToolRegistrations(ctx, tool, v.Communication)
+			if err != nil {
+				executor.logger.Errorf("Failed to initialize tool %s: %v", tool.Name, err)
+				continue
+			}
+			executor.registerToolDefinitions(registrations)
+		}
+		return nil
+	case ExecuteToolsPipeline:
+		executor.executeTools(ctx, v.ContextID, v.Calls, v.Communication)
+		return nil
+	default:
+		return fmt.Errorf("unknown tool pipeline type: %T", pipeline)
+	}
+}
+
+func (executor *toolExecutor) initializeToolPipeline(
+	ctx context.Context,
+	communication internal_type.Communication,
+) {
+	if err := executor.Run(ctx, DiscoverToolsPipeline{Communication: communication}); err != nil {
+		executor.logger.Errorf("tool initialize pipeline failed: %v", err)
 	}
 }
 
 // Initialize sets up all tools (local + MCP) for the assistant
 func (executor *toolExecutor) Initialize(ctx context.Context, communication internal_type.Communication) error {
-	executor.initializeTools(ctx, communication.Assistant().AssistantTools, communication)
+	executor.initializeToolPipeline(ctx, communication)
 	return nil
 }
 
@@ -118,13 +234,12 @@ func (executor *toolExecutor) GetFunctionDefinitions() []*protos.FunctionDefinit
 }
 
 func (executor *toolExecutor) ExecuteAll(ctx context.Context, contextID string, calls []*protos.ToolCall, communication internal_type.Communication) {
-	for _, call := range calls {
-		funC, ok := executor.getTool(call.GetFunction().GetName())
-		if !ok {
-			executor.logger.Errorf("No tool found for function: %s", call.GetFunction().GetName())
-			continue
-		}
-		funC.Call(ctx, contextID, call.GetId(), executor.parseArgument(call.GetFunction().GetArguments()), communication)
+	if err := executor.Run(ctx, ExecuteToolsPipeline{
+		ContextID:     contextID,
+		Calls:         calls,
+		Communication: communication,
+	}); err != nil {
+		executor.logger.Errorf("tool execute pipeline failed: %v", err)
 	}
 }
 

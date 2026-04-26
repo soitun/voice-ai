@@ -19,42 +19,65 @@ import (
 
 type transferCallCaller struct {
 	toolCaller
-	transferTo      string
-	transferDelay   uint32
-	transferMessage string
+	transferTo         string
+	transferDelay      uint32
+	transferMessage    string
+	postTransferAction string
 }
 
 func (tc *transferCallCaller) Call(ctx context.Context, contextID, toolId string, args map[string]interface{}, communication internal_type.Communication) {
+	transferTo := tc.transferTo
+	transferMessage := tc.transferMessage
+	transferDelay := tc.transferDelay
+	postTransferAction := tc.postTransferAction
+
 	if to, ok := args["transfer_to"].(string); ok && to != "" {
-		tc.transferTo = to
+		transferTo = to
 	}
 
 	if msg, ok := args["transfer_message"].(string); ok && msg != "" {
-		tc.transferMessage = msg
+		transferMessage = msg
 	}
 
 	if delay, ok := args["transfer_delay"].(float64); ok {
-		tc.transferDelay = uint32(delay)
+		transferDelay = uint32(delay)
 	}
 
-	if tc.transferMessage != "" {
+	if action, ok := args["post_transfer_action"].(string); ok && action != "" {
+		if normalized, isValid := normalizePostTransferAction(action); isValid {
+			postTransferAction = normalized
+		}
+	}
+
+	if transferMessage != "" {
 		communication.OnPacket(ctx,
-			internal_type.InjectMessagePacket{ContextID: contextID, Text: tc.transferMessage},
+			internal_type.InjectMessagePacket{ContextID: contextID, Text: transferMessage},
 		)
 	}
 
-	if tc.transferDelay > 0 {
-		time.Sleep(time.Duration(tc.transferDelay) * time.Millisecond)
+	if transferDelay > 0 {
+		time.Sleep(time.Duration(transferDelay) * time.Millisecond)
 	}
+
+	arguments := map[string]string{
+		"to":               transferTo,
+		"transfer_to":      transferTo,
+		"message":          transferMessage,
+		"transfer_message": transferMessage,
+		"delay":            fmt.Sprintf("%d", transferDelay),
+		"transfer_delay":   fmt.Sprintf("%d", transferDelay),
+	}
+	if postTransferAction != "" {
+		arguments["post_transfer_action"] = postTransferAction
+	}
+
 	communication.OnPacket(ctx,
 		internal_type.LLMToolCallPacket{
 			ToolID:    toolId,
 			Name:      tc.Name(),
 			ContextID: contextID,
 			Action:    protos.ToolCallAction_TOOL_CALL_ACTION_TRANSFER_CONVERSATION,
-			Arguments: map[string]string{
-				"to":      tc.transferTo,
-				"message": tc.transferMessage, "delay": fmt.Sprintf("%d", tc.transferDelay)},
+			Arguments: arguments,
 		})
 }
 
@@ -67,13 +90,29 @@ func NewTransferCallCaller(ctx context.Context, logger commons.Logger, toolOptio
 	}
 	transferDelay, _ := opts.GetUint32("tool.transfer_delay")
 	transferMessage, _ := opts.GetString("tool.transfer_message")
+	postTransferActionRaw, _ := opts.GetString("tool.post_transfer_action")
+	postTransferAction, ok := normalizePostTransferAction(postTransferActionRaw)
+	if postTransferActionRaw != "" && !ok {
+		return nil, fmt.Errorf("tool.post_transfer_action must be one of end_call,resume_ai")
+	}
+
 	return &transferCallCaller{
 		toolCaller: toolCaller{
 			logger:      logger,
 			toolOptions: toolOptions,
 		},
-		transferMessage: transferMessage,
-		transferDelay:   transferDelay,
-		transferTo:      transferTo,
+		transferMessage:    transferMessage,
+		transferDelay:      transferDelay,
+		transferTo:         transferTo,
+		postTransferAction: postTransferAction,
 	}, nil
+}
+
+func normalizePostTransferAction(raw string) (string, bool) {
+	switch raw {
+	case "end_call", "resume_ai":
+		return raw, true
+	default:
+		return "", false
+	}
 }

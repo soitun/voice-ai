@@ -19,6 +19,7 @@ import (
 	internal_agent_executor "github.com/rapidaai/api/assistant-api/internal/agent/executor"
 	internal_agent_tool "github.com/rapidaai/api/assistant-api/internal/agent/executor/tool"
 	internal_type "github.com/rapidaai/api/assistant-api/internal/type"
+	"github.com/rapidaai/api/assistant-api/internal/variable"
 	integration_client_builders "github.com/rapidaai/pkg/clients/integration/builders"
 	"github.com/rapidaai/pkg/commons"
 	"github.com/rapidaai/pkg/parsers"
@@ -440,45 +441,16 @@ func (e *modelAssistantExecutor) buildPromptArgs(communication internal_type.Com
 	}})
 }
 
+// buildBasePromptArgs builds the nested prompt-argument map consumed by the
+// LLM template engine. Resolution is delegated to the shared variable
+// resolver — see api/assistant-api/internal/variable. The message.* sub-tree
+// is per-message and stays here; buildPromptArgs overlays it on top.
 func (e *modelAssistantExecutor) buildBasePromptArgs(communication internal_type.Communication) map[string]interface{} {
-	now := time.Now().UTC()
-	system := map[string]interface{}{
-		"current_date": now.Format("2006-01-02"), "current_time": now.Format("15:04:05"),
-		"current_datetime": now.Format(time.RFC3339), "day_of_week": now.Weekday().String(),
-		"date_rfc1123": now.Format(time.RFC1123),
-		"date_unix":    strconv.FormatInt(now.Unix(), 10), "date_unix_ms": strconv.FormatInt(now.UnixMilli(), 10),
-	}
-	assistant := map[string]interface{}{}
-	if a := communication.Assistant(); a != nil {
-		assistant = map[string]interface{}{
-			"name": a.Name, "id": fmt.Sprintf("%d", a.Id), "language": a.Language, "description": a.Description,
-		}
-	}
-	conversation := map[string]interface{}{}
-	if conv := communication.Conversation(); conv != nil {
-		conversation["id"] = fmt.Sprintf("%d", conv.Id)
-		conversation["identifier"] = conv.Identifier
-		conversation["source"] = string(conv.Source)
-		conversation["direction"] = conv.Direction.String()
-		if startTime := time.Time(conv.CreatedDate); !startTime.IsZero() {
-			conversation["created_date"] = startTime.UTC().Format(time.RFC3339)
-			conversation["duration"] = time.Since(startTime).Truncate(time.Second).String()
-		}
-	}
-	session := map[string]interface{}{}
-	if mode := communication.GetMode(); mode != "" {
-		session["mode"] = mode
-	}
-	if source := communication.GetSource(); source != "" {
-		session["source"] = source
-	}
-	args := communication.GetArgs()
-	return utils.MergeMaps(
-		map[string]interface{}{"system": system, "assistant": assistant, "conversation": conversation, "session": session},
-		map[string]interface{}{"message": map[string]interface{}{"language": "English"}},
-		map[string]interface{}{"args": args},
-		args,
-	)
+	registry := variable.NewDefaultRegistry()
+	src := variable.NewCommunicationSource(communication)
+	out := registry.Expand(src, variable.ResolveContext{})
+	out["message"] = map[string]interface{}{"language": "English"}
+	return out
 }
 
 // =============================================================================

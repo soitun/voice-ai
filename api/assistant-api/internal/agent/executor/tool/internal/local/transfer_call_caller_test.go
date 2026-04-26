@@ -116,4 +116,5 @@ func TestTransferCallCaller_Call_TransferToFromArgsWithSeparator(t *testing.T) {
 	tc, ok := pkts[0].(internal_type.LLMToolCallPacket)
 	require.True(t, ok, "packet[0] must be LLMToolCallPacket")
 	assert.Equal(t, "+15551111111SEPERATOR+15552222222", tc.Arguments["to"], "caller passes raw targets — streamer splits")
+	assert.Equal(t, "+15551111111SEPERATOR+15552222222", tc.Arguments["transfer_to"], "caller passes raw targets — streamer splits")
 }

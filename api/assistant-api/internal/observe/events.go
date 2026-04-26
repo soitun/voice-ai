@@ -19,9 +19,6 @@ const (
 	// ComponentSession is the conversation session lifecycle.
 	ComponentSession = "session"
 
-	// ComponentSIP is the SIP signaling layer.
-	ComponentSIP = "sip"
-
 	// ComponentTelephony is the telephony provider layer (Twilio, Asterisk, etc.)
 	ComponentTelephony = "telephony"
 
@@ -112,10 +109,12 @@ const (
 	EventDTMF              = "dtmf"
 
 	// --- WebRTC-specific ---
-	EventICEConnected     = "ice_connected"
-	EventICEFailed        = "ice_failed"
-	EventPeerConnected    = "peer_connected"
-	EventPeerDisconnected = "peer_disconnected"
+	EventICEConnected       = "ice_connected"
+	EventICEFailed          = "ice_failed"
+	EventPeerConnected      = "peer_connected"
+	EventPeerFailed         = "peer_failed"
+	EventPeerDisconnected   = "peer_disconnected"
+	EventAudioTrackReceived = "audio_track_received"
 
 	// --- Tool ---
 	EventToolCallStarted   = "tool_call_started"

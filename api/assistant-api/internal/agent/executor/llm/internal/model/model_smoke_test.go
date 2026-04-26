@@ -77,7 +77,11 @@ func (m *testComm) Assistant() *internal_assistant_entity.Assistant { return m.a
 func (m *testComm) Conversation() *internal_conversation_entity.AssistantConversation {
 	return m.conversation
 }
-func (m *testComm) GetArgs() map[string]interface{} { return map[string]interface{}{} }
+func (m *testComm) GetArgs() map[string]interface{}     { return map[string]interface{}{} }
+func (m *testComm) GetMetadata() map[string]interface{} { return map[string]interface{}{} }
+func (m *testComm) GetHistories() []internal_type.MessagePacket {
+	return []internal_type.MessagePacket{}
+}
 func (m *testComm) GetMode() type_enums.MessageMode { return type_enums.TextMode }
 func (m *testComm) GetSource() utils.RapidaSource   { return utils.WebPlugin }
 func (m *testComm) GetOptions() utils.Option        { return nil }

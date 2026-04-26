@@ -13,6 +13,7 @@ import (
 
 	internal_output_aggregator_normalizer "github.com/rapidaai/api/assistant-api/internal/normalizer/output/aggregator"
 	internal_type "github.com/rapidaai/api/assistant-api/internal/type"
+	"github.com/rapidaai/api/assistant-api/internal/variable"
 	"github.com/rapidaai/pkg/commons"
 	"github.com/rapidaai/pkg/parsers"
 	"github.com/rapidaai/protos"
@@ -37,7 +38,7 @@ type outputNormalizer struct {
 	logger         commons.Logger
 	aggregator     internal_type.LLMTextAggregator
 	normalizers    []internal_type.TextNormalizer
-	args           map[string]interface{}
+	expandArgs     func() map[string]interface{}
 	templateParser parsers.StringTemplateParser
 	onPacket       func(context.Context, ...internal_type.Packet) error
 }
@@ -61,7 +62,10 @@ func (n *outputNormalizer) Initialize(ctx context.Context, communication interna
 	if dictionaries, err := communication.GetOptions().GetString("speaker.pronunciation.dictionaries"); err == nil && dictionaries != "" {
 		n.normalizers = n.buildNormalizerPipeline(strings.Split(dictionaries, commons.SEPARATOR))
 	}
-	n.args = communication.GetArgs()
+	registry := variable.NewDefaultRegistry()
+	n.expandArgs = func() map[string]interface{} {
+		return registry.Expand(variable.NewCommunicationSource(communication), variable.ResolveContext{})
+	}
 	n.onPacket = func(ctx context.Context, pkts ...internal_type.Packet) error {
 		return communication.OnPacket(ctx, pkts...)
 	}
@@ -144,8 +148,10 @@ func (n *outputNormalizer) handleAggregate(ctx context.Context, v AggregatePipel
 
 func (n *outputNormalizer) handleArgumentation(ctx context.Context, v ArgumentationPipeline) {
 	text := v.Text
-	if n.templateParser != nil && len(n.args) > 0 {
-		text = n.templateParser.Parse(text, n.args)
+	if n.templateParser != nil && n.expandArgs != nil {
+		if args := n.expandArgs(); len(args) > 0 {
+			text = n.templateParser.Parse(text, args)
+		}
 	}
 	n.Run(ctx, CleanTextPipeline{ContextID: v.ContextID, Text: text, IsFinal: v.IsFinal})
 }
