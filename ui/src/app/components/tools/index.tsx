@@ -1,13 +1,6 @@
 import { Metadata } from '@rapidaai/react';
 import { FC, useCallback, useMemo } from 'react';
-import {
-  Dropdown,
-  Select,
-  SelectItem,
-  Toggletip,
-  ToggletipButton,
-  ToggletipContent,
-} from '@carbon/react';
+import { Dropdown, Select, SelectItem, Tooltip } from '@carbon/react';
 import { CONFIG } from '@/configs';
 import { Information } from '@carbon/icons-react';
 import { ConfigureAPIRequest } from '@/app/components/tools/api-request';
@@ -58,7 +51,7 @@ import {
   withNormalizedToolCondition,
 } from './common';
 
-const CONDITION_OPTIONS = [{ label: 'equals', value: 'equals' }];
+const CONDITION_OPTIONS = [{ label: 'equals', value: '=' }];
 
 // ============================================================================
 // Types
@@ -291,7 +284,7 @@ export const BuildinTool: FC<{
     () =>
       conditionEntries.find(entry => entry.key === 'source') || {
         key: 'source',
-        condition: 'equals',
+        condition: '=',
         value: 'all',
       },
     [conditionEntries],
@@ -334,28 +327,50 @@ export const BuildinTool: FC<{
         className="relative z-20"
         childClass="overflow-visible relative z-20"
       >
-        <div className="mb-2 text-xs text-gray-500 flex items-center gap-2">
+        <div className="mb-2 text-xs text-gray-500 flex items-center gap-1">
           <span>Rule</span>
-          <Toggletip align="top" className="relative z-[2000]">
-            <ToggletipButton label="Rule info">
-              <Information size={16} />
-            </ToggletipButton>
-            <ToggletipContent className="!z-[2100]">
-              This rule is tested before the tool is added to the LLM tool list.
-            </ToggletipContent>
-          </Toggletip>
+          <Tooltip
+            align="right"
+            label="This rule is tested before the tool is added to the LLM tool list."
+          >
+            <Information size={14} />
+          </Tooltip>
         </div>
         <table className="w-full border-collapse border border-gray-200 dark:border-gray-700 text-sm [&_input]:!border-none [&_.cds--text-input]:!border-none [&_.cds--text-input]:!outline-none [&_.cds--select-input]:!border-none [&_.cds--form-item]:!m-0">
           <thead>
             <tr className="bg-gray-50 dark:bg-gray-900">
               <th className="text-left text-xs font-medium text-gray-500 dark:text-gray-400 px-3 py-2 border-b border-r border-gray-200 dark:border-gray-700 w-1/4">
-                Key
+                <span className="inline-flex items-center gap-1">
+                  Key
+                  <Tooltip
+                    align="right"
+                    label="The variable to evaluate for this condition. 'source' refers to the channel the call is coming from."
+                  >
+                    <Information size={11} />
+                  </Tooltip>
+                </span>
               </th>
               <th className="text-left text-xs font-medium text-gray-500 dark:text-gray-400 px-3 py-2 border-b border-r border-gray-200 dark:border-gray-700 w-1/4">
-                Condition
+                <span className="inline-flex items-center gap-1">
+                  Condition
+                  <Tooltip
+                    align="right"
+                    label="The condition to evaluate for this variable."
+                  >
+                    <Information size={11} />
+                  </Tooltip>
+                </span>
               </th>
               <th className="text-left text-xs font-medium text-gray-500 dark:text-gray-400 px-3 py-2 border-b border-gray-200 dark:border-gray-700">
-                Value
+                <span className="inline-flex items-center gap-1">
+                  Value
+                  <Tooltip
+                    align="right"
+                    label="The value to compare against the variable."
+                  >
+                    <Information size={11} />
+                  </Tooltip>
+                </span>
               </th>
             </tr>
           </thead>

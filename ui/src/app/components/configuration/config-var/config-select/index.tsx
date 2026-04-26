@@ -83,7 +83,7 @@ const ConfigSelect: FC<IConfigSelectProps> = ({
           </ReactSortable>
         </table>
       )}
-      <div className="pt-4">
+      <div className="pt-2">
         <TertiaryButton
           size="md"
           renderIcon={Add}

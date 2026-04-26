@@ -7,12 +7,28 @@ import { ConfigureTransferCall } from '../index';
 jest.mock('@/app/components/carbon/form', () => {
   const React = require('react');
   return {
+    FormGroup: ({ legendText, children }: any) =>
+      React.createElement(
+        'fieldset',
+        null,
+        legendText ? React.createElement('legend', null, legendText) : null,
+        children,
+      ),
     Stack: ({ children }: any) => React.createElement('div', null, children),
-    TextArea: ({ id, labelText, value, onChange, helperText, placeholder }: any) =>
+    TextArea: ({
+      id,
+      labelText,
+      value,
+      onChange,
+      helperText,
+      placeholder,
+    }: any) =>
       React.createElement(
         'div',
         null,
-        labelText ? React.createElement('label', { htmlFor: id }, labelText) : null,
+        labelText
+          ? React.createElement('label', { htmlFor: id }, labelText)
+          : null,
         helperText ? React.createElement('small', null, helperText) : null,
         React.createElement('textarea', {
           id,
@@ -32,7 +48,9 @@ jest.mock('@carbon/react', () => {
       React.createElement(
         'div',
         null,
-        labelText ? React.createElement('label', { htmlFor: id }, labelText) : null,
+        labelText
+          ? React.createElement('label', { htmlFor: id }, labelText)
+          : null,
         React.createElement('input', {
           id,
           type: 'range',
@@ -44,6 +62,22 @@ jest.mock('@carbon/react', () => {
           onChange: (e: any) => onChange?.({ value: Number(e.target.value) }),
         }),
       ),
+    Select: ({ id, labelText, value, onChange, children }: any) =>
+      React.createElement(
+        'div',
+        null,
+        labelText
+          ? React.createElement('label', { htmlFor: id }, labelText)
+          : null,
+        React.createElement(
+          'select',
+          { id, value: value ?? '', 'data-testid': id, onChange },
+          children,
+        ),
+      ),
+    SelectItem: ({ value, text }: any) =>
+      React.createElement('option', { value }, text),
+    Tooltip: ({ children }: any) => React.createElement('span', null, children),
   };
 });
 
@@ -82,8 +116,12 @@ describe('ConfigureTransferCall', () => {
     const onParameterChange = jest.fn();
     const params = [
       createMetadata('tool.transfer_to', '+14155551234'),
-      createMetadata('tool.transfer_message', 'Please hold while I transfer your call.'),
+      createMetadata(
+        'tool.transfer_message',
+        'Please hold while I transfer your call.',
+      ),
       createMetadata('tool.transfer_delay', '300'),
+      createMetadata('tool.post_transfer_action', 'end_call'),
     ];
 
     render(
@@ -95,30 +133,55 @@ describe('ConfigureTransferCall', () => {
 
     const message = screen.getByTestId('transfer-message');
     const delay = screen.getByTestId('transfer-delay');
+    const postTransferAction = screen.getByTestId('post-transfer-action');
 
     expect(message).toHaveValue('Please hold while I transfer your call.');
     expect(delay).toHaveValue('300');
+    expect(postTransferAction).toHaveValue('end_call');
 
     fireEvent.change(message, {
       target: { value: 'Connecting you now to our support specialist.' },
     });
 
-    const afterMessageUpdate = onParameterChange.mock.calls.at(-1)?.[0] as Metadata[];
+    const afterMessageUpdate = onParameterChange.mock.calls.at(
+      -1,
+    )?.[0] as Metadata[];
     expect(
-      afterMessageUpdate.find(m => m.getKey() === 'tool.transfer_message')?.getValue(),
+      afterMessageUpdate
+        .find(m => m.getKey() === 'tool.transfer_message')
+        ?.getValue(),
     ).toBe('Connecting you now to our support specialist.');
     expect(
-      afterMessageUpdate.find(m => m.getKey() === 'tool.transfer_delay')?.getValue(),
+      afterMessageUpdate
+        .find(m => m.getKey() === 'tool.transfer_delay')
+        ?.getValue(),
     ).toBe('300');
 
     fireEvent.change(delay, { target: { value: '650' } });
 
-    const afterDelayUpdate = onParameterChange.mock.calls.at(-1)?.[0] as Metadata[];
+    const afterDelayUpdate = onParameterChange.mock.calls.at(
+      -1,
+    )?.[0] as Metadata[];
     expect(
-      afterDelayUpdate.find(m => m.getKey() === 'tool.transfer_delay')?.getValue(),
+      afterDelayUpdate
+        .find(m => m.getKey() === 'tool.transfer_delay')
+        ?.getValue(),
     ).toBe('650');
     expect(
-      afterDelayUpdate.find(m => m.getKey() === 'tool.transfer_message')?.getValue(),
+      afterDelayUpdate
+        .find(m => m.getKey() === 'tool.transfer_message')
+        ?.getValue(),
     ).toBe('Please hold while I transfer your call.');
+
+    fireEvent.change(postTransferAction, { target: { value: 'resume_ai' } });
+
+    const afterActionUpdate = onParameterChange.mock.calls.at(
+      -1,
+    )?.[0] as Metadata[];
+    expect(
+      afterActionUpdate
+        .find(m => m.getKey() === 'tool.post_transfer_action')
+        ?.getValue(),
+    ).toBe('resume_ai');
   });
 });

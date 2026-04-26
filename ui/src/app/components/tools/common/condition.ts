@@ -100,13 +100,19 @@ const parseToolConditionJson = (
   }
 };
 
+const getPersistedToolConditionEntries = (
+  parameters: Metadata[] | null | undefined,
+): ToolConditionEntry[] | null => {
+  const params = parameters || [];
+  return parseToolConditionJson(
+    getOptionValue(params, TOOL_CONDITION_JSON_KEY),
+  );
+};
+
 export const getToolConditionEntries = (
   parameters: Metadata[] | null | undefined,
 ): ToolConditionEntry[] => {
-  const params = parameters || [];
-  const jsonEntries = parseToolConditionJson(
-    getOptionValue(params, TOOL_CONDITION_JSON_KEY),
-  );
+  const jsonEntries = getPersistedToolConditionEntries(parameters);
   if (jsonEntries && jsonEntries.length > 0) {
     return jsonEntries;
   }
@@ -168,11 +174,15 @@ export const withNormalizedToolCondition = (
   parameters: Metadata[],
   fallback?: Metadata[],
 ): Metadata[] => {
-  const primary = getToolConditionEntries(parameters);
-  const fallbackEntries = getToolConditionEntries(fallback || []);
+  const primary = getPersistedToolConditionEntries(parameters);
+  const fallbackEntries = getPersistedToolConditionEntries(fallback || []);
   return withToolConditionEntries(
     parameters,
-    primary.length > 0 ? primary : fallbackEntries,
+    primary && primary.length > 0
+      ? primary
+      : fallbackEntries && fallbackEntries.length > 0
+        ? fallbackEntries
+        : defaultConditionEntries(),
   );
 };
 

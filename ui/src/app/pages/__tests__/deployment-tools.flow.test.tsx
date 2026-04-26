@@ -210,16 +210,39 @@ jest.mock('@/app/components/form/tab-form', () => ({
 }));
 
 jest.mock('@/app/components/tools', () => ({
-  BuildinTool: ({ onChangeBuildinTool }: any) => (
+  BuildinTool: ({ onChangeBuildinTool, onChangeConfig, config }: any) => (
     <div>
       <button onClick={() => onChangeBuildinTool('knowledge_retrieval')}>
         Use Knowledge Tool
       </button>
       <button onClick={() => onChangeBuildinTool('mcp')}>Use MCP Tool</button>
+      <button
+        onClick={() => {
+          const { Metadata } = require('@rapidaai/react');
+          const m = new Metadata();
+          m.setKey('tool.condition');
+          m.setValue(
+            JSON.stringify([
+              { key: 'source', condition: '=', value: 'phone' },
+            ]),
+          );
+          onChangeConfig?.({
+            ...(config || { code: 'knowledge_retrieval', parameters: [] }),
+            parameters: [m],
+          });
+        }}
+      >
+        Set Condition Phone
+      </button>
+      <div data-testid="loaded-condition">
+        {(config?.parameters || []).find((p: any) => p.getKey?.() === 'tool.condition')
+          ?.getValue?.() || ''}
+      </div>
     </div>
   ),
   BuildinToolConfig: {},
-  GetDefaultToolConfigIfInvalid: () => [],
+  GetDefaultToolConfigIfInvalid: (_code: string, parameters: any[]) =>
+    parameters || [],
   GetDefaultToolDefintion: (code: string, defaults: any) => {
     if (code === 'mcp') {
       return {
@@ -637,5 +660,69 @@ describe('Deployment and tool flows', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Configure Tool' }));
 
     expect(CreateAssistantTool).toHaveBeenCalledTimes(1);
+  });
+
+  it('create tool includes tool.condition metadata in execution options', () => {
+    render(<CreateTool assistantId="assistant-1" />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Set Condition Phone' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+    fireEvent.change(screen.getByLabelText('Tool Name'), {
+      target: { value: 'valid_tool' },
+    });
+    fireEvent.change(screen.getByLabelText('Tool Parameters'), {
+      target: { value: '{"context":"ok"}' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Configure Tool' }));
+
+    expect(CreateAssistantTool).toHaveBeenCalledTimes(1);
+    const executionOptions = (CreateAssistantTool as jest.Mock).mock.calls[0][6];
+    const condition = executionOptions.find(
+      (m: any) => m.getKey() === 'tool.condition',
+    );
+    expect(condition).toBeTruthy();
+    expect(condition.getValue()).toContain('"source"');
+    expect(condition.getValue()).toContain('"phone"');
+  });
+
+  it('update tool loads existing tool.condition metadata and submits it', async () => {
+    (GetAssistantTool as jest.Mock).mockImplementation(
+      (_cfg, _assistantId, _toolId, cb) => {
+        const { Metadata } = require('@rapidaai/react');
+        const m = new Metadata();
+        m.setKey('tool.condition');
+        m.setValue(
+          JSON.stringify([{ key: 'source', condition: '=', value: 'phone' }]),
+        );
+        cb(null, {
+          getData: () => ({
+            getName: () => 'existing_tool',
+            getDescription: () => 'existing description',
+            getFields: () => ({ toJavaScript: () => ({ context: 'ok' }) }),
+            getExecutionmethod: () => 'knowledge_retrieval',
+            getExecutionoptionsList: () => [m],
+          }),
+        });
+      },
+    );
+
+    render(<UpdateTool assistantId="assistant-1" />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('loaded-condition').textContent).toContain(
+        '"phone"',
+      );
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Update Tool' }));
+
+    expect(UpdateAssistantTool).toHaveBeenCalledTimes(1);
+    const executionOptions = (UpdateAssistantTool as jest.Mock).mock.calls[0][7];
+    const condition = executionOptions.find(
+      (m: any) => m.getKey() === 'tool.condition',
+    );
+    expect(condition).toBeTruthy();
+    expect(condition.getValue()).toContain('"phone"');
   });
 });
