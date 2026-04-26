@@ -6,7 +6,8 @@ export const TOOL_CONDITION_OPERATOR_SYMBOL = '=';
 
 export const TOOL_CONDITION_SOURCES = [
   'all',
-  'app',
+  'sdk',
+  'web_plugin',
   'debugger',
   'phone',
 ] as const;
@@ -22,11 +23,12 @@ export const TOOL_CONDITION_SOURCE_OPTIONS: Array<{
   label: string;
   value: ToolConditionSource;
 }> = [
-  { label: 'All', value: 'all' },
-  { label: 'App', value: 'app' },
-  { label: 'Debugger', value: 'debugger' },
-  { label: 'Phone', value: 'phone' },
-];
+    { label: 'All', value: 'all' },
+    { label: 'SDK', value: 'sdk' },
+    { label: 'Web Plugin', value: 'web_plugin' },
+    { label: 'Debugger', value: 'debugger' },
+    { label: 'Phone', value: 'phone' },
+  ];
 
 const upsertMetadata = (
   parameters: Metadata[],

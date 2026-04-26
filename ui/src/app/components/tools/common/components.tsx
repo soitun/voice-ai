@@ -2,10 +2,10 @@ import { FC, useState, useCallback } from 'react';
 import { cn } from '@/utils';
 import { CodeEditor } from '@/app/components/form/editor/code-editor';
 import { DocNoticeBlock } from '@/app/components/container/message/notice-block/doc-notice-block';
-import { Add, TrashCan, ArrowRight } from '@carbon/icons-react';
+import { Add, TrashCan, ArrowRight, Information } from '@carbon/icons-react';
 import { TertiaryButton } from '@/app/components/carbon/button';
 import { Stack, TextInput, TextArea } from '@/app/components/carbon/form';
-import { Select, SelectItem, Button } from '@carbon/react';
+import { Select, SelectItem, Button, Tooltip } from '@carbon/react';
 import {
   ToolDefinition,
   ParameterType,
@@ -51,6 +51,9 @@ export const ToolDefinitionForm: FC<ToolDefinitionFormProps> = ({
   documentationUrl = 'https://doc.rapida.ai/assistants/overview',
   documentationTitle,
 }) => {
+  const llmTooltip =
+    'This value is sent to the LLM as part of the tool definition.';
+
   return (
     <div>
       <DocumentationNotice
@@ -61,7 +64,14 @@ export const ToolDefinitionForm: FC<ToolDefinitionFormProps> = ({
         <Stack gap={6}>
           <TextInput
             id="tool-def-name"
-            labelText="Name"
+            labelText={
+              <span className="inline-flex items-center gap-1">
+                Name
+                <Tooltip align="right" label={llmTooltip}>
+                  <Information size={14} />
+                </Tooltip>
+              </span>
+            }
             value={toolDefinition.name}
             onChange={e =>
               onChangeToolDefinition({
@@ -73,7 +83,14 @@ export const ToolDefinitionForm: FC<ToolDefinitionFormProps> = ({
           />
           <TextArea
             id="tool-def-description"
-            labelText="Description"
+            labelText={
+              <span className="inline-flex items-center gap-1">
+                Description
+                <Tooltip align="right" label={llmTooltip}>
+                  <Information size={14} />
+                </Tooltip>
+              </span>
+            }
             value={toolDefinition.description}
             onChange={e =>
               onChangeToolDefinition({
@@ -85,7 +102,14 @@ export const ToolDefinitionForm: FC<ToolDefinitionFormProps> = ({
             rows={2}
           />
           <CodeEditor
-            labelText="Parameters"
+            labelText={
+              <span className="inline-flex items-center gap-1">
+                Parameters
+                <Tooltip align="right" label={llmTooltip}>
+                  <Information size={14} />
+                </Tooltip>
+              </span>
+            }
             placeholder="Provide tool parameters as JSON that will be passed to LLM"
             value={toolDefinition.parameters}
             onChange={value =>
