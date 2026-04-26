@@ -22,6 +22,12 @@ describe('Prompt editor reserved variable suggestions', () => {
     expect(
       suggestions.some(item => item.description.includes('Assistant name')),
     ).toBeTruthy();
+    expect(
+      suggestions.some(item => item.label === '{{client.phone}}'),
+    ).toBeTruthy();
+    expect(
+      suggestions.some(item => item.label === '{{client.provider_call_id}}'),
+    ).toBeTruthy();
   });
 
   it('filters suggestions by currently typed variable prefix', () => {
@@ -35,6 +41,18 @@ describe('Prompt editor reserved variable suggestions', () => {
     ).toBeTruthy();
     expect(
       assistantSuggestions.some(item => item.label === '{{assistant.id}}'),
+    ).toBeTruthy();
+  });
+
+  it('returns client-specific suggestions when typing client prefix', () => {
+    const clientSuggestions = getPromptVariableSuggestions('Hello {{client.');
+
+    expect(clientSuggestions.length).toBeGreaterThan(0);
+    expect(
+      clientSuggestions.every(item => item.key.startsWith('client.')),
+    ).toBeTruthy();
+    expect(
+      clientSuggestions.some(item => item.label === '{{client.phone}}'),
     ).toBeTruthy();
   });
 

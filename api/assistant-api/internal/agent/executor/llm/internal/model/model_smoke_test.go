@@ -206,14 +206,14 @@ func TestModel_ToolResultResolved_TriggersFollowUp(t *testing.T) {
 	require.Equal(t, "tool", snap[1].GetRole())
 }
 
-func TestModel_Interruption_ClearsCurrentAndSupersedesPending(t *testing.T) {
+func TestModel_Interruption_SupersedesPending(t *testing.T) {
 	e, comm, _, _ := newModelTestEnv(t)
 	e.currentPacket = &internal_type.UserInputPacket{ContextID: "ctx-1", Text: "hello"}
 	e.history.AppendAssistant("ctx-1", testToolAssistantMessage("t1"))
 
-	err := e.Execute(context.Background(), comm, internal_type.InterruptionDetectedPacket{ContextID: "ctx-1"})
+	err := e.Execute(context.Background(), comm, internal_type.LLMInterruptPacket{ContextID: "ctx-1"})
 	require.NoError(t, err)
-	require.Empty(t, e.currentContextID())
+	require.Equal(t, "ctx-1", e.currentContextID())
 	require.Empty(t, comm.pkts)
 
 	ctx, followUp := e.history.FlushToolBlock()

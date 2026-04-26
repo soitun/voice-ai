@@ -67,6 +67,8 @@ describe('ConfigPrompt argument hints', () => {
       screen.getAllByText('{{system.current_date}}').length,
     ).toBeGreaterThan(0);
     expect(screen.getAllByText('{{assistant.name}}').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('{{client.phone}}').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('{{client.provider_call_id}}').length).toBeGreaterThan(0);
     expect(screen.queryByText('{{session.mode}}')).not.toBeInTheDocument();
     expect(
       screen.queryByText('{{conversation.updated_date}}'),

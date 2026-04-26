@@ -154,6 +154,33 @@ func (n *noopConversationService) ApplyMessageMetadata(_ context.Context, _ rapi
 	return nil, nil
 }
 
+// noopAssistantToolService prevents nil dereference in low-dispatcher tool-log handlers.
+type noopAssistantToolService struct {
+	internal_services.AssistantToolService
+}
+
+func (n *noopAssistantToolService) CreateLog(
+	_ context.Context,
+	_ rapida_types.SimplePrinciple,
+	_, _ uint64,
+	_, _, _ string,
+	_ type_enums.RecordState,
+	_ []byte,
+) (*internal_assistant_entity.AssistantToolLog, error) {
+	return &internal_assistant_entity.AssistantToolLog{}, nil
+}
+
+func (n *noopAssistantToolService) UpdateLog(
+	_ context.Context,
+	_ rapida_types.SimplePrinciple,
+	_ string,
+	_ uint64,
+	_ type_enums.RecordState,
+	_ []byte,
+) (*internal_assistant_entity.AssistantToolLog, error) {
+	return &internal_assistant_entity.AssistantToolLog{}, nil
+}
+
 // vadStub captures Process calls.
 type vadStub struct {
 	mu      sync.Mutex
@@ -232,6 +259,7 @@ func newTestRequestor(t *testing.T, ctx context.Context) *genericRequestor {
 		assistant:             &internal_assistant_entity.Assistant{},
 		assistantConversation: &internal_conversation_entity.AssistantConversation{Audited: gorm_model.Audited{Id: 1}},
 		conversationService:   &noopConversationService{},
+		assistantToolService:  &noopAssistantToolService{},
 		histories:             make([]internal_type.MessagePacket, 0),
 		criticalCh:            make(chan packetEnvelope, 256),
 		inputCh:               make(chan packetEnvelope, 4096),
@@ -2292,29 +2320,29 @@ func TestBug_IdleTimeoutCount_ResetByInterruption(t *testing.T) {
 			"idleTimeoutCount should be %d after %d idle timeouts, but got %d (reset by handleInterruption?)", i, i, currentCount)
 	}
 
-	// After `backoff` idle timeouts, the next call should emit END_CONVERSATION.
+	// After `backoff` idle timeouts, the next call should emit IDLE_TIMEOUT disconnection.
 	t.Log("--- final idle timeout (should trigger disconnect) ---")
 	err := r.onIdleTimeout(ctx)
 	require.NoError(t, err)
 
-	// Verify END_CONVERSATION directive was emitted
-	directiveFound := false
+	// Verify disconnection notification was emitted
+	disconnectionFound := false
 	require.Eventually(t, func() bool {
 		sent := streamer.getSent()
 		for _, msg := range sent {
-			if d, ok := msg.(*protos.ConversationToolCall); ok {
-				if d.GetAction() == protos.ToolCallAction_TOOL_CALL_ACTION_END_CONVERSATION {
-					directiveFound = true
+			if d, ok := msg.(*protos.ConversationDisconnection); ok {
+				if d.GetType() == protos.ConversationDisconnection_DISCONNECTION_TYPE_IDLE_TIMEOUT {
+					disconnectionFound = true
 					return true
 				}
 			}
 		}
 		return false
 	}, 3*time.Second, 20*time.Millisecond,
-		"END_CONVERSATION directive should be emitted after %d idle timeouts", backoff)
+		"IDLE_TIMEOUT disconnection should be emitted after %d idle timeouts", backoff)
 
-	assert.True(t, directiveFound, "conversation should have been ended after reaching idle timeout backoff threshold")
-	t.Logf("idle timeout backoff test complete: directiveFound=%v", directiveFound)
+	assert.True(t, disconnectionFound, "conversation should be disconnected after reaching idle timeout backoff threshold")
+	t.Logf("idle timeout backoff test complete: disconnectionFound=%v", disconnectionFound)
 }
 
 // =============================================================================
@@ -2549,32 +2577,32 @@ func TestScenario_WelcomeThenIdleTimeoutsUntilDisconnect(t *testing.T) {
 		t.Logf("  idle timeout %d: text ✓, TTS ✓, audio ✓, count=%d", i, r.idleTimeoutCount)
 	}
 
-	// === Final step: Next idle timeout should trigger END_CONVERSATION ===
+	// === Final step: Next idle timeout should trigger IDLE_TIMEOUT disconnection ===
 	t.Logf("=== Step %d: Final idle timeout (should disconnect, count=%d, backoff=%d) ===", backoff+2, r.idleTimeoutCount, backoff)
 
 	err = r.onIdleTimeout(ctx)
 	require.NoError(t, err)
 
-	// Allow dispatcher to process the directive
+	// Allow dispatcher to process the disconnection
 	time.Sleep(200 * time.Millisecond)
 
-	// Verify END_CONVERSATION directive was sent
-	directiveFound := false
+	// Verify IDLE_TIMEOUT disconnection was sent
+	disconnectionFound := false
 	require.Eventually(t, func() bool {
 		sent := streamer.getSent()
 		for _, msg := range sent {
-			if d, ok := msg.(*protos.ConversationToolCall); ok {
-				if d.GetAction() == protos.ToolCallAction_TOOL_CALL_ACTION_END_CONVERSATION {
-					directiveFound = true
+			if d, ok := msg.(*protos.ConversationDisconnection); ok {
+				if d.GetType() == protos.ConversationDisconnection_DISCONNECTION_TYPE_IDLE_TIMEOUT {
+					disconnectionFound = true
 					return true
 				}
 			}
 		}
 		return false
 	}, 3*time.Second, 20*time.Millisecond,
-		"END_CONVERSATION should fire after %d idle timeouts (backoff threshold)", backoff)
+		"IDLE_TIMEOUT disconnection should fire after %d idle timeouts (backoff threshold)", backoff)
 
-	assert.True(t, directiveFound)
+	assert.True(t, disconnectionFound)
 
 	// Count how many idle messages were sent. Each idle message produces 2 text
 	// sends (delta + done via TTSTextPacket), so expect backoff*2 text entries.

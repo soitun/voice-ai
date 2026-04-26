@@ -911,12 +911,12 @@ func TestHandleResponse_StaleContext_Dropped(t *testing.T) {
 	assert.Empty(t, collector.all())
 }
 
-func TestExecute_InterruptionDetectedPacket_ClearsCurrentContext(t *testing.T) {
+func TestExecute_LLMInterruptPacket_ClearsCurrentContext(t *testing.T) {
 	e := newTestExecutor()
 	e.currentID = "ctx-1"
 	comm, _ := newTestComm()
 
-	err := e.Execute(context.Background(), comm, internal_type.InterruptionDetectedPacket{ContextID: "ctx-1"})
+	err := e.Execute(context.Background(), comm, internal_type.LLMInterruptPacket{ContextID: "ctx-1"})
 	require.NoError(t, err)
 	assert.Equal(t, "", e.currentID)
 }
@@ -1081,7 +1081,7 @@ func TestE2E_InterruptDuringStreaming(t *testing.T) {
 	})
 
 	// Interrupt
-	_ = e.Execute(context.Background(), comm, internal_type.InterruptionDetectedPacket{ContextID: "ctx-1"})
+	_ = e.Execute(context.Background(), comm, internal_type.LLMInterruptPacket{ContextID: "ctx-1"})
 	assert.Equal(t, "", e.currentID)
 
 	// New context
@@ -1339,7 +1339,7 @@ func TestConcurrency_ExecuteAndInterruptRace(t *testing.T) {
 	go func() {
 		defer wg.Done()
 		for i := 0; i < 100; i++ {
-			_ = e.Execute(context.Background(), comm, internal_type.InterruptionDetectedPacket{
+			_ = e.Execute(context.Background(), comm, internal_type.LLMInterruptPacket{
 				ContextID: fmt.Sprintf("ctx-%d", i),
 			})
 		}
@@ -1382,7 +1382,7 @@ func TestConcurrency_ResponseAndInterruptRace(t *testing.T) {
 	go func() {
 		defer wg.Done()
 		for i := 0; i < 100; i++ {
-			_ = e.Execute(context.Background(), comm, internal_type.InterruptionDetectedPacket{
+			_ = e.Execute(context.Background(), comm, internal_type.LLMInterruptPacket{
 				ContextID: fmt.Sprintf("ctx-%d", i),
 			})
 		}

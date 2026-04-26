@@ -54,7 +54,6 @@ type TelemetryRow =
 
 const EVENT_TAG_TYPE: Record<string, string> = {
   session: 'gray',
-  sip: 'warm-gray',
   telephony: 'teal',
   webrtc: 'cool-gray',
   stt: 'green',
@@ -64,12 +63,13 @@ const EVENT_TAG_TYPE: Record<string, string> = {
   eos: 'cyan',
   denoise: 'warm-gray',
   recording: 'purple',
-  audio: 'cool-gray',
   tool: 'magenta',
-  behavior: 'red',
   knowledge: 'teal',
   metric: 'high-contrast',
 };
+
+const normalizeComponentType = (nameKey: string): string =>
+  nameKey === 'sip' ? 'telephony' : nameKey;
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -227,7 +227,6 @@ export function ConversationTelemetryDialog(
 
   const EVENT_TYPES = [
     'session',
-    'sip',
     'telephony',
     'webrtc',
     'stt',
@@ -237,11 +236,8 @@ export function ConversationTelemetryDialog(
     'eos',
     'denoise',
     'recording',
-    'audio',
     'tool',
-    'behavior',
     'knowledge',
-    'metric',
   ];
 
   const toggleFilter = (type: string) => {
@@ -255,7 +251,9 @@ export function ConversationTelemetryDialog(
 
   const getRowData = (row: TelemetryRow) => {
     if (row.kind === 'event') {
-      const nameKey = row.record.getName().split('.')[0];
+      const nameKey = normalizeComponentType(
+        row.record.getName().split('.')[0],
+      );
       return {
         typeLabel: row.record.getName(),
         tagType: EVENT_TAG_TYPE[nameKey] ?? 'gray',
@@ -280,7 +278,7 @@ export function ConversationTelemetryDialog(
         ? true
         : activeFilters.has(
             row.kind === 'event'
-              ? row.record.getName().split('.')[0]
+              ? normalizeComponentType(row.record.getName().split('.')[0])
               : 'metric',
           );
     return matchesSearch && matchesFilter;

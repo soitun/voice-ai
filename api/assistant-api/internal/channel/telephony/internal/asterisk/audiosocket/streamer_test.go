@@ -79,8 +79,20 @@ func newTestStreamer(t *testing.T) (*Streamer, net.Conn) {
 	return as, remote
 }
 
+func drainRemoteConn(remote net.Conn) {
+	go func() {
+		buf := make([]byte, 1024)
+		for {
+			if _, err := remote.Read(buf); err != nil {
+				return
+			}
+		}
+	}()
+}
+
 func TestSend_EndConversation_PushesToolCallResult(t *testing.T) {
-	as, _ := newTestStreamer(t)
+	as, remote := newTestStreamer(t)
+	drainRemoteConn(remote)
 
 	toolCall := &protos.ConversationToolCall{
 		Id:     "call-123",
@@ -124,7 +136,8 @@ func TestSend_EndConversation_PushesToolCallResult(t *testing.T) {
 }
 
 func TestSend_EndConversation_SecondCall_NoAdditionalDisconnection(t *testing.T) {
-	as, _ := newTestStreamer(t)
+	as, remote := newTestStreamer(t)
+	drainRemoteConn(remote)
 
 	toolCall := &protos.ConversationToolCall{
 		Id:     "call-789",
@@ -177,8 +190,9 @@ func TestSend_EndConversation_SecondCall_NoAdditionalDisconnection(t *testing.T)
 	}
 }
 
-func TestSend_ConversationDisconnection_NoRequeueNoImmediateClose(t *testing.T) {
-	as, _ := newTestStreamer(t)
+func TestSend_ConversationDisconnection_RequeuesDisconnect_NoImmediateClose(t *testing.T) {
+	as, remote := newTestStreamer(t)
+	drainRemoteConn(remote)
 
 	err := as.Send(&protos.ConversationDisconnection{
 		Type: protos.ConversationDisconnection_DISCONNECTION_TYPE_USER,
@@ -187,7 +201,16 @@ func TestSend_ConversationDisconnection_NoRequeueNoImmediateClose(t *testing.T) 
 
 	select {
 	case msg := <-as.CriticalCh:
-		t.Fatalf("expected no requeued disconnection, got %T", msg)
+		disc, ok := msg.(*protos.ConversationDisconnection)
+		require.True(t, ok, "expected requeued disconnection, got %T", msg)
+		assert.Equal(t, protos.ConversationDisconnection_DISCONNECTION_TYPE_USER, disc.GetType())
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for requeued disconnection")
+	}
+
+	select {
+	case msg := <-as.CriticalCh:
+		t.Fatalf("unexpected extra message after requeued disconnection: %T", msg)
 	case <-time.After(200 * time.Millisecond):
 	}
 
@@ -202,14 +225,7 @@ func TestSend_TransferConversation_Unsupported(t *testing.T) {
 	as, remote := newTestStreamer(t)
 
 	// Drain remote so nothing blocks.
-	go func() {
-		buf := make([]byte, 1024)
-		for {
-			if _, err := remote.Read(buf); err != nil {
-				return
-			}
-		}
-	}()
+	drainRemoteConn(remote)
 
 	toolCall := &protos.ConversationToolCall{
 		Id:     "call-abc",
@@ -248,14 +264,7 @@ func TestSend_TransferConversation_EmptyToolId_StillPushesFailedResult(t *testin
 	as, remote := newTestStreamer(t)
 
 	// Drain remote.
-	go func() {
-		buf := make([]byte, 1024)
-		for {
-			if _, err := remote.Read(buf); err != nil {
-				return
-			}
-		}
-	}()
+	drainRemoteConn(remote)
 
 	toolCall := &protos.ConversationToolCall{
 		Id:     "call-xyz",
@@ -285,14 +294,7 @@ func TestSend_UnknownToolCallAction_NoOp(t *testing.T) {
 	as, remote := newTestStreamer(t)
 
 	// Drain remote.
-	go func() {
-		buf := make([]byte, 1024)
-		for {
-			if _, err := remote.Read(buf); err != nil {
-				return
-			}
-		}
-	}()
+	drainRemoteConn(remote)
 
 	toolCall := &protos.ConversationToolCall{
 		Id:     "call-unk",
@@ -323,14 +325,7 @@ func TestSend_Interruption_ClearsOutputBuffer(t *testing.T) {
 	as, remote := newTestStreamer(t)
 
 	// Drain remote.
-	go func() {
-		buf := make([]byte, 1024)
-		for {
-			if _, err := remote.Read(buf); err != nil {
-				return
-			}
-		}
-	}()
+	drainRemoteConn(remote)
 
 	interruption := &protos.ConversationInterruption{
 		Type: protos.ConversationInterruption_INTERRUPTION_TYPE_WORD,

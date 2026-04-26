@@ -1216,7 +1216,7 @@ func TestExecute_UserTextReceivedPacket_SendsAndRecordsHistory(t *testing.T) {
 	assert.Empty(t, currentPacket.Language.Name, "Language should be zero-value when not set")
 }
 
-func TestExecute_InterruptionDetectedPacket(t *testing.T) {
+func TestExecute_LLMInterruptPacket(t *testing.T) {
 	e := newTestExecutor()
 	e.currentPacket = &internal_type.UserInputPacket{
 		ContextID: "ctx-old",
@@ -1225,7 +1225,7 @@ func TestExecute_InterruptionDetectedPacket(t *testing.T) {
 	}
 	comm, _ := newTestComm()
 
-	err := e.Execute(context.Background(), comm, internal_type.InterruptionDetectedPacket{ContextID: "x"})
+	err := e.Execute(context.Background(), comm, internal_type.LLMInterruptPacket{ContextID: "x"})
 	require.NoError(t, err)
 	assert.Nil(t, e.currentPacket, "currentPacket should be nil on interrupt")
 }
@@ -1799,7 +1799,7 @@ func TestE2E_InterruptDuringStreaming(t *testing.T) {
 	})
 
 	// 3. User interrupts
-	err = e.Execute(context.Background(), comm, internal_type.InterruptionDetectedPacket{ContextID: "ctx-1"})
+	err = e.Execute(context.Background(), comm, internal_type.LLMInterruptPacket{ContextID: "ctx-1"})
 	require.NoError(t, err)
 	assert.Nil(t, e.currentPacket)
 
@@ -2090,7 +2090,7 @@ func TestDeadlock_ToolCallWithConcurrentInterrupt(t *testing.T) {
 	go func() {
 		defer wg.Done()
 		time.Sleep(time.Millisecond)
-		_ = e.Execute(ctx, comm, internal_type.InterruptionDetectedPacket{ContextID: "ctx-tool-interrupt"})
+		_ = e.Execute(ctx, comm, internal_type.LLMInterruptPacket{ContextID: "ctx-tool-interrupt"})
 		close(toolDelay) // unblock tool
 	}()
 
@@ -2334,7 +2334,7 @@ func TestConcurrency_MassiveParallelInjectAndSnapshot(t *testing.T) {
 }
 
 // TestConcurrency_ExecuteAndInterruptRace runs Execute(UserInputPacket)
-// and Execute(InterruptionDetectedPacket) concurrently to verify no race on
+// and Execute(LLMInterruptPacket) concurrently to verify no race on
 // currentPacket.
 func TestConcurrency_ExecuteAndInterruptRace(t *testing.T) {
 	e := newTestExecutor()
@@ -2358,7 +2358,7 @@ func TestConcurrency_ExecuteAndInterruptRace(t *testing.T) {
 	go func() {
 		defer wg.Done()
 		for i := 0; i < 100; i++ {
-			_ = e.Execute(context.Background(), comm, internal_type.InterruptionDetectedPacket{
+			_ = e.Execute(context.Background(), comm, internal_type.LLMInterruptPacket{
 				ContextID: fmt.Sprintf("ctx-%d", i),
 			})
 		}
@@ -2410,7 +2410,7 @@ func TestConcurrency_ResponseAndInterruptRace(t *testing.T) {
 	go func() {
 		defer wg.Done()
 		for i := 0; i < 100; i++ {
-			_ = e.Execute(context.Background(), comm, internal_type.InterruptionDetectedPacket{
+			_ = e.Execute(context.Background(), comm, internal_type.LLMInterruptPacket{
 				ContextID: fmt.Sprintf("ctx-%d", i),
 			})
 		}
@@ -3065,7 +3065,7 @@ func TestModel_InterruptionClearsPacket_ToolResultAfterInterrupt(t *testing.T) {
 	e.mu.Unlock()
 
 	// Interrupt.
-	err := e.Execute(context.Background(), comm, internal_type.InterruptionDetectedPacket{ContextID: "ctx-interrupted"})
+	err := e.Execute(context.Background(), comm, internal_type.LLMInterruptPacket{ContextID: "ctx-interrupted"})
 	require.NoError(t, err)
 	assert.Nil(t, e.currentPacket)
 
