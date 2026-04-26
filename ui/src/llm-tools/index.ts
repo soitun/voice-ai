@@ -15,11 +15,6 @@ export const BUILDIN_TOOLS = [
     name: 'Endpoint (LLM Call)',
   },
   {
-    icon: 'https://cdn-01.rapida.ai/partners/tools/waiting.png',
-    code: 'put_on_hold',
-    name: 'Put on hold',
-  },
-  {
     icon: 'https://cdn-01.rapida.ai/partners/tools/stop.png',
     code: 'end_of_conversation',
     name: 'End of conversation',
