@@ -34,7 +34,7 @@ func TestTransferCallCaller_Call_EmitsToolCallWithAction(t *testing.T) {
 	assert.Equal(t, "ctx-100", tc.ContextID)
 	assert.Equal(t, "transfer_call", tc.Name)
 	assert.Equal(t, protos.ToolCallAction_TOOL_CALL_ACTION_TRANSFER_CONVERSATION, tc.Action)
-	assert.Equal(t, "+15551234567", tc.Arguments["to"])
+	assert.Equal(t, "+15551234567", tc.Arguments["transfer_to"])
 }
 
 func TestTransferCallCaller_Call_NoToolResultPacket(t *testing.T) {
@@ -74,7 +74,7 @@ func TestTransferCallCaller_Call_PacketOrder(t *testing.T) {
 	assert.Equal(t, "transfer_call", tc.Name)
 	assert.Equal(t, "ctx-ord-2", tc.ContextID)
 	assert.Equal(t, protos.ToolCallAction_TOOL_CALL_ACTION_TRANSFER_CONVERSATION, tc.Action)
-	assert.Equal(t, "+15559876543", tc.Arguments["to"])
+	assert.Equal(t, "+15559876543", tc.Arguments["transfer_to"])
 }
 
 func TestTransferCallCaller_Call_SIPTarget(t *testing.T) {
@@ -96,7 +96,7 @@ func TestTransferCallCaller_Call_SIPTarget(t *testing.T) {
 	require.True(t, ok, "packet[0] must be LLMToolCallPacket")
 	assert.Equal(t, "tool-sip", tc.ToolID)
 	assert.Equal(t, protos.ToolCallAction_TOOL_CALL_ACTION_TRANSFER_CONVERSATION, tc.Action)
-	assert.Equal(t, "sip:support@pbx.example.com", tc.Arguments["to"])
+	assert.Equal(t, "sip:support@pbx.example.com", tc.Arguments["transfer_to"])
 }
 
 func TestTransferCallCaller_Call_TransferToFromArgsWithSeparator(t *testing.T) {
@@ -115,6 +115,5 @@ func TestTransferCallCaller_Call_TransferToFromArgsWithSeparator(t *testing.T) {
 	require.Len(t, pkts, 1)
 	tc, ok := pkts[0].(internal_type.LLMToolCallPacket)
 	require.True(t, ok, "packet[0] must be LLMToolCallPacket")
-	assert.Equal(t, "+15551111111SEPERATOR+15552222222", tc.Arguments["to"], "caller passes raw targets — streamer splits")
 	assert.Equal(t, "+15551111111SEPERATOR+15552222222", tc.Arguments["transfer_to"], "caller passes raw targets — streamer splits")
 }

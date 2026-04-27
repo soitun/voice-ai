@@ -17,12 +17,19 @@ import (
 	"github.com/rapidaai/protos"
 )
 
+type PostTransferAction string
+
+const (
+	PostTransferActionEndCall  PostTransferAction = "end_call"
+	PostTransferActionResumeAI PostTransferAction = "resume_ai"
+)
+
 type transferCallCaller struct {
 	toolCaller
 	transferTo         string
 	transferDelay      uint32
 	transferMessage    string
-	postTransferAction string
+	postTransferAction PostTransferAction
 }
 
 func (tc *transferCallCaller) Call(ctx context.Context, contextID, toolId string, args map[string]interface{}, communication internal_type.Communication) {
@@ -44,9 +51,7 @@ func (tc *transferCallCaller) Call(ctx context.Context, contextID, toolId string
 	}
 
 	if action, ok := args["post_transfer_action"].(string); ok && action != "" {
-		if normalized, isValid := normalizePostTransferAction(action); isValid {
-			postTransferAction = normalized
-		}
+		postTransferAction = getPostTransferAction(action)
 	}
 
 	if transferMessage != "" {
@@ -60,15 +65,14 @@ func (tc *transferCallCaller) Call(ctx context.Context, contextID, toolId string
 	}
 
 	arguments := map[string]string{
-		"to":               transferTo,
-		"transfer_to":      transferTo,
-		"message":          transferMessage,
-		"transfer_message": transferMessage,
-		"delay":            fmt.Sprintf("%d", transferDelay),
-		"transfer_delay":   fmt.Sprintf("%d", transferDelay),
+		"transfer_to":          transferTo,
+		"message":              transferMessage,
+		"transfer_message":     transferMessage,
+		"transfer_delay":       fmt.Sprintf("%d", transferDelay),
+		"post_transfer_action": string(PostTransferActionEndCall),
 	}
 	if postTransferAction != "" {
-		arguments["post_transfer_action"] = postTransferAction
+		arguments["post_transfer_action"] = string(postTransferAction)
 	}
 
 	communication.OnPacket(ctx,
@@ -91,11 +95,6 @@ func NewTransferCallCaller(ctx context.Context, logger commons.Logger, toolOptio
 	transferDelay, _ := opts.GetUint32("tool.transfer_delay")
 	transferMessage, _ := opts.GetString("tool.transfer_message")
 	postTransferActionRaw, _ := opts.GetString("tool.post_transfer_action")
-	postTransferAction, ok := normalizePostTransferAction(postTransferActionRaw)
-	if postTransferActionRaw != "" && !ok {
-		return nil, fmt.Errorf("tool.post_transfer_action must be one of end_call,resume_ai")
-	}
-
 	return &transferCallCaller{
 		toolCaller: toolCaller{
 			logger:      logger,
@@ -104,15 +103,17 @@ func NewTransferCallCaller(ctx context.Context, logger commons.Logger, toolOptio
 		transferMessage:    transferMessage,
 		transferDelay:      transferDelay,
 		transferTo:         transferTo,
-		postTransferAction: postTransferAction,
+		postTransferAction: getPostTransferAction(postTransferActionRaw),
 	}, nil
 }
 
-func normalizePostTransferAction(raw string) (string, bool) {
+func getPostTransferAction(raw string) PostTransferAction {
 	switch raw {
-	case "end_call", "resume_ai":
-		return raw, true
+	case "end_call":
+		return PostTransferActionEndCall
+	case "resume_ai":
+		return PostTransferActionResumeAI
 	default:
-		return "", false
+		return PostTransferActionEndCall
 	}
 }

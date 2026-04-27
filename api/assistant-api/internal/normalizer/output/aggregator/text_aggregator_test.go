@@ -282,9 +282,11 @@ func TestDonePacketFlush(t *testing.T) {
 		}
 	}
 
-	_, ok = results[1].(internal_type.TTSTextPacket)
+	done, ok := results[1].(internal_type.TTSDonePacket)
 	if !ok {
-		t.Errorf("expected second result to be TTSTextPacket, got %T", results[1])
+		t.Errorf("expected second result to be TTSDonePacket, got %T", results[1])
+	} else if done.ContextID != "speaker1" {
+		t.Errorf("expected done contextID 'speaker1', got %q", done.ContextID)
 	}
 }
 
@@ -599,9 +601,11 @@ func TestLLMStreamingForcedCompletion(t *testing.T) {
 		}
 	}
 
-	_, ok = results[1].(internal_type.TTSTextPacket)
+	done, ok := results[1].(internal_type.TTSDonePacket)
 	if !ok {
-		t.Errorf("expected second result to be TTSTextPacket, got %T", results[1])
+		t.Errorf("expected second result to be TTSDonePacket, got %T", results[1])
+	} else if done.ContextID != "llm" {
+		t.Errorf("expected done contextID 'llm', got %q", done.ContextID)
 	}
 }
 
@@ -631,15 +635,17 @@ func TestLLMStreamingUnformattedButComplete(t *testing.T) {
 		t.Errorf("expected flushed text 'this is a raw llm response', got %q", ts0.Text)
 	}
 
-	_, ok = results[1].(internal_type.TTSTextPacket)
+	done, ok := results[1].(internal_type.TTSDonePacket)
 	if !ok {
-		t.Errorf("expected second result to be TTSTextPacket, got %T", results[1])
+		t.Errorf("expected second result to be TTSDonePacket, got %T", results[1])
+	} else if done.ContextID != "llm" {
+		t.Errorf("expected done contextID 'llm', got %q", done.ContextID)
 	}
 }
 
 // TestRealisticLLMStream_CafeConversation replays a real production LLM
 // stream (61 chunks) and verifies the aggregator flushes at every sentence
-// boundary and emits a final IsFinal=true packet on done.
+// boundary and emits a final TTSDonePacket on done.
 //
 // Production contextID: c85c1cc3-1535-4a58-bb5f-dce9e1f6def3
 // Full text: "Oh, I like that idea---something chill and cozy sounds perfect
@@ -696,12 +702,12 @@ func TestRealisticLLMStream_CafeConversation(t *testing.T) {
 	//   2. " I definitely want to relax, maybe find some nice spots to unwind."       (at ".")
 	//   3. " Do you have any places in mind that are more laid-back but still beautiful?" (at "?")
 	//   4. " Like, maybe with good cafes, pretty scenery, and not too hectic?"         (at "?" --- trailing flush or boundary)
-	//   5. IsFinal=true done packet
+	//   5. TTSDonePacket
 	//
 	// The exact count depends on whether the aggregator flushes on the second "?"
 	// during streaming or defers it to the done flush. We verify at minimum:
 	//   - At least 3 mid-stream sentence flushes
-	//   - The last packet is IsFinal=true
+	//   - The last packet is TTSDonePacket
 	//   - All packets carry the correct contextID
 
 	if len(results) < 4 {
@@ -720,10 +726,10 @@ func TestRealisticLLMStream_CafeConversation(t *testing.T) {
 		}
 	}
 
-	// Last packet must be the done/final marker (TTSTextPacket).
-	last, ok := results[len(results)-1].(internal_type.TTSTextPacket)
+	// Last packet must be the done/final marker (TTSDonePacket).
+	last, ok := results[len(results)-1].(internal_type.TTSDonePacket)
 	if !ok {
-		t.Errorf("last packet: expected TTSTextPacket, got %T", results[len(results)-1])
+		t.Errorf("last packet: expected TTSDonePacket, got %T", results[len(results)-1])
 	}
 	if last.ContextID != ctxID {
 		t.Errorf("last packet: contextID = %q, want %q", last.ContextID, ctxID)
