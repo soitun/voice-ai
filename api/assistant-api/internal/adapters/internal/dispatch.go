@@ -459,6 +459,8 @@ func (talking *genericRequestor) callInputNormalizer(ctx context.Context, vl int
 
 func (talking *genericRequestor) handleUserInput(ctx context.Context, vl internal_type.UserInputPacket) {
 	talking.stopIdleTimeoutTimerAndResetCount()
+
+	//
 	if err := talking.Transition(LLMGenerating); err != nil {
 		talking.logger.Errorf("messaging transition error: %v", err)
 	}
@@ -816,7 +818,7 @@ func (talking *genericRequestor) handleTTSDone(ctx context.Context, vl internal_
 	if vl.ContextID != talking.GetID() {
 		return
 	}
-	talking.startIdleTimeoutTimer(ctx)
+
 	if talking.textToSpeechTransformer != nil && talking.GetMode().Audio() {
 		if err := talking.textToSpeechTransformer.Transform(ctx, vl); err != nil {
 			talking.logger.Errorf("tts done: failed to send final: %v", err)
@@ -997,13 +999,20 @@ func (talking *genericRequestor) handleToolCall(ctx context.Context, vl internal
 		Data:      map[string]string{observe.DataType: observe.EventToolCallStarted, "name": vl.Name, "id": vl.ToolID, "action": vl.Action.String()},
 		Time:      time.Now(),
 	})
+
+	if msg, ok := vl.Arguments["message"]; ok && msg != "" {
+		talking.OnPacket(ctx,
+			internal_type.STTInterruptPacket{ContextID: vl.ContextID},
+			internal_type.InjectMessagePacket{ContextID: talking.GetID(), Text: msg})
+	}
+
 	talking.Notify(ctx, &protos.ConversationToolCall{
 		Id: vl.ContextID, ToolId: vl.ToolID, Name: vl.Name,
 		Action: vl.Action, Args: vl.Arguments, Time: timestamppb.Now(),
 	})
 
 	if vl.Action != protos.ToolCallAction_TOOL_CALL_ACTION_UNSPECIFIED {
-		talking.stopIdleTimeoutTimer()
+		talking.stopIdleTimeoutTimerAndResetCount()
 		if talking.maxSessionTimer != nil {
 			talking.maxSessionTimer.Stop()
 		}
@@ -1035,7 +1044,8 @@ func (talking *genericRequestor) handleToolResult(ctx context.Context, vl intern
 	})
 
 	if vl.Action != protos.ToolCallAction_TOOL_CALL_ACTION_UNSPECIFIED {
-		talking.restartTimers(ctx)
+		// start ideal timeout
+		talking.startIdleTimeoutTimer(ctx)
 	}
 
 	// DB write → lowCh (non-blocking)
@@ -1090,10 +1100,11 @@ func (talking *genericRequestor) handleConversationEvent(ctx context.Context, vl
 	})
 	if talking.observer != nil {
 		talking.observer.EventCollectors().Collect(ctx, observe.EventRecord{
-			MessageID: contextID,
-			Name:      vl.Name,
-			Data:      vl.Data,
-			Time:      vl.Time,
+			ConversationID: talking.observer.Meta().AssistantConversationID,
+			MessageID:      contextID,
+			Name:           vl.Name,
+			Data:           vl.Data,
+			Time:           vl.Time,
 		})
 	}
 }

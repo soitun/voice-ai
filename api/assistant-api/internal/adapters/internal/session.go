@@ -121,10 +121,11 @@ func (r *genericRequestor) Disconnect(ctx context.Context) {
 	// have already returned, so any packet enqueued here would be silently lost.
 	if r.observer != nil {
 		r.observer.EventCollectors().Collect(context.Background(), observe.EventRecord{
-			MessageID: r.GetID(),
-			Name:      observe.ComponentSession,
-			Data:      map[string]string{observe.DataType: observe.EventDisconnected, observe.DataMessages: fmt.Sprintf("%d", len(r.GetHistories()))},
-			Time:      time.Now(),
+			ConversationID: r.observer.Meta().AssistantConversationID,
+			MessageID:      r.GetID(),
+			Name:           observe.ComponentSession,
+			Data:           map[string]string{observe.DataType: observe.EventDisconnected, observe.DataMessages: fmt.Sprintf("%d", len(r.GetHistories()))},
+			Time:           time.Now(),
 		})
 	}
 	r.shutdownCollectors(ctx)

@@ -184,4 +184,16 @@ describe('ConfigureTransferCall', () => {
         ?.getValue(),
     ).toBe('resume_ai');
   });
+
+  it('shows 500ms as default transfer delay when delay parameter is missing', () => {
+    render(
+      <ConfigureTransferCall
+        parameters={[createMetadata('tool.transfer_to', '+14155551234')]}
+        onParameterChange={jest.fn()}
+      />,
+    );
+
+    const delay = screen.getByTestId('transfer-delay');
+    expect(delay).toHaveValue('500');
+  });
 });

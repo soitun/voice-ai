@@ -27,6 +27,12 @@ export const ConfigureTransferCall: FC<ConfigureToolProps> = ({
     const raw = getParamValue('tool.transfer_to');
     return raw ? raw.split(SEPARATOR) : [''];
   });
+  const transferDelayRaw = getParamValue('tool.transfer_delay');
+  const transferDelayParsed = Number.parseInt(transferDelayRaw, 10);
+  const transferDelayValue =
+    transferDelayRaw === '' || Number.isNaN(transferDelayParsed)
+      ? 500
+      : transferDelayParsed;
 
   const handleTransferToChange = useCallback(
     (options: string[]) => {
@@ -113,7 +119,7 @@ export const ConfigureTransferCall: FC<ConfigureToolProps> = ({
               min={0}
               max={1000}
               step={50}
-              value={Number(getParamValue('tool.transfer_delay')) || 0}
+              value={transferDelayValue}
               onChange={({ value }: { value: number }) =>
                 updateParameter('tool.transfer_delay', value.toString())
               }

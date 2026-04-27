@@ -90,7 +90,6 @@ func (executor *toolExecutor) filterToolsByCondition(
 	if executor.conditionMatcher == nil {
 		executor.conditionMatcher = newToolConditionMatcher()
 	}
-
 	filtered := make([]*internal_assistant_entity.AssistantTool, 0, len(tools))
 	for _, tool := range tools {
 		opts := tool.GetOptions()

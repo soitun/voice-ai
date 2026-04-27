@@ -97,7 +97,6 @@ func (r *genericRequestor) restartTimers(ctx context.Context) {
 	if err != nil {
 		return
 	}
-	r.startIdleTimeoutTimer(ctx)
 	r.initializeMaxSessionDuration(ctx, behavior)
 }
 
@@ -139,6 +138,7 @@ func (r *genericRequestor) OnError(ctx context.Context) error {
 
 	r.Transition(Interrupted)
 	if err := r.OnPacket(ctx,
+		internal_type.TTSInterruptPacket{ContextID: r.GetID()},
 		internal_type.InjectMessagePacket{ContextID: r.GetID(), Text: mistakeContent},
 		internal_type.ConversationEventPacket{
 			Name: "behavior",
@@ -191,13 +191,8 @@ func (r *genericRequestor) onIdleTimeout(ctx context.Context) error {
 	// InjectMessagePacket routes to outputCh; the context must be rotated
 	// before enqueueing so GetID() returns the new context.
 	r.Transition(Interrupted)
-	// Reinitialize TTS synchronously — the provider enters "completed" state
-	// after speaking and needs an interrupt to accept new text. Calling inline
-	// guarantees TTS is ready before InjectMessagePacket reaches handleSpeakText.
-	if r.textToSpeechTransformer != nil {
-		r.textToSpeechTransformer.Transform(ctx, internal_type.InterruptionDetectedPacket{ContextID: r.GetID()})
-	}
 	if err := r.OnPacket(ctx,
+		internal_type.TTSInterruptPacket{ContextID: r.GetID()},
 		internal_type.InjectMessagePacket{ContextID: r.GetID(), Text: timeoutContent},
 		internal_type.ConversationEventPacket{
 			Name: "behavior",
@@ -230,6 +225,8 @@ func (r *genericRequestor) getIdleTimeoutMessage(behavior *internal_assistant_en
 // has spoken but the user hasn't responded within the configured duration.
 // The inputDuration parameter extends the idle timeout to account for user input time.
 func (r *genericRequestor) startIdleTimeoutTimer(ctx context.Context, inputDuration ...time.Duration) {
+	r.logger.Debugf("idle timeout --> starting idle timeout timer with input duration: %v", inputDuration)
+
 	if r.idleTimeoutTimer != nil {
 		r.idleTimeoutTimer.Stop()
 	}
@@ -281,6 +278,7 @@ func (r *genericRequestor) stopIdleTimeoutTimerAndResetCount() {
 // retry count. The count is only reset when the user actually speaks
 // (handleNormalizedText), not when a system-generated interrupt fires.
 func (r *genericRequestor) stopIdleTimeoutTimer() {
+	r.logger.Debugf("idle timeout --> stopping idle timeout timer")
 	if r.idleTimeoutTimer != nil {
 		r.idleTimeoutTimer.Stop()
 		r.idleTimeoutTimer = nil

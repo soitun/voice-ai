@@ -332,7 +332,17 @@ func (eService assistantDeploymentService) CreatePhoneDeployment(
 		},
 	}
 
-	// TODO: Persist the deployment to the database
+	// Today we support one active phone deployment per assistant. So we archive prior deployments before creating a new one. In future if we want to support multiple active phone deployments, we can remove this logic and add necessary filters while fetching the deployment for a call.
+	if err := db.Model(&internal_assistant_entity.AssistantPhoneDeployment{}).
+		Where("assistant_id = ? AND status = ?", assistantId, type_enums.RECORD_ACTIVE).
+		Updates(map[string]interface{}{
+			"status":     type_enums.RECORD_ARCHIEVE,
+			"updated_by": *auth.GetUserId(),
+		}).Error; err != nil {
+		eService.logger.Errorf("unable to archive prior phone deployments for assistant %d: %v", assistantId, err)
+		return nil, err
+	}
+
 	tx := db.Create(deployment)
 	if tx.Error != nil {
 		eService.logger.Errorf("unable to create web plugin deployment for assistant wiht error %v", tx.Error)

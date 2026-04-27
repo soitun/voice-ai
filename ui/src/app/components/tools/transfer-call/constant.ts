@@ -27,7 +27,7 @@ export const GetTransferCallDefaultOptions = (
     [
       { key: 'tool.transfer_to' },
       { key: 'tool.transfer_message' },
-      { key: 'tool.transfer_delay', defaultValue: '0' },
+      { key: 'tool.transfer_delay', defaultValue: '500' },
       { key: 'tool.post_transfer_action', defaultValue: 'end_call' },
     ],
     ALL_KEYS,

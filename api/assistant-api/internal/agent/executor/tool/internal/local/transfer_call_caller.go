@@ -54,12 +54,6 @@ func (tc *transferCallCaller) Call(ctx context.Context, contextID, toolId string
 		postTransferAction = getPostTransferAction(action)
 	}
 
-	if transferMessage != "" {
-		communication.OnPacket(ctx,
-			internal_type.InjectMessagePacket{ContextID: contextID, Text: transferMessage},
-		)
-	}
-
 	if transferDelay > 0 {
 		time.Sleep(time.Duration(transferDelay) * time.Millisecond)
 	}
