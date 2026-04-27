@@ -3,16 +3,15 @@
 //
 // Licensed under GPL-2.0 with Rapida Additional Terms.
 // See LICENSE.md or contact sales@rapida.ai for commercial usage.
-package internal_agent_executor_llm
+package internal_llm
 
 import (
 	"context"
 	"errors"
 
-	internal_agent_executor "github.com/rapidaai/api/assistant-api/internal/agent/executor"
-	internal_agentkit "github.com/rapidaai/api/assistant-api/internal/agent/executor/llm/internal/agentkit"
-	internal_model "github.com/rapidaai/api/assistant-api/internal/agent/executor/llm/internal/model"
-	internal_websocket "github.com/rapidaai/api/assistant-api/internal/agent/executor/llm/internal/websocket"
+	internal_agentkit "github.com/rapidaai/api/assistant-api/internal/llm/internal/agentkit"
+	internal_model "github.com/rapidaai/api/assistant-api/internal/llm/internal/model"
+	internal_websocket "github.com/rapidaai/api/assistant-api/internal/llm/internal/websocket"
 	internal_type "github.com/rapidaai/api/assistant-api/internal/type"
 	"github.com/rapidaai/pkg/commons"
 	type_enums "github.com/rapidaai/pkg/types/enums"
@@ -21,10 +20,10 @@ import (
 
 type assistantExecutor struct {
 	logger   commons.Logger
-	executor internal_agent_executor.AssistantExecutor
+	executor AssistantExecutor
 }
 
-func NewAssistantExecutor(logger commons.Logger) internal_agent_executor.AssistantExecutor {
+func NewAssistantExecutor(logger commons.Logger) AssistantExecutor {
 	return &assistantExecutor{
 		logger: logger,
 	}

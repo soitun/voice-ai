@@ -3,7 +3,7 @@
 //
 // Licensed under GPL-2.0 with Rapida Additional Terms.
 // See LICENSE.md or contact sales@rapida.ai for commercial usage.
-package internal_agent_executor_tool
+package internal_tool
 
 import (
 	"context"
@@ -11,11 +11,10 @@ import (
 	"errors"
 	"fmt"
 
-	internal_agent_executor "github.com/rapidaai/api/assistant-api/internal/agent/executor"
-	internal_tool "github.com/rapidaai/api/assistant-api/internal/agent/executor/tool/internal"
-	internal_tool_local "github.com/rapidaai/api/assistant-api/internal/agent/executor/tool/internal/local"
-	internal_tool_mcp "github.com/rapidaai/api/assistant-api/internal/agent/executor/tool/internal/mcp"
 	internal_assistant_entity "github.com/rapidaai/api/assistant-api/internal/entity/assistants"
+	internal_tool "github.com/rapidaai/api/assistant-api/internal/tool/internal"
+	internal_tool_local "github.com/rapidaai/api/assistant-api/internal/tool/internal/local"
+	internal_tool_mcp "github.com/rapidaai/api/assistant-api/internal/tool/internal/mcp"
 	internal_type "github.com/rapidaai/api/assistant-api/internal/type"
 
 	"github.com/rapidaai/protos"
@@ -37,7 +36,7 @@ type toolRegistration struct {
 	def    *protos.FunctionDefinition
 }
 
-func NewToolExecutor(logger commons.Logger) internal_agent_executor.ToolExecutor {
+func NewToolExecutor(logger commons.Logger) ToolExecutor {
 	return &toolExecutor{
 		logger:                 logger,
 		mcpClients:             make([]*internal_tool_mcp.Client, 0),

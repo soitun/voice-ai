@@ -8,9 +8,9 @@ import (
 	"testing"
 	"time"
 
-	internal_agent_executor "github.com/rapidaai/api/assistant-api/internal/agent/executor"
 	internal_assistant_entity "github.com/rapidaai/api/assistant-api/internal/entity/assistants"
 	internal_conversation_entity "github.com/rapidaai/api/assistant-api/internal/entity/conversations"
+	internal_agent_tool "github.com/rapidaai/api/assistant-api/internal/tool"
 	internal_type "github.com/rapidaai/api/assistant-api/internal/type"
 	integration_client_builders "github.com/rapidaai/pkg/clients/integration/builders"
 	"github.com/rapidaai/pkg/commons"
@@ -43,7 +43,7 @@ func (m *testStream) SendMsg(any) error                   { return nil }
 func (m *testStream) RecvMsg(any) error                   { return nil }
 
 type testToolExecutor struct {
-	internal_agent_executor.ToolExecutor
+	internal_agent_tool.ToolExecutor
 	calls []struct {
 		contextID string
 		tools     []*protos.ToolCall

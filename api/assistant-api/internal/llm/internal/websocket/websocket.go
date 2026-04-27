@@ -17,15 +17,12 @@ import (
 
 	"github.com/gorilla/websocket"
 
-	internal_agent_executor "github.com/rapidaai/api/assistant-api/internal/agent/executor"
 	internal_assistant_entity "github.com/rapidaai/api/assistant-api/internal/entity/assistants"
 	internal_type "github.com/rapidaai/api/assistant-api/internal/type"
 	"github.com/rapidaai/pkg/commons"
 	"github.com/rapidaai/pkg/utils"
 	"github.com/rapidaai/protos"
 )
-
-var _ internal_agent_executor.AssistantExecutor = (*websocketExecutor)(nil)
 
 type websocketExecutor struct {
 	logger    commons.Logger
@@ -36,7 +33,7 @@ type websocketExecutor struct {
 }
 
 // NewWebsocketAssistantExecutor creates a new WebSocket-based assistant executor.
-func NewWebsocketAssistantExecutor(logger commons.Logger) internal_agent_executor.AssistantExecutor {
+func NewWebsocketAssistantExecutor(logger commons.Logger) *websocketExecutor {
 	return &websocketExecutor{
 		logger: logger,
 	}
@@ -274,11 +271,6 @@ func (e *websocketExecutor) Execute(ctx context.Context, comm internal_type.Comm
 	default:
 		return fmt.Errorf("unsupported packet: %T", packet)
 	}
-}
-
-// GetToolExecutor returns nil — the websocket executor does not manage tools locally.
-func (e *websocketExecutor) GetToolExecutor() internal_agent_executor.ToolExecutor {
-	return nil
 }
 
 // Close terminates the WebSocket connection.

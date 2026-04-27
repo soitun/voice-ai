@@ -19,12 +19,11 @@ import (
 	internal_type "github.com/rapidaai/api/assistant-api/internal/type"
 
 	internal_agent_embeddings "github.com/rapidaai/api/assistant-api/internal/agent/embedding"
-	internal_agent_executor "github.com/rapidaai/api/assistant-api/internal/agent/executor"
-	internal_agent_executor_llm "github.com/rapidaai/api/assistant-api/internal/agent/executor/llm"
 	internal_agent_rerankers "github.com/rapidaai/api/assistant-api/internal/agent/reranker"
 	internal_assistant_entity "github.com/rapidaai/api/assistant-api/internal/entity/assistants"
 	internal_conversation_entity "github.com/rapidaai/api/assistant-api/internal/entity/conversations"
 	internal_knowledge_gorm "github.com/rapidaai/api/assistant-api/internal/entity/knowledges"
+	internal_llm "github.com/rapidaai/api/assistant-api/internal/llm"
 	internal_input_normalizer "github.com/rapidaai/api/assistant-api/internal/normalizer/input"
 	internal_output_normalizer "github.com/rapidaai/api/assistant-api/internal/normalizer/output"
 	observe "github.com/rapidaai/api/assistant-api/internal/observe"
@@ -136,7 +135,7 @@ type genericRequestor struct {
 	recorder internal_type.Recorder
 
 	// executor
-	assistantExecutor internal_agent_executor.AssistantExecutor
+	assistantExecutor internal_llm.AssistantExecutor
 
 	// states
 	assistant             *internal_assistant_entity.Assistant
@@ -196,7 +195,7 @@ func NewGenericRequestor(
 		contextID:         uuid.NewString(),
 		interactionState:  Unknown,
 		msgMode:           type_enums.TextMode,
-		assistantExecutor: internal_agent_executor_llm.NewAssistantExecutor(logger),
+		assistantExecutor: internal_llm.NewAssistantExecutor(logger),
 		inputNormalizer:   internal_input_normalizer.NewInputNormalizer(logger),
 		outputNormalizer:  internal_output_normalizer.NewOutputNormalizer(logger),
 

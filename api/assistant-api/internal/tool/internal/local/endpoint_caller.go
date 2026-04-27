@@ -10,8 +10,8 @@ import (
 	"encoding/json"
 	"fmt"
 
-	internal_tool "github.com/rapidaai/api/assistant-api/internal/agent/executor/tool/internal"
 	internal_assistant_entity "github.com/rapidaai/api/assistant-api/internal/entity/assistants"
+	internal_tool "github.com/rapidaai/api/assistant-api/internal/tool/internal"
 	internal_type "github.com/rapidaai/api/assistant-api/internal/type"
 	endpoint_client_builders "github.com/rapidaai/pkg/clients/endpoint/builders"
 	"github.com/rapidaai/pkg/commons"

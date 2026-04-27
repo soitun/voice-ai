@@ -3,7 +3,7 @@
 //
 // Licensed under GPL-2.0 with Rapida Additional Terms.
 // See LICENSE.md or contact sales@rapida.ai for commercial usage.
-package internal_agent_executor_tool
+package internal_tool
 
 import (
 	internal_assistant_entity "github.com/rapidaai/api/assistant-api/internal/entity/assistants"
@@ -37,7 +37,7 @@ type ExecuteToolsPipeline struct {
 	Communication internal_type.Communication
 }
 
-func (DiscoverToolsPipeline) toolPipeline()            {}
-func (FilterToolsPipeline) toolPipeline()              {}
-func (BuildAndRegisterToolsPipeline) toolPipeline()    {}
-func (ExecuteToolsPipeline) toolPipeline()             {}
+func (DiscoverToolsPipeline) toolPipeline()         {}
+func (FilterToolsPipeline) toolPipeline()           {}
+func (BuildAndRegisterToolsPipeline) toolPipeline() {}
+func (ExecuteToolsPipeline) toolPipeline()          {}

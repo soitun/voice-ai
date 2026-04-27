@@ -18,7 +18,6 @@ import (
 	"sync"
 	"time"
 
-	internal_agent_executor "github.com/rapidaai/api/assistant-api/internal/agent/executor"
 	internal_assistant_entity "github.com/rapidaai/api/assistant-api/internal/entity/assistants"
 	internal_type "github.com/rapidaai/api/assistant-api/internal/type"
 	"github.com/rapidaai/pkg/commons"
@@ -33,8 +32,6 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-var _ internal_agent_executor.AssistantExecutor = (*agentkitExecutor)(nil)
-
 type agentkitExecutor struct {
 	logger     commons.Logger
 	connection *grpc.ClientConn
@@ -44,7 +41,7 @@ type agentkitExecutor struct {
 	done       chan struct{}
 }
 
-func NewAgentKitAssistantExecutor(logger commons.Logger) internal_agent_executor.AssistantExecutor {
+func NewAgentKitAssistantExecutor(logger commons.Logger) *agentkitExecutor {
 	return &agentkitExecutor{logger: logger}
 }
 
@@ -106,10 +103,6 @@ func (e *agentkitExecutor) Close(ctx context.Context) error {
 			e.logger.Errorf("timed out waiting for listener goroutine to exit")
 		}
 	}
-	return nil
-}
-
-func (e *agentkitExecutor) GetToolExecutor() internal_agent_executor.ToolExecutor {
 	return nil
 }
 

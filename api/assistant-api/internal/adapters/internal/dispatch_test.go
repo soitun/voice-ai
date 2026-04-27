@@ -9,11 +9,12 @@ import (
 	"testing"
 	"time"
 
-	internal_agent_executor "github.com/rapidaai/api/assistant-api/internal/agent/executor"
 	internal_assistant_entity "github.com/rapidaai/api/assistant-api/internal/entity/assistants"
 	internal_conversation_entity "github.com/rapidaai/api/assistant-api/internal/entity/conversations"
 	internal_message_gorm "github.com/rapidaai/api/assistant-api/internal/entity/messages"
+	internal_llm "github.com/rapidaai/api/assistant-api/internal/llm"
 	internal_services "github.com/rapidaai/api/assistant-api/internal/services"
+	internal_tool "github.com/rapidaai/api/assistant-api/internal/tool"
 	internal_type "github.com/rapidaai/api/assistant-api/internal/type"
 	"github.com/rapidaai/pkg/commons"
 	gorm_model "github.com/rapidaai/pkg/models/gorm"
@@ -45,7 +46,7 @@ type executorStub struct {
 	err     error
 }
 
-var _ internal_agent_executor.AssistantExecutor = (*executorStub)(nil)
+var _ internal_llm.AssistantExecutor = (*executorStub)(nil)
 
 func (e *executorStub) Initialize(context.Context, internal_type.Communication, *protos.ConversationInitialization) error {
 	return nil
@@ -57,8 +58,8 @@ func (e *executorStub) Execute(_ context.Context, _ internal_type.Communication,
 	e.mu.Unlock()
 	return e.err
 }
-func (e *executorStub) GetToolExecutor() internal_agent_executor.ToolExecutor { return nil }
-func (e *executorStub) Close(context.Context) error                           { return nil }
+func (e *executorStub) GetToolExecutor() internal_tool.ToolExecutor { return nil }
+func (e *executorStub) Close(context.Context) error                 { return nil }
 func (e *executorStub) getPackets() []internal_type.Packet {
 	e.mu.Lock()
 	defer e.mu.Unlock()
@@ -1086,8 +1087,8 @@ func (e *e2eExecutorStub) Execute(_ context.Context, comm internal_type.Communic
 	}
 	return nil
 }
-func (e *e2eExecutorStub) GetToolExecutor() internal_agent_executor.ToolExecutor { return nil }
-func (e *e2eExecutorStub) Close(context.Context) error                           { return nil }
+func (e *e2eExecutorStub) GetToolExecutor() internal_tool.ToolExecutor { return nil }
+func (e *e2eExecutorStub) Close(context.Context) error                 { return nil }
 func (e *e2eExecutorStub) getPackets() []internal_type.Packet {
 	e.mu.Lock()
 	defer e.mu.Unlock()

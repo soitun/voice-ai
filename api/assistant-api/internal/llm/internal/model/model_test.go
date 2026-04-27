@@ -17,7 +17,7 @@ import (
 	"testing"
 	"time"
 
-	internal_agent_executor "github.com/rapidaai/api/assistant-api/internal/agent/executor"
+	internal_agent_executor "github.com/rapidaai/api/assistant-api/internal"
 	internal_assistant_entity "github.com/rapidaai/api/assistant-api/internal/entity/assistants"
 	internal_conversation_entity "github.com/rapidaai/api/assistant-api/internal/entity/conversations"
 	internal_type "github.com/rapidaai/api/assistant-api/internal/type"

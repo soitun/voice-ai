@@ -16,8 +16,7 @@ import (
 	"sync"
 	"time"
 
-	internal_agent_executor "github.com/rapidaai/api/assistant-api/internal/agent/executor"
-	internal_agent_tool "github.com/rapidaai/api/assistant-api/internal/agent/executor/tool"
+	internal_agent_tool "github.com/rapidaai/api/assistant-api/internal/tool"
 	internal_type "github.com/rapidaai/api/assistant-api/internal/type"
 	"github.com/rapidaai/api/assistant-api/internal/variable"
 	integration_client_builders "github.com/rapidaai/pkg/clients/integration/builders"
@@ -29,11 +28,9 @@ import (
 	"google.golang.org/grpc"
 )
 
-var _ internal_agent_executor.AssistantExecutor = (*modelAssistantExecutor)(nil)
-
 type modelAssistantExecutor struct {
 	logger             commons.Logger
-	toolExecutor       internal_agent_executor.ToolExecutor
+	toolExecutor       internal_agent_tool.ToolExecutor
 	providerCredential *protos.VaultCredential
 	inputBuilder       integration_client_builders.InputChatBuilder
 	history            *ConversationHistory
@@ -46,7 +43,7 @@ type modelAssistantExecutor struct {
 	ctxCancel context.CancelFunc
 }
 
-func NewModelAssistantExecutor(logger commons.Logger) internal_agent_executor.AssistantExecutor {
+func NewModelAssistantExecutor(logger commons.Logger) *modelAssistantExecutor {
 	return &modelAssistantExecutor{
 		logger:       logger,
 		inputBuilder: integration_client_builders.NewChatInputBuilder(logger),
