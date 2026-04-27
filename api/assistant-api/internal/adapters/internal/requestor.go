@@ -261,7 +261,6 @@ func (talking *genericRequestor) BeginConversation(ctx context.Context, assistan
 
 func (talking *genericRequestor) ResumeConversation(ctx context.Context, assistant *internal_assistant_entity.Assistant, config *protos.ConversationInitialization) (*internal_conversation_entity.AssistantConversation, error) {
 	talking.assistant = assistant
-
 	conversation, err := talking.GetAssistantConversation(ctx, talking.Auth(), assistant.Id, config.GetAssistantConversationId())
 	if err != nil {
 		talking.logger.Errorf("failed to get assistant conversation: %+v", err)
@@ -275,6 +274,12 @@ func (talking *genericRequestor) ResumeConversation(ctx context.Context, assista
 	talking.args = conversation.GetArguments()
 	talking.options = conversation.GetOptions()
 	talking.metadata = conversation.GetMetadatas()
+	if extra, err := utils.AnyMapToInterfaceMap(config.GetMetadata()); err == nil && len(extra) > 0 {
+		talking.metadata = utils.MergeMaps(talking.metadata, extra)
+		utils.Go(ctx, func() {
+			talking.conversationService.ApplyConversationMetadata(ctx, talking.Auth(), assistant.Id, conversation.Id, types.NewMetadataList(extra))
+		})
+	}
 	return conversation, nil
 }
 

@@ -73,7 +73,6 @@ func (d *Dispatcher) handleSessionEstablished(ctx context.Context, v sip_infra.S
 		if clientPhone == "" {
 			clientPhone = v.FromURI
 		}
-		// Assistant phone = our DID (To URI for inbound, From URI for outbound)
 		assistantPhone := ""
 		if info := v.Session.GetInfo(); info.LocalURI != "" {
 			assistantPhone = sip_infra.ExtractDIDFromURI(info.LocalURI)

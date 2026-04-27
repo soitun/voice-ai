@@ -29,9 +29,11 @@ import {
   DismissibleTag,
   Loading,
   CodeSnippet,
+  Stack,
 } from '@carbon/react';
 import { TableToolbarFilter } from '@/app/components/carbon/table-toolbar-filter';
 import { ChevronRight } from '@carbon/icons-react';
+import { TextInput } from '@/app/components/carbon/form';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -45,6 +47,11 @@ interface Chip {
   value: string | number;
   id: string;
 }
+
+type CriteriaInput = {
+  key: string;
+  value: string;
+};
 
 type TelemetryRow =
   | { kind: 'event'; ts: Date; key: string; record: TelemetryEvent }
@@ -70,6 +77,44 @@ const EVENT_TAG_TYPE: Record<string, string> = {
 
 const normalizeComponentType = (nameKey: string): string =>
   nameKey === 'sip' ? 'telephony' : nameKey;
+
+export const splitStructuredTelemetryCriteria = (
+  criteriaInputs: CriteriaInput[],
+): {
+  conversationId: string;
+  messageId: string;
+  remaining: CriteriaInput[];
+} => {
+  let conversationId = '';
+  let messageId = '';
+  const remaining: CriteriaInput[] = [];
+
+  criteriaInputs.forEach(c => {
+    if (c.key === 'conversationId') {
+      conversationId = c.value;
+      return;
+    }
+    if (c.key === 'messageId' || c.key === 'contextId') {
+      messageId = c.value;
+      return;
+    }
+    remaining.push(c);
+  });
+
+  return { conversationId, messageId, remaining };
+};
+
+export const buildTelemetryCriteriaInputs = (
+  remaining: CriteriaInput[],
+  conversationId: string,
+  messageId: string,
+): CriteriaInput[] => {
+  const out = [...remaining];
+  if (conversationId)
+    out.push({ key: 'conversationId', value: conversationId });
+  if (messageId) out.push({ key: 'messageId', value: messageId });
+  return out;
+};
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -120,11 +165,22 @@ export function ConversationTelemetryDialog(
   const [criteriaReady, setCriteriaReady] = useState(false);
   const [searchText, setSearchText] = useState('');
   const [activeFilters, setActiveFilters] = useState<Set<string>>(new Set());
+  const [conversationIdInput, setConversationIdInput] = useState('');
+  const [messageIdInput, setMessageIdInput] = useState('');
+  const [appliedConversationId, setAppliedConversationId] = useState('');
+  const [appliedMessageId, setAppliedMessageId] = useState('');
+  const [structuredError, setStructuredError] = useState('');
 
   useEffect(() => {
-    const initialChips = (props.criterias || []).map((criteria, index) => ({
-      field: criteria.getKey(),
-      value: criteria.getValue(),
+    const normalized = splitStructuredTelemetryCriteria(
+      (props.criterias || []).map(criteria => ({
+        key: criteria.getKey(),
+        value: criteria.getValue(),
+      })),
+    );
+    const initialChips = normalized.remaining.map((criteria, index) => ({
+      field: criteria.key,
+      value: criteria.value,
       id: `${Date.now()}-${index}`,
     }));
     setRows([]);
@@ -132,6 +188,11 @@ export function ConversationTelemetryDialog(
     setTotalItem(0);
     setPage(1);
     setChips(initialChips);
+    setConversationIdInput(normalized.conversationId);
+    setMessageIdInput(normalized.messageId);
+    setAppliedConversationId(normalized.conversationId);
+    setAppliedMessageId(normalized.messageId);
+    setStructuredError('');
     setCriteriaReady(true);
   }, [props.criterias]);
 
@@ -152,10 +213,14 @@ export function ConversationTelemetryDialog(
     assistantDef.setAssistantid(props.assistantId);
     request.setAssistant(assistantDef);
 
-    const criteriaList = chips.map(chip => {
+    const criteriaList = buildTelemetryCriteriaInputs(
+      chips.map(chip => ({ key: chip.field, value: String(chip.value) })),
+      appliedConversationId,
+      appliedMessageId,
+    ).map(c => {
       const criteria = new Criteria();
-      criteria.setKey(chip.field);
-      criteria.setValue(String(chip.value));
+      criteria.setKey(c.key);
+      criteria.setValue(c.value);
       criteria.setLogic('match');
       return criteria;
     });
@@ -207,6 +272,8 @@ export function ConversationTelemetryDialog(
     projectId,
     props.assistantId,
     JSON.stringify(chips),
+    appliedConversationId,
+    appliedMessageId,
     pageSize,
     page,
     criteriaReady,
@@ -223,6 +290,30 @@ export function ConversationTelemetryDialog(
 
   const removeChip = (chipId: string) => {
     setChips(prev => prev.filter(c => c.id !== chipId));
+    setPage(1);
+  };
+
+  const applyStructuredCriteria = (): boolean => {
+    const nextConversationId = conversationIdInput.trim();
+    const nextMessageId = messageIdInput.trim();
+    if (nextConversationId && !/^\d+$/.test(nextConversationId)) {
+      setStructuredError('Conversation ID must be numeric.');
+      return false;
+    }
+    setStructuredError('');
+    setAppliedConversationId(nextConversationId);
+    setAppliedMessageId(nextMessageId);
+    setPage(1);
+    return true;
+  };
+
+  const resetStructuredCriteria = () => {
+    setStructuredError('');
+    setConversationIdInput('');
+    setMessageIdInput('');
+    setAppliedConversationId('');
+    setAppliedMessageId('');
+    setPage(1);
   };
 
   const EVENT_TYPES = [
@@ -313,13 +404,62 @@ export function ConversationTelemetryDialog(
               activeFilters={activeFilters}
               onApplyFilter={setActiveFilters}
               onResetFilter={() => setActiveFilters(new Set())}
+              onApply={applyStructuredCriteria}
+              onReset={resetStructuredCriteria}
+              extraContent={
+                <Stack orientation="vertical" gap={6} className="py-2">
+                  <TextInput
+                    id="telemetry-criteria-conversation-id"
+                    labelText="Conversation ID"
+                    placeholder="Conversation ID"
+                    value={conversationIdInput}
+                    onChange={(e: any) =>
+                      setConversationIdInput(e.target?.value || '')
+                    }
+                  />
+                  <TextInput
+                    id="telemetry-criteria-message-id"
+                    labelText="Message / Context ID"
+                    placeholder="Message ID or Context ID"
+                    value={messageIdInput}
+                    onChange={(e: any) =>
+                      setMessageIdInput(e.target?.value || '')
+                    }
+                  />
+                </Stack>
+              }
             />
           </TableToolbarContent>
         </TableToolbar>
 
         {/* Active filter + criteria chips */}
-        {(chips.length > 0 || activeFilters.size > 0) && (
+        {(chips.length > 0 ||
+          activeFilters.size > 0 ||
+          appliedConversationId !== '' ||
+          appliedMessageId !== '') && (
           <div className="flex flex-wrap gap-1.5 px-4 py-2 border-b border-gray-200 dark:border-gray-800">
+            {appliedConversationId !== '' && (
+              <DismissibleTag
+                type="teal"
+                text={`assistantConversationId: ${appliedConversationId}`}
+                onClose={() => {
+                  setConversationIdInput('');
+                  setAppliedConversationId('');
+                  setPage(1);
+                }}
+              />
+            )}
+            {appliedMessageId !== '' && (
+              <DismissibleTag
+                type="teal"
+                text={`messageId/contextId: ${appliedMessageId}`}
+                onClose={() => {
+                  setMessageIdInput('');
+                  setAppliedMessageId('');
+                  setPage(1);
+                }}
+              />
+            )}
             {chips.map(chip => (
               <DismissibleTag
                 key={chip.id}
@@ -336,6 +476,11 @@ export function ConversationTelemetryDialog(
                 onClose={() => toggleFilter(f)}
               />
             ))}
+          </div>
+        )}
+        {structuredError !== '' && (
+          <div className="px-4 py-2 border-b border-gray-200 dark:border-gray-800 text-xs text-red-600 dark:text-red-400">
+            {structuredError}
           </div>
         )}
 

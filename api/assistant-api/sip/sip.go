@@ -867,6 +867,13 @@ func (m *SIPEngine) pipelineCallStart(ctx context.Context, session *sip_infra.Se
 
 	auth := session.GetAuth()
 
+	info := session.GetInfo()
+	clientPhone := sip_infra.ExtractDIDFromURI(info.RemoteURI)
+	if clientPhone == "" {
+		clientPhone = info.RemoteURI
+	}
+	assistantPhone := sip_infra.ExtractDIDFromURI(info.LocalURI)
+
 	cc := &callcontext.CallContext{
 		AssistantID:         setup.AssistantID,
 		ConversationID:      setup.ConversationID,
@@ -875,7 +882,10 @@ func (m *SIPEngine) pipelineCallStart(ctx context.Context, session *sip_infra.Se
 		AuthType:            setup.AuthType,
 		Direction:           direction,
 		Provider:            "sip",
+		CallerNumber:        clientPhone,
+		FromNumber:          assistantPhone,
 		ChannelUUID:         callID,
+		ContextID:           callID,
 		ProjectID:           setup.ProjectID,
 		OrganizationID:      setup.OrganizationID,
 	}

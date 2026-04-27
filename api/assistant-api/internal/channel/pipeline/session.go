@@ -74,12 +74,11 @@ func (d *Dispatcher) runSession(ctx context.Context, v SessionConnectedPipeline)
 		}
 	}
 
-	// --- Emit call_started + client metadata ---
 	if observer != nil {
 		clientPhone := cc.CallerNumber
 		assistantPhone := cc.FromNumber
 		if cc.Direction == "outbound" {
-			clientPhone = cc.CallerNumber // CallerNumber = toPhone for outbound
+			clientPhone = cc.CallerNumber
 			assistantPhone = cc.FromNumber
 		}
 		observer.EmitMetadata(ctx, obs.ClientMetadata(

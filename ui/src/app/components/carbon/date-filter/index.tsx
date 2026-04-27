@@ -47,10 +47,7 @@ export const DateFilter: FC<DateFilterProps> = ({
       />
       {open && (
         <>
-          <div
-            className="fixed inset-0 z-40"
-            onClick={() => setOpen(false)}
-          />
+          <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
           <div className="absolute right-0 top-full z-50 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 shadow-lg">
             <div className="px-4 py-2 border-b border-gray-200 dark:border-gray-700">
               <p className="text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">

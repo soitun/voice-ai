@@ -204,10 +204,32 @@ func (base *BaseTelephonyStreamer) SourceAudioConfig() *protos.AudioConfig {
 }
 
 // CreateConnectionRequest builds the initial ConversationInitialization message.
+// Carries non-empty client.* metadata in the init payload so the requestor's
+// in-memory state is populated at connect time — avoids races with downstream
+// metadata writes that only persist to DB. Empty fields are omitted so they
+// can't overwrite previously-stored values during resume.
 func (base *BaseTelephonyStreamer) CreateConnectionRequest() *protos.ConversationInitialization {
+	clientMetadata := map[string]interface{}{
+		"client.direction":          base.callCtx.Direction,
+		"client.telephony_provider": base.callCtx.Provider,
+	}
+	if v := base.callCtx.CallerNumber; v != "" {
+		clientMetadata["client.phone"] = v
+	}
+	if v := base.callCtx.FromNumber; v != "" {
+		clientMetadata["client.assistant_phone"] = v
+	}
+	if v := base.callCtx.ChannelUUID; v != "" {
+		clientMetadata["client.provider_call_id"] = v
+	}
+	if v := base.callCtx.ContextID; v != "" {
+		clientMetadata["client.context_id"] = v
+	}
+	metadata, _ := utils.InterfaceMapToAnyMap(clientMetadata)
 	return &protos.ConversationInitialization{
 		AssistantConversationId: base.GetConversationId(),
 		Assistant:               base.GetAssistantDefinition(),
 		StreamMode:              protos.StreamMode_STREAM_MODE_AUDIO,
+		Metadata:                metadata,
 	}
 }

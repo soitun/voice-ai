@@ -2995,6 +2995,9 @@
   .w-64 {
     width: calc(var(--spacing) * 64);
   }
+  .w-72 {
+    width: calc(var(--spacing) * 72);
+  }
   .w-80 {
     width: calc(var(--spacing) * 80);
   }
@@ -3966,6 +3969,9 @@
   }
   .border-l-yellow-500 {
     border-left-color: var(--color-yellow-500);
+  }
+  .\!bg-\[var\(--cds-field\)\] {
+    background-color: var(--cds-field) !important;
   }
   .\!bg-white {
     background-color: var(--color-white) !important;
@@ -9917,6 +9923,11 @@
     & .cds--text-input {
       --tw-border-style: none !important;
       border-style: none !important;
+    }
+  }
+  .\[\&_\.cds--text-input\]\:\!bg-\[var\(--cds-field\)\] {
+    & .cds--text-input {
+      background-color: var(--cds-field) !important;
     }
   }
   .\[\&_\.cds--text-input\]\:\!outline-none {
