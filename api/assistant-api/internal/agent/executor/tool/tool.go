@@ -21,6 +21,7 @@ import (
 	"github.com/rapidaai/protos"
 
 	"github.com/rapidaai/pkg/commons"
+	"github.com/rapidaai/pkg/utils"
 )
 
 type toolExecutor struct {
@@ -233,13 +234,15 @@ func (executor *toolExecutor) GetFunctionDefinitions() []*protos.FunctionDefinit
 }
 
 func (executor *toolExecutor) ExecuteAll(ctx context.Context, contextID string, calls []*protos.ToolCall, communication internal_type.Communication) {
-	if err := executor.Run(ctx, ExecuteToolsPipeline{
-		ContextID:     contextID,
-		Calls:         calls,
-		Communication: communication,
-	}); err != nil {
-		executor.logger.Errorf("tool execute pipeline failed: %v", err)
-	}
+	utils.Go(ctx, func() {
+		if err := executor.Run(ctx, ExecuteToolsPipeline{
+			ContextID:     contextID,
+			Calls:         calls,
+			Communication: communication,
+		}); err != nil {
+			executor.logger.Errorf("tool execute pipeline failed: %v", err)
+		}
+	})
 }
 
 func (executor *toolExecutor) parseArgument(arguments string) map[string]interface{} {
