@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	callcontext "github.com/rapidaai/api/assistant-api/internal/callcontext"
 	sip_infra "github.com/rapidaai/api/assistant-api/sip/infra"
 	"github.com/rapidaai/pkg/commons"
 	"github.com/rapidaai/pkg/types"
@@ -59,7 +60,7 @@ func TestHandleSessionEstablished_SetupErrorEndsSession(t *testing.T) {
 
 	d := NewDispatcher(&DispatcherConfig{
 		Logger: newPipelineTestLogger(t),
-		OnCallSetup: func(ctx context.Context, session *sip_infra.Session, auth types.SimplePrinciple, assistantID uint64, conversationID uint64) (*CallSetupResult, error) {
+		OnCallSetup: func(ctx context.Context, session *sip_infra.Session, auth types.SimplePrinciple, assistantID uint64, conversationID uint64, cc *callcontext.CallContext) (*CallSetupResult, error) {
 			return nil, fmt.Errorf("setup failed")
 		},
 		OnCallStart: func(ctx context.Context, session *sip_infra.Session, setup *CallSetupResult, vaultCred interface{}, sipConfig *sip_infra.Config, direction string) error {
@@ -87,7 +88,7 @@ func TestHandleSessionEstablished_PanicStillCallsOnCallEnd(t *testing.T) {
 
 	d := NewDispatcher(&DispatcherConfig{
 		Logger: newPipelineTestLogger(t),
-		OnCallSetup: func(ctx context.Context, session *sip_infra.Session, auth types.SimplePrinciple, assistantID uint64, conversationID uint64) (*CallSetupResult, error) {
+		OnCallSetup: func(ctx context.Context, session *sip_infra.Session, auth types.SimplePrinciple, assistantID uint64, conversationID uint64, cc *callcontext.CallContext) (*CallSetupResult, error) {
 			return &CallSetupResult{AssistantID: assistantID, ConversationID: conversationID}, nil
 		},
 		OnCallStart: func(ctx context.Context, session *sip_infra.Session, setup *CallSetupResult, vaultCred interface{}, sipConfig *sip_infra.Config, direction string) error {
@@ -132,7 +133,7 @@ func TestDispatcherBackpressureAndTeardownStress(t *testing.T) {
 
 	d := NewDispatcher(&DispatcherConfig{
 		Logger: logger,
-		OnCallSetup: func(ctx context.Context, session *sip_infra.Session, auth types.SimplePrinciple, assistantID uint64, conversationID uint64) (*CallSetupResult, error) {
+		OnCallSetup: func(ctx context.Context, session *sip_infra.Session, auth types.SimplePrinciple, assistantID uint64, conversationID uint64, cc *callcontext.CallContext) (*CallSetupResult, error) {
 			return &CallSetupResult{AssistantID: assistantID, ConversationID: conversationID}, nil
 		},
 		OnCallStart: func(ctx context.Context, session *sip_infra.Session, setup *CallSetupResult, vaultCred interface{}, sipConfig *sip_infra.Config, direction string) error {

@@ -205,11 +205,15 @@ const (
 )
 
 // ClientMetadata returns standardized client metadata for a conversation.
-// Called from both session.go (telephony channels) and media.go (SIP).
+// Each field is emitted only when non-empty so callers can pass "" for fields
+// already covered by ConversationInitialization.Metadata.
 func ClientMetadata(phone, assistantPhone, direction, provider, providerCallID, contextID, codec, sampleRate string) []*types.Metadata {
-	md := []*types.Metadata{
-		types.NewMetadata(ClientDirection, direction),
-		types.NewMetadata(ClientTelephonyProvider, provider),
+	md := make([]*types.Metadata, 0, 8)
+	if direction != "" {
+		md = append(md, types.NewMetadata(ClientDirection, direction))
+	}
+	if provider != "" {
+		md = append(md, types.NewMetadata(ClientTelephonyProvider, provider))
 	}
 	if phone != "" {
 		md = append(md, types.NewMetadata(ClientPhone, phone))

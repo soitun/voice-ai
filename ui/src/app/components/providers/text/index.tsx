@@ -1,7 +1,10 @@
 import { Metadata, VaultCredential } from '@rapidaai/react';
 import { ProviderComponentProps } from '@/app/components/providers';
 import { loadProviderConfig } from '@/providers/config-loader';
-import { getDefaultsFromConfig, validateFromConfig } from '@/providers/config-defaults';
+import {
+  getDefaultsFromConfig,
+  validateFromConfig,
+} from '@/providers/config-defaults';
 import { ConfigRenderer } from '@/app/components/providers/config-renderer';
 import { FC, useCallback, useMemo } from 'react';
 import { CredentialDropdown } from '@/app/components/dropdown/credential-dropdown';
@@ -15,7 +18,10 @@ export const GetDefaultTextProviderConfigIfInvalid = (
 ): Metadata[] => {
   const config = loadProviderConfig(provider);
   if (!config?.text) return parameters;
-  const normalizedParameters = NormalizeTextProviderModelSelection(provider, parameters);
+  const normalizedParameters = NormalizeTextProviderModelSelection(
+    provider,
+    parameters,
+  );
   return getDefaultsFromConfig(config, 'text', normalizedParameters, provider);
 };
 
@@ -24,7 +30,8 @@ export const GetDefaultTextProviderConfigOnProviderSwitch = (
   parameters: Metadata[],
 ): Metadata[] => {
   const resetParameters = parameters.filter(
-    p => p.getKey() !== 'rapida.credential_id' && !p.getKey().startsWith('model.'),
+    p =>
+      p.getKey() !== 'rapida.credential_id' && !p.getKey().startsWith('model.'),
   );
 
   return GetDefaultTextProviderConfigIfInvalid(provider, resetParameters);
@@ -37,16 +44,25 @@ export const ValidateTextProviderDefaultOptions = (
 ): string | undefined => {
   const config = loadProviderConfig(provider);
   if (!config?.text) return 'Please select a valid model and provider.';
-  const normalizedParameters = NormalizeTextProviderModelSelection(provider, parameters);
-  const validationError = validateFromConfig(config, 'text', provider, normalizedParameters);
+  const normalizedParameters = NormalizeTextProviderModelSelection(
+    provider,
+    parameters,
+  );
+  const validationError = validateFromConfig(
+    config,
+    'text',
+    provider,
+    normalizedParameters,
+  );
   if (validationError) return validationError;
 
   if (!providerCredentialIds) return undefined;
-  const credentialID = normalizedParameters.find(
-    opt => opt.getKey() === 'rapida.credential_id',
-  )?.getValue();
+  const credentialID = normalizedParameters
+    .find(opt => opt.getKey() === 'rapida.credential_id')
+    ?.getValue();
   if (!credentialID) return `Please provide a valid ${provider} credential.`;
-  if (!providerCredentialIds.includes(credentialID)) return `Please select a valid ${provider} credential.`;
+  if (!providerCredentialIds.includes(credentialID))
+    return `Please select a valid ${provider} credential.`;
   return undefined;
 };
 

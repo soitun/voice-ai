@@ -153,6 +153,7 @@ func (m *SIPEngine) Connect(ctx context.Context) error {
 		RegistrationClient:   m.registrationClient,
 		DIDResolver:          m.resolveAssistantByDID,
 		OnCreateConversation: m.pipelineCreateConversation,
+		OnEnsureCallContext:  m.pipelineEnsureCallContext,
 		OnCallSetup:          m.pipelineCallSetup,
 		OnCallStart:          m.pipelineCallStart,
 		OnCallEnd:            m.pipelineCallEnd,
@@ -291,6 +292,7 @@ func (m *SIPEngine) onInvite(session *sip_infra.Session, fromURI, toURI string) 
 		AssistantID:     assistant.Id,
 		Auth:            auth,
 		FromURI:         fromURI,
+		ToURI:           toURI,
 		ConversationID:  conversationID,
 	})
 
@@ -803,9 +805,119 @@ func (m *SIPEngine) pipelineCreateConversation(ctx context.Context, auth types.S
 	return conversation.Id, nil
 }
 
-// pipelineCallSetup builds the CallSetupResult from auth and IDs.
-// Pure function — conversation must already exist (created by pipeline or channel layer).
-func (m *SIPEngine) pipelineCallSetup(ctx context.Context, session *sip_infra.Session, auth types.SimplePrinciple, assistantID uint64, conversationID uint64) (*sip_pipeline.CallSetupResult, error) {
+// pipelineEnsureCallContext resolves the durable CallContext for a SIP session.
+// Outbound: load + claim the record persisted by channel/pipeline/outbound.go.
+// Inbound: build from the INVITE URIs and persist. Returns an in-memory cc
+// when the DB is unreachable so the call can still proceed.
+func (m *SIPEngine) pipelineEnsureCallContext(
+	ctx context.Context,
+	session *sip_infra.Session,
+	auth types.SimplePrinciple,
+	assistantID uint64,
+	conversationID uint64,
+	direction sip_infra.CallDirection,
+	fromURI string,
+	toURI string,
+) (*callcontext.CallContext, error) {
+	callID := session.GetCallID()
+	dirStr := string(direction)
+
+	if direction == sip_infra.CallDirectionOutbound {
+		ctxID := session.GetContextID()
+		if ctxID == "" {
+			return m.reconstructCallContext(auth, assistantID, conversationID, dirStr, callID, "", fromURI, toURI), nil
+		}
+		if claimed, err := m.callContextStore.Claim(ctx, ctxID); err == nil {
+			return claimed, nil
+		}
+		if loaded, err := m.callContextStore.Get(ctx, ctxID); err == nil {
+			return loaded, nil
+		}
+		return m.reconstructCallContext(auth, assistantID, conversationID, dirStr, callID, ctxID, fromURI, toURI), nil
+	}
+
+	// Inbound. ContextID stays empty so store.Save generates a UUID that fits
+	// the varchar(36) column; the raw SIP Call-ID lives in ChannelUUID instead.
+	cc := &callcontext.CallContext{
+		AssistantID:    assistantID,
+		ConversationID: conversationID,
+		AuthToken:      auth.GetCurrentToken(),
+		AuthType:       auth.Type(),
+		Direction:      dirStr,
+		Provider:       "sip",
+		CallerNumber:   extractDIDOrRaw(fromURI),
+		FromNumber:     extractDIDOrRaw(toURI),
+		ChannelUUID:    callID,
+	}
+	if pid := auth.GetCurrentProjectId(); pid != nil {
+		cc.ProjectID = *pid
+	}
+	if oid := auth.GetCurrentOrganizationId(); oid != nil {
+		cc.OrganizationID = *oid
+	}
+	if assistant := session.GetAssistant(); assistant != nil {
+		cc.AssistantProviderId = assistant.AssistantProviderId
+	}
+	if _, err := m.callContextStore.Save(ctx, cc); err != nil {
+		m.logger.Warnw("failed to persist inbound call context — continuing in-memory",
+			"call_id", callID, "error", err)
+		return cc, nil
+	}
+	if _, err := m.callContextStore.Claim(ctx, cc.ContextID); err != nil {
+		m.logger.Debugw("inbound claim non-fatal", "call_id", callID, "error", err)
+	}
+	return cc, nil
+}
+
+func (m *SIPEngine) reconstructCallContext(
+	auth types.SimplePrinciple,
+	assistantID uint64,
+	conversationID uint64,
+	direction string,
+	callID string,
+	contextID string,
+	fromURI string,
+	toURI string,
+) *callcontext.CallContext {
+	cc := &callcontext.CallContext{
+		AssistantID:    assistantID,
+		ConversationID: conversationID,
+		AuthToken:      auth.GetCurrentToken(),
+		AuthType:       auth.Type(),
+		Direction:      direction,
+		Provider:       "sip",
+		ChannelUUID:    callID,
+		ContextID:      contextID,
+	}
+	if direction == string(sip_infra.CallDirectionOutbound) {
+		cc.CallerNumber = extractDIDOrRaw(toURI)
+		cc.FromNumber = extractDIDOrRaw(fromURI)
+	} else {
+		cc.CallerNumber = extractDIDOrRaw(fromURI)
+		cc.FromNumber = extractDIDOrRaw(toURI)
+	}
+	if pid := auth.GetCurrentProjectId(); pid != nil {
+		cc.ProjectID = *pid
+	}
+	if oid := auth.GetCurrentOrganizationId(); oid != nil {
+		cc.OrganizationID = *oid
+	}
+	return cc
+}
+
+func extractDIDOrRaw(uri string) string {
+	if uri == "" {
+		return ""
+	}
+	if did := sip_infra.ExtractDIDFromURI(uri); did != "" {
+		return did
+	}
+	return uri
+}
+
+// pipelineCallSetup builds the CallSetupResult from auth, IDs, and the
+// CallContext resolved by pipelineEnsureCallContext.
+func (m *SIPEngine) pipelineCallSetup(ctx context.Context, session *sip_infra.Session, auth types.SimplePrinciple, assistantID uint64, conversationID uint64, cc *callcontext.CallContext) (*sip_pipeline.CallSetupResult, error) {
 	assistant := session.GetAssistant()
 	if assistant == nil {
 		var err error
@@ -822,18 +934,13 @@ func (m *SIPEngine) pipelineCallSetup(ctx context.Context, session *sip_infra.Se
 		AssistantProviderId: assistant.AssistantProviderId,
 		AuthToken:           auth.GetCurrentToken(),
 		AuthType:            auth.Type(),
+		CallContext:         cc,
 	}
 	if auth.GetCurrentProjectId() != nil {
 		result.ProjectID = *auth.GetCurrentProjectId()
 	}
 	if auth.GetCurrentOrganizationId() != nil {
 		result.OrganizationID = *auth.GetCurrentOrganizationId()
-	}
-
-	if ctxID := session.GetContextID(); ctxID != "" {
-		if _, err := m.callContextStore.Claim(ctx, ctxID); err != nil {
-			m.logger.Warnw("Failed to claim call context", "context_id", ctxID, "error", err)
-		}
 	}
 
 	return result, nil
@@ -867,27 +974,40 @@ func (m *SIPEngine) pipelineCallStart(ctx context.Context, session *sip_infra.Se
 
 	auth := session.GetAuth()
 
-	info := session.GetInfo()
-	clientPhone := sip_infra.ExtractDIDFromURI(info.RemoteURI)
-	if clientPhone == "" {
-		clientPhone = info.RemoteURI
-	}
-	assistantPhone := sip_infra.ExtractDIDFromURI(info.LocalURI)
-
-	cc := &callcontext.CallContext{
-		AssistantID:         setup.AssistantID,
-		ConversationID:      setup.ConversationID,
-		AssistantProviderId: setup.AssistantProviderId,
-		AuthToken:           setup.AuthToken,
-		AuthType:            setup.AuthType,
-		Direction:           direction,
-		Provider:            "sip",
-		CallerNumber:        clientPhone,
-		FromNumber:          assistantPhone,
-		ChannelUUID:         callID,
-		ContextID:           callID,
-		ProjectID:           setup.ProjectID,
-		OrganizationID:      setup.OrganizationID,
+	var cc *callcontext.CallContext
+	if setup.CallContext != nil {
+		cc = setup.CallContext
+		if cc.AssistantProviderId == 0 {
+			cc.AssistantProviderId = setup.AssistantProviderId
+		}
+		if cc.ProjectID == 0 {
+			cc.ProjectID = setup.ProjectID
+		}
+		if cc.OrganizationID == 0 {
+			cc.OrganizationID = setup.OrganizationID
+		}
+	} else {
+		m.logger.Warnw("setup.CallContext missing — reconstructing from session", "call_id", callID)
+		info := session.GetInfo()
+		clientPhone := sip_infra.ExtractDIDFromURI(info.RemoteURI)
+		if clientPhone == "" {
+			clientPhone = info.RemoteURI
+		}
+		cc = &callcontext.CallContext{
+			AssistantID:         setup.AssistantID,
+			ConversationID:      setup.ConversationID,
+			AssistantProviderId: setup.AssistantProviderId,
+			AuthToken:           setup.AuthToken,
+			AuthType:            setup.AuthType,
+			Direction:           direction,
+			Provider:            "sip",
+			CallerNumber:        clientPhone,
+			FromNumber:          sip_infra.ExtractDIDFromURI(info.LocalURI),
+			ChannelUUID:         callID,
+			ContextID:           callID,
+			ProjectID:           setup.ProjectID,
+			OrganizationID:      setup.OrganizationID,
+		}
 	}
 
 	callCtx, cancel := context.WithCancel(session.Context())

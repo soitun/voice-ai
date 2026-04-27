@@ -121,13 +121,22 @@ func (aws *asteriskWebsocketStreamer) runWebSocketReader() {
 			switch event.Event {
 			case "MEDIA_START":
 				aws.channelName = event.Channel
-				aws.ChannelUUID = event.Channel // propagate to base streamer for client.provider_call_id
+				aws.ChannelUUID = event.Channel
 				aws.Logger.Info("Asterisk media started", "channel", aws.channelName, "optimal_frame_size", event.OptimalFrameSize)
 				if event.OptimalFrameSize > 0 {
 					aws.audioProcessor.SetOptimalFrameSize(event.OptimalFrameSize)
 				}
 				aws.startOutputSender()
 				aws.Input(aws.CreateConnectionRequest())
+				// The inbound webhook may not have carried channel_id, so the
+				// init payload's client.provider_call_id can be empty. Emit
+				// the live channel as metadata so it still lands in conversation
+				// metadata.
+				if event.Channel != "" {
+					aws.Input(&protos.ConversationMetadata{
+						Metadata: []*protos.Metadata{{Key: "client.provider_call_id", Value: event.Channel}},
+					})
+				}
 				aws.Input(&protos.ConversationEvent{
 					Name: "channel",
 					Data: map[string]string{"type": "media_started", "provider": "asterisk_ws", "channel_name": aws.channelName},

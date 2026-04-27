@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"time"
 
+	callcontext "github.com/rapidaai/api/assistant-api/internal/callcontext"
 	obs "github.com/rapidaai/api/assistant-api/internal/observe"
 	sip_infra "github.com/rapidaai/api/assistant-api/sip/infra"
 )
@@ -48,7 +49,16 @@ func (d *Dispatcher) handleSessionEstablished(ctx context.Context, v sip_infra.S
 		v.Session.SetConversationID(conversationID)
 	}
 
-	setup, err := d.onCallSetup(ctx, v.Session, v.Auth, v.AssistantID, conversationID)
+	var cc *callcontext.CallContext
+	if d.onEnsureCallContext != nil {
+		ensured, err := d.onEnsureCallContext(ctx, v.Session, v.Auth, v.AssistantID, conversationID, v.Direction, v.FromURI, v.ToURI)
+		if err != nil {
+			d.logger.Warnw("Pipeline: ensure call context failed", "call_id", v.ID, "error", err)
+		}
+		cc = ensured
+	}
+
+	setup, err := d.onCallSetup(ctx, v.Session, v.Auth, v.AssistantID, conversationID, cc)
 	if err != nil {
 		d.logger.Error("Pipeline: call setup failed", "call_id", v.ID, "error", err)
 		v.Session.End()
@@ -69,31 +79,25 @@ func (d *Dispatcher) handleSessionEstablished(ctx context.Context, v sip_infra.S
 	}
 
 	if observer != nil {
-		clientPhone := sip_infra.ExtractDIDFromURI(v.FromURI)
-		if clientPhone == "" {
-			clientPhone = v.FromURI
-		}
-		assistantPhone := ""
-		if info := v.Session.GetInfo(); info.LocalURI != "" {
-			assistantPhone = sip_infra.ExtractDIDFromURI(info.LocalURI)
-		}
 		codec := ""
 		sampleRate := ""
 		if negotiated := v.Session.GetNegotiatedCodec(); negotiated != nil {
 			codec = negotiated.Name
 			sampleRate = fmt.Sprintf("%d", negotiated.ClockRate)
 		}
+		// Identity keys flow through ConversationInitialization.Metadata.
+		// provider_call_id is emitted here as well because the SIP Call-ID
+		// is only known at this stage and isn't required for prompts.
 		observer.EmitMetadata(ctx, obs.ClientMetadata(
-			clientPhone, assistantPhone, string(v.Direction), "sip",
-			v.ID, "", codec, sampleRate,
+			"", "", "", "",
+			v.ID, "",
+			codec, sampleRate,
 		))
 		observer.EmitEvent(ctx, obs.ComponentTelephony, map[string]string{
 			obs.DataType:      obs.EventCallStarted,
 			obs.DataProvider:  "sip",
 			obs.DataDirection: string(v.Direction),
 		})
-		d.logger.Infow("Pipeline: call_started event emitted",
-			"call_id", v.ID, "direction", v.Direction)
 	}
 
 	go func() {

@@ -19,11 +19,12 @@ import (
 //
 //	PENDING → CLAIMED
 //
-// Save creates with PENDING. Claim transitions to CLAIMED when the call ends.
-// Get reads regardless of status (callbacks may arrive after claim).
+// Save creates with PENDING. Claim transitions to CLAIMED when the media path
+// consumes the context (typically at session establishment). Get reads
+// regardless of status, since async callbacks may arrive after claim.
 const (
-	StatusPending = "pending" // Context created, call in progress
-	StatusClaimed = "claimed" // Call ended, context consumed
+	StatusPending = "pending" // Context created, awaiting media-path consumption
+	StatusClaimed = "claimed" // Context consumed (media-path bound, or call ended unclaimed)
 )
 
 // CallContext holds all the information needed to resolve a call session.

@@ -439,8 +439,8 @@ func (r *genericRequestor) notifyConfiguration(
 			Version:     utils.GetVersionString(assistant.AssistantProviderId),
 		},
 		Args:         config.GetArgs(),
-		Metadata:     config.GetOptions(),
-		Options:      config.GetMetadata(),
+		Metadata:     config.GetMetadata(),
+		Options:      config.GetOptions(),
 		StreamMode:   config.GetStreamMode(),
 		UserIdentity: config.GetUserIdentity(),
 		Time:         timestamppb.Now(),
@@ -468,10 +468,9 @@ func (r *genericRequestor) storeClientInformation(ctx context.Context) {
 		return
 	}
 
-	// Flatten client info into metadata with "client." prefix.
-	// These fields are directly available in prompt context via r.metadata["client.timezone"] etc.
-	// Note: client.telephony_provider and client.direction are set by the channel pipeline
-	// (session.go / media.go) BEFORE the requestor runs — do not overwrite here.
+	// Flatten client info into "client." metadata. Telephony-side keys come
+	// in via the streamer's ConversationInitialization.Metadata — do not
+	// overwrite them here.
 	flat := map[string]interface{}{}
 	if clientInfo.Timezone != "" {
 		flat["client.timezone"] = clientInfo.Timezone

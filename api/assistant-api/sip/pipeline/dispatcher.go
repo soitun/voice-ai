@@ -10,6 +10,7 @@ import (
 	"context"
 	"fmt"
 
+	callcontext "github.com/rapidaai/api/assistant-api/internal/callcontext"
 	observe "github.com/rapidaai/api/assistant-api/internal/observe"
 	sip_infra "github.com/rapidaai/api/assistant-api/sip/infra"
 	"github.com/rapidaai/pkg/commons"
@@ -43,6 +44,7 @@ type Dispatcher struct {
 
 	didResolver          DIDResolverFunc
 	onCreateConversation OnCreateConversationFunc
+	onEnsureCallContext  OnEnsureCallContextFunc
 	onCallSetup          OnCallSetupFunc
 	onCallStart          OnCallStartFunc
 	onCallEnd            OnCallEndFunc
@@ -54,7 +56,22 @@ type DIDResolverFunc func(did string) (assistantID uint64, auth types.SimplePrin
 
 type OnCreateConversationFunc func(ctx context.Context, auth types.SimplePrinciple, assistantID uint64, fromURI string, direction string) (conversationID uint64, err error)
 
-type OnCallSetupFunc func(ctx context.Context, session *sip_infra.Session, auth types.SimplePrinciple, assistantID uint64, conversationID uint64) (*CallSetupResult, error)
+// OnEnsureCallContextFunc resolves the durable CallContext for a SIP session.
+// Outbound: claim/load the record persisted by the channel pipeline. Inbound:
+// build from the INVITE URIs and persist. Should return an in-memory cc on DB
+// failure so the call still proceeds.
+type OnEnsureCallContextFunc func(
+	ctx context.Context,
+	session *sip_infra.Session,
+	auth types.SimplePrinciple,
+	assistantID uint64,
+	conversationID uint64,
+	direction sip_infra.CallDirection,
+	fromURI string,
+	toURI string,
+) (*callcontext.CallContext, error)
+
+type OnCallSetupFunc func(ctx context.Context, session *sip_infra.Session, auth types.SimplePrinciple, assistantID uint64, conversationID uint64, cc *callcontext.CallContext) (*CallSetupResult, error)
 
 type CallSetupResult struct {
 	AssistantID         uint64
@@ -64,6 +81,9 @@ type CallSetupResult struct {
 	AuthType            string
 	ProjectID           uint64
 	OrganizationID      uint64
+	// CallContext is resolved by OnEnsureCallContext and carried in memory
+	// into pipelineCallStart. May be nil if OnEnsureCallContext is unset.
+	CallContext *callcontext.CallContext
 }
 
 type OnCallStartFunc func(ctx context.Context, session *sip_infra.Session, setup *CallSetupResult, vaultCred interface{}, sipConfig *sip_infra.Config, direction string) error
@@ -80,6 +100,7 @@ type DispatcherConfig struct {
 	RegistrationClient   *sip_infra.RegistrationClient
 	DIDResolver          DIDResolverFunc
 	OnCreateConversation OnCreateConversationFunc
+	OnEnsureCallContext  OnEnsureCallContextFunc
 	OnCallSetup          OnCallSetupFunc
 	OnCallStart          OnCallStartFunc
 	OnCallEnd            OnCallEndFunc
@@ -94,6 +115,7 @@ func NewDispatcher(cfg *DispatcherConfig) *Dispatcher {
 		registrationClient:   cfg.RegistrationClient,
 		didResolver:          cfg.DIDResolver,
 		onCreateConversation: cfg.OnCreateConversation,
+		onEnsureCallContext:  cfg.OnEnsureCallContext,
 		onCallSetup:          cfg.OnCallSetup,
 		onCallStart:          cfg.OnCallStart,
 		onCallEnd:            cfg.OnCallEnd,

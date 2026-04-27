@@ -72,11 +72,25 @@ func (apt *asteriskTelephony) ReceiveCall(c *gin.Context) (*internal_type.CallIn
 		return nil, fmt.Errorf("missing caller information in query params")
 	}
 
+	dialedNumber := c.Query("to")
+	if dialedNumber == "" {
+		dialedNumber = c.Query("extension")
+	}
+	if dialedNumber == "" {
+		dialedNumber = c.Query("dnid")
+	}
+
+	payload := map[string]string{"from": clientNumber}
+	if dialedNumber != "" {
+		payload["to"] = dialedNumber
+	}
+
 	info := &internal_type.CallInfo{
 		CallerNumber: clientNumber,
+		FromNumber:   dialedNumber,
 		Provider:     asteriskProvider,
 		Status:       "SUCCESS",
-		StatusInfo:   internal_type.StatusInfo{Event: "webhook", Payload: map[string]string{"from": clientNumber}},
+		StatusInfo:   internal_type.StatusInfo{Event: "webhook", Payload: payload},
 	}
 	if channelID := c.Query("channel_id"); channelID != "" {
 		info.ChannelUUID = channelID

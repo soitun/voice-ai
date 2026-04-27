@@ -26,7 +26,9 @@ type Pipeline interface {
 // =============================================================================
 
 // SessionEstablishedPipeline is emitted after RTP allocation, session creation,
-// and 200 OK is sent. Converges inbound and outbound flows.
+// and 200 OK is sent. Converges inbound and outbound flows. FromURI/ToURI
+// carry the INVITE addresses so downstream stages can build a CallContext
+// without re-parsing SIP headers.
 type SessionEstablishedPipeline struct {
 	ID              string
 	Session         *Session
@@ -36,6 +38,7 @@ type SessionEstablishedPipeline struct {
 	AssistantID     uint64
 	Auth            types.SimplePrinciple
 	FromURI         string
+	ToURI           string
 	ConversationID  uint64 // Non-zero for outbound (already created by channel pipeline)
 }
 
