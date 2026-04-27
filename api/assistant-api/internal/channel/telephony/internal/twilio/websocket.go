@@ -219,14 +219,26 @@ func (tws *twilioWebsocketStreamer) Send(response internal_type.Stream) error {
 			// supported on Twilio. Supporting resume_ai would require a TwiML
 			// `<Dial action="...">` callback that hands the leg back to a fresh
 			// assistant Stream on hangup (not implemented).
-			to := data.GetArgs()["transfer_to"]
-			if to == "" || tws.GetConversationUuid() == "" {
+			//
+			// Multi-target failover (try t1, on failure try t2 …) is NOT
+			// supported either: once the redirect is dispatched, the WebSocket
+			// is closed and we lose the ability to retry. Only the first
+			// target from a SEPARATOR-joined transfer_to is dialed; the rest
+			// are dropped with a warning.
+			raw := data.GetArgs()["transfer_to"]
+			targets := tws.SplitTransferTargets(raw)
+			if raw == "" || len(targets) == 0 || tws.GetConversationUuid() == "" {
 				tws.Input(&protos.ConversationToolCallResult{
 					Id:     data.GetId(),
 					ToolId: data.GetToolId(), Name: data.GetName(), Action: data.GetAction(),
 					Result: map[string]string{"status": "failed", "reason": "missing target or call ID"},
 				})
 				return nil
+			}
+			to := targets[0]
+			if len(targets) > 1 {
+				tws.Logger.Warnw("Twilio transfer received multiple targets; failover not supported, using first only",
+					"chosen", to, "ignored", targets[1:])
 			}
 			tws.Logger.Infow("Transferring Twilio call", "to", to)
 			client, err := twilioClient(tws.VaultCredential())
@@ -247,10 +259,16 @@ func (tws *twilioWebsocketStreamer) Send(response internal_type.Stream) error {
 					Result: map[string]string{"status": "failed", "reason": fmt.Sprintf("transfer failed: %v", err)},
 				})
 			} else {
+				// "dispatched" — Twilio accepted the redirect; we cannot observe
+				// whether the target rang, answered, declined, or timed out
+				// because the AI WebSocket is closed by Cancel() below.
 				tws.Input(&protos.ConversationToolCallResult{
 					Id:     data.GetId(),
 					ToolId: data.GetToolId(), Name: data.GetName(), Action: data.GetAction(),
-					Result: map[string]string{"status": "completed"},
+					Result: map[string]string{
+						"status": "dispatched",
+						"reason": "transfer dispatched to Twilio; outcome not observed",
+					},
 				})
 			}
 			tws.Cancel()

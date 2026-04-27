@@ -23,6 +23,7 @@ import (
 	callcontext "github.com/rapidaai/api/assistant-api/internal/callcontext"
 	internal_telephony "github.com/rapidaai/api/assistant-api/internal/channel/telephony"
 	internal_assistant_entity "github.com/rapidaai/api/assistant-api/internal/entity/assistants"
+	internal_type "github.com/rapidaai/api/assistant-api/internal/type"
 	observe "github.com/rapidaai/api/assistant-api/internal/observe"
 	observe_exporters "github.com/rapidaai/api/assistant-api/internal/observe/exporters"
 	internal_services "github.com/rapidaai/api/assistant-api/internal/services"
@@ -39,6 +40,7 @@ import (
 	type_enums "github.com/rapidaai/pkg/types/enums"
 	"github.com/rapidaai/pkg/utils"
 	"github.com/rapidaai/protos"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 // SIPEngine manages a multi-tenant SIP server. Config is resolved per-call
@@ -1064,6 +1066,7 @@ func (m *SIPEngine) pipelineCallStart(ctx context.Context, session *sip_infra.Se
 		ExitTransferMode()
 		PushBridgeOperatorAudio([]byte)
 		PushToolCallResult(contextID, toolID, toolName string, action protos.ToolCallAction, result map[string]string)
+		Input(internal_type.Stream)
 	}
 	if ts, ok := streamer.(transferable); ok {
 		ts.SetOnTransferInitiated(func(targets []string, message string, postTransferAction string) {
@@ -1079,6 +1082,20 @@ func (m *SIPEngine) pipelineCallStart(ctx context.Context, session *sip_infra.Se
 				Targets:            targets,
 				Config:             sipConfig,
 				PostTransferAction: postTransferAction,
+				OnAttempt: func(target string, attempt int, total int) {
+					ts.Input(&protos.ConversationEvent{
+						Id:   callID,
+						Name: observe.ComponentTelephony,
+						Data: map[string]string{
+							observe.DataType:     observe.EventTransferring,
+							observe.DataProvider: "sip",
+							observe.DataTarget:   target,
+							"attempt":            strconv.Itoa(attempt),
+							"total":              strconv.Itoa(total),
+						},
+						Time: timestamppb.Now(),
+					})
+				},
 				OnConnected: func(outboundRTP *sip_infra.RTPHandler) {
 					ts.StopRingback()
 					ts.SetBridgeOutRTP(outboundRTP)

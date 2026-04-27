@@ -260,14 +260,25 @@ func (aws *asteriskWebsocketStreamer) Send(response internal_type.Stream) error 
 			// meaningful — resume_ai is NOT supported here. Supporting resume_ai
 			// would require an ARI Bridge + outbound channel + StasisEnd watch
 			// (B2BUA pattern, similar to sip/infra/bridge.go).
-			to := data.GetArgs()["transfer_to"]
-			if to == "" || aws.channelName == "" {
+			//
+			// Multi-target failover (try t1, on failure try t2 …) is NOT
+			// supported either: once the redirect is dispatched, the channel
+			// leaves Stasis. Only the first target from a SEPARATOR-joined
+			// transfer_to is dialed; the rest are dropped with a warning.
+			raw := data.GetArgs()["transfer_to"]
+			targets := aws.SplitTransferTargets(raw)
+			if raw == "" || len(targets) == 0 || aws.channelName == "" {
 				aws.Input(&protos.ConversationToolCallResult{
 					Id:     data.GetId(),
 					ToolId: data.GetToolId(), Name: data.GetName(), Action: data.GetAction(),
 					Result: map[string]string{"status": "failed", "reason": "missing target or channel name"},
 				})
 				return nil
+			}
+			to := targets[0]
+			if len(targets) > 1 {
+				aws.Logger.Warnw("Asterisk transfer received multiple targets; failover not supported, using first only",
+					"chosen", to, "ignored", targets[1:])
 			}
 			aws.Logger.Infow("Transferring Asterisk call via ARI redirect", "to", to, "channel", aws.channelName)
 			aws.stopAudioProcessing()
@@ -279,10 +290,17 @@ func (aws *asteriskWebsocketStreamer) Send(response internal_type.Stream) error 
 					Result: map[string]string{"status": "failed", "reason": fmt.Sprintf("ARI redirect failed: %v", err)},
 				})
 			} else {
+				// "dispatched" — Asterisk accepted the redirect; the dialplan
+				// has not yet dialed the target. We cannot observe whether the
+				// target rang/answered because the AI WebSocket is closed by
+				// Cancel() below.
 				aws.Input(&protos.ConversationToolCallResult{
 					Id:     data.GetId(),
 					ToolId: data.GetToolId(), Name: data.GetName(), Action: data.GetAction(),
-					Result: map[string]string{"status": "completed"},
+					Result: map[string]string{
+						"status": "dispatched",
+						"reason": "transfer dispatched via ARI redirect; outcome not observed",
+					},
 				})
 			}
 			aws.Cancel()

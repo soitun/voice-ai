@@ -101,6 +101,7 @@ const (
 	EventResume            = "resume"
 	EventReInvite          = "reinvite"
 	EventTransferRequested = "transfer_requested"
+	EventTransferring      = "transferring"
 	EventTransferConnected = "transfer_connected"
 	EventTransferCompleted = "transfer_completed"
 	EventTransferFailed    = "transfer_failed"

@@ -70,6 +70,7 @@ type TransferInitiatedPipeline struct {
 	Targets            []string
 	Config             *Config
 	PostTransferAction string
+	OnAttempt          func(target string, attempt int, total int)
 	OnConnected        func(outboundRTP *RTPHandler)
 	OnFailed           func()
 	OnTeardown         func()

@@ -198,7 +198,7 @@ func (s *Streamer) Send(response internal_type.Stream) error {
 				})
 				return nil
 			}
-			targets := splitTransferTargets(raw)
+			targets := s.SplitTransferTargets(raw)
 			message := data.GetArgs()["message"]
 			postTransferAction := data.GetArgs()["post_transfer_action"]
 			s.mu.RLock()
@@ -314,20 +314,6 @@ func (s *Streamer) SetOnTransferInitiated(fn func(targets []string, message stri
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.onTransferInitiated = fn
-}
-
-func splitTransferTargets(raw string) []string {
-	parts := strings.Split(raw, commons.SEPARATOR)
-	var targets []string
-	for _, p := range parts {
-		if t := strings.TrimSpace(p); t != "" {
-			targets = append(targets, t)
-		}
-	}
-	if len(targets) == 0 {
-		return []string{raw}
-	}
-	return targets
 }
 
 func (s *Streamer) endSession() {
