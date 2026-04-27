@@ -253,7 +253,7 @@ func (aws *asteriskWebsocketStreamer) Send(response internal_type.Stream) error 
 				aws.Input(disc)
 			}
 		case protos.ToolCallAction_TOOL_CALL_ACTION_TRANSFER_CONVERSATION:
-			to := data.GetArgs()["to"]
+			to := data.GetArgs()["transfer_to"]
 			if to == "" || aws.channelName == "" {
 				aws.Input(&protos.ConversationToolCallResult{
 					Id:     data.GetId(),

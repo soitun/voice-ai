@@ -212,7 +212,7 @@ func (tws *twilioWebsocketStreamer) Send(response internal_type.Stream) error {
 				tws.Input(disc)
 			}
 		case protos.ToolCallAction_TOOL_CALL_ACTION_TRANSFER_CONVERSATION:
-			to := data.GetArgs()["to"]
+			to := data.GetArgs()["transfer_to"]
 			if to == "" || tws.GetConversationUuid() == "" {
 				tws.Input(&protos.ConversationToolCallResult{
 					Id:     data.GetId(),

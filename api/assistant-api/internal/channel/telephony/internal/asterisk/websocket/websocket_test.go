@@ -119,7 +119,7 @@ func TestSend_TransferConversation_MissingTarget(t *testing.T) {
 		ToolId: "tool-transfer",
 		Name:   "transfer_conversation",
 		Action: protos.ToolCallAction_TOOL_CALL_ACTION_TRANSFER_CONVERSATION,
-		Args:   map[string]string{"to": ""}, // empty target
+		Args:   map[string]string{"transfer_to": ""}, // empty target
 	}
 
 	err := aws.Send(toolCall)

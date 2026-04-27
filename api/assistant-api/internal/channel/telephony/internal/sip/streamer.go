@@ -190,9 +190,9 @@ func (s *Streamer) Send(response internal_type.Stream) error {
 			}
 			s.endSession()
 		case protos.ToolCallAction_TOOL_CALL_ACTION_TRANSFER_CONVERSATION:
-			raw := data.GetArgs()["to"]
+			raw := data.GetArgs()["transfer_to"]
 			if raw == "" {
-				s.Logger.Warnw("Transfer tool call missing 'to' target")
+				s.Logger.Warnw("Transfer tool call missing 'transfer_to' target")
 				s.PushToolCallResult(data.GetId(), data.GetToolId(), data.GetName(), data.GetAction(), map[string]string{
 					"status": "failed", "reason": "missing transfer target",
 				})

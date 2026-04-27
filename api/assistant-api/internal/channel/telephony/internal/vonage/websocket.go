@@ -191,7 +191,7 @@ func (vng *vonageWebsocketStreamer) Send(response internal_type.Stream) error {
 				vng.Input(disc)
 			}
 		case protos.ToolCallAction_TOOL_CALL_ACTION_TRANSFER_CONVERSATION:
-			vng.Logger.Warnw("Vonage call transfer not yet implemented", "to", data.GetArgs()["to"])
+			vng.Logger.Warnw("Vonage call transfer not yet implemented", "transfer_to", data.GetArgs()["transfer_to"])
 			vng.Input(&protos.ConversationToolCallResult{
 				Id:     data.GetId(),
 				ToolId: data.GetToolId(), Name: data.GetName(), Action: data.GetAction(),
