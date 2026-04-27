@@ -36,7 +36,7 @@ type Streamer struct {
 
 	transferring        atomic.Bool
 	ringbackCancel      context.CancelFunc
-	onTransferInitiated func(targets []string, message string)
+	onTransferInitiated func(targets []string, message string, postTransferAction string)
 
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -200,6 +200,7 @@ func (s *Streamer) Send(response internal_type.Stream) error {
 			}
 			targets := splitTransferTargets(raw)
 			message := data.GetArgs()["message"]
+			postTransferAction := data.GetArgs()["post_transfer_action"]
 			s.mu.RLock()
 			if s.session != nil {
 				s.session.SetMetadata(sip_infra.MetadataBridgeTransferTarget, strings.Join(targets, commons.SEPARATOR))
@@ -207,7 +208,7 @@ func (s *Streamer) Send(response internal_type.Stream) error {
 				s.session.SetMetadata("tool_context_id", data.GetId())
 			}
 			s.mu.RUnlock()
-			s.EnterTransferMode(targets, message)
+			s.EnterTransferMode(targets, message, postTransferAction)
 			return nil
 		}
 	}
@@ -218,7 +219,7 @@ func (s *Streamer) Send(response internal_type.Stream) error {
 // Transfer
 // =============================================================================
 
-func (s *Streamer) EnterTransferMode(targets []string, message string) {
+func (s *Streamer) EnterTransferMode(targets []string, message string, postTransferAction string) {
 	if !s.transferring.CompareAndSwap(false, true) {
 		return
 	}
@@ -244,7 +245,7 @@ func (s *Streamer) EnterTransferMode(targets []string, message string) {
 	}
 
 	if callback != nil {
-		callback(targets, message)
+		callback(targets, message, postTransferAction)
 	}
 }
 
@@ -309,7 +310,7 @@ func (s *Streamer) PushToolCallResult(contextID, toolID, toolName string, action
 	})
 }
 
-func (s *Streamer) SetOnTransferInitiated(fn func(targets []string, message string)) {
+func (s *Streamer) SetOnTransferInitiated(fn func(targets []string, message string, postTransferAction string)) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.onTransferInitiated = fn

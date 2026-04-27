@@ -212,6 +212,13 @@ func (tws *twilioWebsocketStreamer) Send(response internal_type.Stream) error {
 				tws.Input(disc)
 			}
 		case protos.ToolCallAction_TOOL_CALL_ACTION_TRANSFER_CONVERSATION:
+			// Twilio transfer is a blind transfer via REST `UpdateCall` with TwiML
+			// `<Dial>`. Twilio takes over the leg; the AI WebSocket is closed by
+			// Cancel() below and cannot be resumed. As a result, only
+			// post_transfer_action=end_call is meaningful — resume_ai is NOT
+			// supported on Twilio. Supporting resume_ai would require a TwiML
+			// `<Dial action="...">` callback that hands the leg back to a fresh
+			// assistant Stream on hangup (not implemented).
 			to := data.GetArgs()["transfer_to"]
 			if to == "" || tws.GetConversationUuid() == "" {
 				tws.Input(&protos.ConversationToolCallResult{

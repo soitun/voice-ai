@@ -107,9 +107,11 @@ func TestSend_TransferConversation_UsesTransferToKey(t *testing.T) {
 
 	var gotTargets []string
 	var gotMessage string
-	s.SetOnTransferInitiated(func(targets []string, message string) {
+	var gotPostTransferAction string
+	s.SetOnTransferInitiated(func(targets []string, message string, postTransferAction string) {
 		gotTargets = append([]string(nil), targets...)
 		gotMessage = message
+		gotPostTransferAction = postTransferAction
 	})
 
 	err := s.Send(&protos.ConversationToolCall{
@@ -118,14 +120,16 @@ func TestSend_TransferConversation_UsesTransferToKey(t *testing.T) {
 		Name:   "transfer_call",
 		Action: protos.ToolCallAction_TOOL_CALL_ACTION_TRANSFER_CONVERSATION,
 		Args: map[string]string{
-			"transfer_to": "+15550001111" + commons.SEPARATOR + "sip:agent@example.com",
-			"message":     "Please hold while I transfer your call.",
+			"transfer_to":          "+15550001111" + commons.SEPARATOR + "sip:agent@example.com",
+			"message":              "Please hold while I transfer your call.",
+			"post_transfer_action": "end_call",
 		},
 	})
 	require.NoError(t, err)
 
 	assert.Equal(t, []string{"+15550001111", "sip:agent@example.com"}, gotTargets)
 	assert.Equal(t, "Please hold while I transfer your call.", gotMessage)
+	assert.Equal(t, "end_call", gotPostTransferAction)
 }
 
 func TestSend_TransferConversation_MissingTransferTarget(t *testing.T) {

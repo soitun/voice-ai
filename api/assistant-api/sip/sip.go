@@ -1057,7 +1057,7 @@ func (m *SIPEngine) pipelineCallStart(ctx context.Context, session *sip_infra.Se
 	}
 
 	type transferable interface {
-		SetOnTransferInitiated(func(targets []string, message string))
+		SetOnTransferInitiated(func(targets []string, message string, postTransferAction string))
 		SetBridgeOutRTP(*sip_infra.RTPHandler)
 		ClearBridgeTarget()
 		StopRingback()
@@ -1066,18 +1066,19 @@ func (m *SIPEngine) pipelineCallStart(ctx context.Context, session *sip_infra.Se
 		PushToolCallResult(contextID, toolID, toolName string, action protos.ToolCallAction, result map[string]string)
 	}
 	if ts, ok := streamer.(transferable); ok {
-		ts.SetOnTransferInitiated(func(targets []string, message string) {
+		ts.SetOnTransferInitiated(func(targets []string, message string, postTransferAction string) {
 			toolID, _ := session.GetMetadata("tool_id")
 			toolIDStr, _ := toolID.(string)
 			toolCtxID, _ := session.GetMetadata("tool_context_id")
 			toolCtxIDStr, _ := toolCtxID.(string)
 			primaryTarget := targets[0]
 			m.dispatcher.OnPipeline(m.ctx, sip_infra.TransferInitiatedPipeline{
-				ID:        callID,
-				Session:   session,
-				TargetURI: primaryTarget,
-				Targets:   targets,
-				Config:    sipConfig,
+				ID:                 callID,
+				Session:            session,
+				TargetURI:          primaryTarget,
+				Targets:            targets,
+				Config:             sipConfig,
+				PostTransferAction: postTransferAction,
 				OnConnected: func(outboundRTP *sip_infra.RTPHandler) {
 					ts.StopRingback()
 					ts.SetBridgeOutRTP(outboundRTP)

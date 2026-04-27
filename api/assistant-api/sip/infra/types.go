@@ -300,6 +300,14 @@ const (
 	// MetadataBridgeTransferOutboundCallID holds the SIP Call-ID of the
 	// outbound (B-leg) call created for the transfer.
 	MetadataBridgeTransferOutboundCallID = "bridge_transfer_outbound_call_id"
+
+	// PostTransferActionEndCall ends the inbound caller's session when the
+	// operator (transfer target) hangs up.
+	PostTransferActionEndCall = "end_call"
+
+	// PostTransferActionResumeAI hands the caller back to the AI when the
+	// operator (transfer target) hangs up.
+	PostTransferActionResumeAI = "resume_ai"
 )
 
 // Event represents events from SIP stack

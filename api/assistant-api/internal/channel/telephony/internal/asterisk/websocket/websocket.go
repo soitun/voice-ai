@@ -253,6 +253,13 @@ func (aws *asteriskWebsocketStreamer) Send(response internal_type.Stream) error 
 				aws.Input(disc)
 			}
 		case protos.ToolCallAction_TOOL_CALL_ACTION_TRANSFER_CONVERSATION:
+			// Asterisk transfer is a blind transfer via ARI `channels/{id}/redirect`
+			// — the channel leaves Stasis for the dialplan extension we redirect
+			// to, and the AI WebSocket is closed by Cancel() below. The leg
+			// cannot be resumed by the AI. Only post_transfer_action=end_call is
+			// meaningful — resume_ai is NOT supported here. Supporting resume_ai
+			// would require an ARI Bridge + outbound channel + StasisEnd watch
+			// (B2BUA pattern, similar to sip/infra/bridge.go).
 			to := data.GetArgs()["transfer_to"]
 			if to == "" || aws.channelName == "" {
 				aws.Input(&protos.ConversationToolCallResult{

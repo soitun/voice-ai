@@ -803,6 +803,13 @@ func (s *webrtcStreamer) Send(response internal_type.Stream) error {
 				s.Input(disc)
 			}
 		case protos.ToolCallAction_TOOL_CALL_ACTION_TRANSFER_CONVERSATION:
+			// WebRTC transfer is NOT supported. WebRTC peers connect directly
+			// to the assistant — there is no PSTN/SIP leg to hand off. A
+			// "transfer" semantically equivalent to phone transfer would
+			// require either (a) a B2BUA outbound SIP call bridged via the
+			// server's RTP path (heavy — the WebRTC client would need a UI
+			// flow distinct from voice), or (b) signalling the peer to dial
+			// out itself. Neither is in scope for this channel.
 			s.Input(&protos.ConversationToolCallResult{
 				Id:     data.GetId(),
 				ToolId: data.GetToolId(),

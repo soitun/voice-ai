@@ -228,6 +228,13 @@ func (as *Streamer) Send(response internal_type.Stream) error {
 				as.Input(disc)
 			}
 		case protos.ToolCallAction_TOOL_CALL_ACTION_TRANSFER_CONVERSATION:
+			// AudioSocket transfer is NOT supported. AudioSocket is a raw
+			// audio-only TCP protocol with no signalling channel back to
+			// Asterisk — there is no way to instruct Asterisk to redirect /
+			// bridge from inside the AudioSocket session. To implement
+			// transfer for an AudioSocket-attached channel, route the call
+			// through the Asterisk WS/ARI streamer instead, which can issue
+			// `channels/{id}/redirect` (blind transfer; end_call only).
 			as.Logger.Warnw("Call transfer not supported for AudioSocket")
 			as.Input(&protos.ConversationToolCallResult{
 				Id:     data.GetId(),
