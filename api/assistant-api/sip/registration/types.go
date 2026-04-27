@@ -7,8 +7,6 @@
 package sip_registration
 
 import (
-	"context"
-	"errors"
 	"time"
 
 	sip_infra "github.com/rapidaai/api/assistant-api/sip/infra"
@@ -39,9 +37,10 @@ const (
 	OptKeySIPInbound   = "rapida.sip_inbound"
 )
 
-// Record is a single DID-registration work item flowing through the pipeline.
-// Outcome is written by stages (claimed/peer/registered/...) so Reconcile can
-// emit a single structured tick-summary log instead of N per-record lines.
+// Record is a single DID-registration work item carried by every Stage. The
+// Outcome field is written by handlers (claimed/peer/registered/...) so
+// Reconcile can emit a single structured tick-summary log instead of N
+// per-record lines.
 type Record struct {
 	DID          string
 	AssistantID  uint64
@@ -51,7 +50,7 @@ type Record struct {
 	Outcome      string
 }
 
-// Outcome values written by stages.
+// Outcome values written by handlers.
 const (
 	OutcomePeerOwned     = "peer_owned"
 	OutcomeAlreadyActive = "already_active"
@@ -62,10 +61,6 @@ const (
 	OutcomeTransient     = "transient"
 	OutcomeClaimError    = "claim_error"
 )
-
-// Stage is a single step of the per-record pipeline. Returning an error stops
-// the chain — each stage is responsible for writing any status it cares about.
-type Stage func(ctx context.Context, rec *Record) error
 
 // Config wires the manager's external dependencies. ApplyOpDefaults overlays
 // the operational SIP defaults (port, transport, RTP range) onto the per-DID
@@ -79,6 +74,3 @@ type Config struct {
 	ExternalIP         string
 	ApplyOpDefaults    func(*sip_infra.Config)
 }
-
-// errPeerOwned signals a record is owned by another instance; pipeline stops silently.
-var errPeerOwned = errors.New("did owned by peer instance")

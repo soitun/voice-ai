@@ -9,24 +9,26 @@ package sip_registration
 import (
 	"context"
 	"errors"
-	"fmt"
 
 	internal_assistant_entity "github.com/rapidaai/api/assistant-api/internal/entity/assistants"
 	sip_infra "github.com/rapidaai/api/assistant-api/sip/infra"
 	"github.com/rapidaai/pkg/types"
 )
 
-// stageRegister implements the "Register" pipeline step. Skips if the DID is
-// already registered by this instance (renewal loop is healthy). On terminal
-// failure modes (rejected, auth, config) the stage writes the matching status
-// itself and returns the error to halt the chain so stageMarkActive does not
-// overwrite it.
-func (m *Manager) stageRegister(ctx context.Context, rec *Record) error {
+// handleRegister implements the "Register" pipeline step. Skips if the DID is
+// already registered by this instance (renewal loop is healthy) and falls
+// through to MarkActivePipeline. On terminal failure (rejected, auth, config)
+// the handler writes the matching status itself and returns nil so
+// MarkActivePipeline does not overwrite it. Transient failures bump the retry
+// counter via handleTransient and also halt the chain.
+func (m *Manager) handleRegister(ctx context.Context, s RegisterPipeline) Pipeline {
+	rec := s.Record
+
 	if m.regClient.IsRegistered(rec.DID) {
 		rec.Outcome = OutcomeAlreadyActive
 		m.logger.Debugw("SIP DID already registered — renewal loop active",
 			"did", rec.DID, "assistant_id", rec.AssistantID)
-		return nil
+		return MarkActivePipeline{Record: rec}
 	}
 
 	db := m.postgres.DB(ctx)
@@ -36,7 +38,7 @@ func (m *Manager) stageRegister(ctx context.Context, rec *Record) error {
 		m.logger.Warnw("Failed to load assistant for registration",
 			"assistant_id", rec.AssistantID, "did", rec.DID, "error", err)
 		m.markStatus(ctx, rec.DeploymentID, StatusConfigError, "assistant not found")
-		return fmt.Errorf("load assistant %d: %w", rec.AssistantID, err)
+		return nil
 	}
 
 	auth := &types.ProjectScope{
@@ -51,7 +53,7 @@ func (m *Manager) stageRegister(ctx context.Context, rec *Record) error {
 			"assistant_id", rec.AssistantID, "did", rec.DID,
 			"credential_id", rec.CredentialID, "error", err)
 		m.markStatus(ctx, rec.DeploymentID, StatusConfigError, "vault credential not found")
-		return fmt.Errorf("vault credential %d: %w", rec.CredentialID, err)
+		return nil
 	}
 
 	sipConfig, err := sip_infra.ParseConfigFromVault(vaultCred)
@@ -60,11 +62,23 @@ func (m *Manager) stageRegister(ctx context.Context, rec *Record) error {
 		m.logger.Warnw("Failed to parse SIP config for registration",
 			"assistant_id", rec.AssistantID, "did", rec.DID, "error", err)
 		m.markStatus(ctx, rec.DeploymentID, StatusConfigError, "invalid SIP config: "+err.Error())
-		return err
+		return nil
 	}
 	if m.opDefaults != nil {
 		m.opDefaults(sipConfig)
 	}
+
+	m.logger.Debugw("Registering SIP DID with provider",
+		"did", rec.DID,
+		"assistant_id", rec.AssistantID,
+		"deployment_id", rec.DeploymentID,
+		"credential_id", rec.CredentialID,
+		"server", sipConfig.Server,
+		"domain", sipConfig.Domain,
+		"transport", sipConfig.Transport,
+		"port", sipConfig.Port,
+		"username", sipConfig.Username,
+		"owner", m.externalIP)
 
 	regErr := m.regClient.Register(ctx, &sip_infra.Registration{
 		DID:         rec.DID,
@@ -78,7 +92,7 @@ func (m *Manager) stageRegister(ctx context.Context, rec *Record) error {
 			"assistant_id", rec.AssistantID,
 			"server", sipConfig.Server,
 			"owner", m.externalIP)
-		return nil
+		return MarkActivePipeline{Record: rec}
 	}
 
 	switch {
@@ -96,5 +110,5 @@ func (m *Manager) stageRegister(ctx context.Context, rec *Record) error {
 		rec.Outcome = OutcomeTransient
 		m.handleTransient(ctx, rec, regErr)
 	}
-	return regErr
+	return nil
 }

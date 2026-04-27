@@ -8,7 +8,7 @@ package sip_registration
 
 import (
 	"context"
-	"errors"
+	"fmt"
 	"os"
 	"strings"
 	"sync"
@@ -22,13 +22,14 @@ import (
 )
 
 // Manager is the SIP registration orchestrator. It runs a periodic reconcile
-// loop that builds a per-DID pipeline of stages:
+// loop that drives a typed Pipeline chain:
 //
-//	GetRecordToRegister -> ClaimOwnership -> Register -> UpdateStatus
+//	ClaimOwnershipPipeline -> RegisterPipeline -> MarkActivePipeline
 //
 // Distribution across instances is achieved via Redis SETNX on a per-DID key
-// whose value is the server's externalIP. Each instance only owns the DIDs it
-// successfully claims; peers skip those records. Ownership self-heals via TTL.
+// whose value is the server's externalIP@hostname identity. Each instance
+// only owns the DIDs it successfully claims; peers skip those records.
+// Ownership self-heals via TTL.
 type Manager struct {
 	logger     commons.Logger
 	postgres   connectors.PostgresConnector
@@ -37,47 +38,37 @@ type Manager struct {
 	regClient  *sip_infra.RegistrationClient
 	externalIP string
 	opDefaults func(*sip_infra.Config)
-
-	stages []Stage
 }
 
-// NewManager wires the dependencies and assembles the default stage pipeline.
+// NewManager wires the dependencies and resolves a stable instance identity
+// (externalIP@hostname) for the Redis ownership keys. Bare externalIP is not
+// enough — two replicas behind a shared LB or with a "0.0.0.0" bind-address
+// fallback can collapse to the same value and mistakenly treat each other's
+// DIDs as self-owned. Combining with hostname always distinguishes pods.
 func NewManager(cfg Config) *Manager {
+	hostname, _ := os.Hostname()
+	ip := strings.TrimSpace(cfg.ExternalIP)
+	if ip == "" && hostname == "" {
+		panic("sip_registration: ExternalIP and Hostname both empty — cannot derive instance identity")
+	}
+	identity := ip + "@" + hostname
+
 	m := &Manager{
 		logger:     cfg.Logger,
 		postgres:   cfg.Postgres,
 		redis:      cfg.Redis.GetConnection(),
 		vault:      cfg.Vault,
 		regClient:  cfg.RegistrationClient,
-		externalIP: resolveInstanceID(cfg.ExternalIP),
+		externalIP: identity,
 		opDefaults: cfg.ApplyOpDefaults,
 	}
-	m.stages = []Stage{
-		m.stageClaimOwnership,
-		m.stageRegister,
-		m.stageMarkActive,
-	}
 	cfg.Logger.Infow("SIP registration manager initialized",
-		"instance_id", m.externalIP,
+		"instance_id", identity,
 		"external_ip", cfg.ExternalIP,
 		"poll_interval", PollInterval,
 		"ownership_ttl", OwnershipTTL,
 		"max_concurrent", MaxConcurrent)
 	return m
-}
-
-// resolveInstanceID composes a stable per-pod identity for the Redis ownership
-// keys. The bare externalIP is not enough — two replicas behind a shared LB,
-// or with the bind-address fallback (e.g. "0.0.0.0"), can collapse to the same
-// value and mistakenly treat each other's DIDs as self-owned. Combining with
-// the hostname always distinguishes pods even when the IPs collide.
-func resolveInstanceID(externalIP string) string {
-	hostname, _ := os.Hostname()
-	ip := strings.TrimSpace(externalIP)
-	if ip == "" && hostname == "" {
-		panic("sip_registration: ExternalIP and Hostname both empty — cannot derive instance identity")
-	}
-	return ip + "@" + hostname
 }
 
 // Start blocks running the periodic reconcile loop until ctx is cancelled.
@@ -96,9 +87,9 @@ func (m *Manager) Start(ctx context.Context) {
 	}
 }
 
-// Reconcile runs one full pipeline tick: load records, run the per-record
-// stage chain in bounded parallel, and unregister any locally-active DIDs
-// that no longer appear in the desired set.
+// Reconcile runs one full pipeline tick: load records, drive each through the
+// typed stage chain in bounded parallel, and unregister any locally-active
+// DIDs that no longer appear in the desired set.
 func (m *Manager) Reconcile(ctx context.Context) {
 	tickStart := time.Now()
 
@@ -125,7 +116,7 @@ func (m *Manager) Reconcile(ctx context.Context) {
 			case <-ctx.Done():
 				return
 			}
-			m.runPipeline(ctx, rec)
+			m.Run(ctx, rec)
 		}()
 	}
 	wg.Wait()
@@ -145,17 +136,20 @@ func (m *Manager) Reconcile(ctx context.Context) {
 		unregistered++
 	}
 
-	tally := tally(records)
+	counts := map[string]int{}
+	for _, r := range records {
+		counts[r.Outcome]++
+	}
 	m.logger.Infow("Registration reconcile complete",
 		"loaded", len(records),
-		"registered", tally[OutcomeRegistered],
-		"already_active", tally[OutcomeAlreadyActive],
-		"peer_owned", tally[OutcomePeerOwned],
-		"rejected", tally[OutcomeRejected],
-		"auth_failed", tally[OutcomeAuthFailed],
-		"config_error", tally[OutcomeConfigError],
-		"transient", tally[OutcomeTransient],
-		"claim_error", tally[OutcomeClaimError],
+		"registered", counts[OutcomeRegistered],
+		"already_active", counts[OutcomeAlreadyActive],
+		"peer_owned", counts[OutcomePeerOwned],
+		"rejected", counts[OutcomeRejected],
+		"auth_failed", counts[OutcomeAuthFailed],
+		"config_error", counts[OutcomeConfigError],
+		"transient", counts[OutcomeTransient],
+		"claim_error", counts[OutcomeClaimError],
 		"unregistered", unregistered,
 		"active_local", m.regClient.ActiveCount(),
 		"owner", m.externalIP,
@@ -175,25 +169,28 @@ func (m *Manager) ReleaseAll(ctx context.Context) {
 		"count", len(dids), "owner", m.externalIP)
 }
 
-// runPipeline executes the per-record stage chain. Stages stop early on error
-// (or on the silent peer-owned skip).
-func (m *Manager) runPipeline(ctx context.Context, rec *Record) {
-	for _, stage := range m.stages {
-		if err := stage(ctx, rec); err != nil {
-			if !errors.Is(err, errPeerOwned) {
-				m.logger.Debugw("Pipeline stopped",
-					"did", rec.DID, "outcome", rec.Outcome, "error", err)
-			}
-			return
-		}
+// Run drives the typed Pipeline chain for one Record, starting at
+// ClaimOwnershipPipeline. dispatch returns the next Pipeline or nil to stop.
+func (m *Manager) Run(ctx context.Context, rec *Record) {
+	var next Pipeline = ClaimOwnershipPipeline{Record: rec}
+	for next != nil {
+		next = m.dispatch(ctx, next)
 	}
 }
 
-// tally counts outcomes across a finished tick.
-func tally(records []Record) map[string]int {
-	out := map[string]int{}
-	for _, r := range records {
-		out[r.Outcome]++
+// dispatch routes a typed Pipeline to the matching handler. Mirrors the
+// switch-on-type pattern of sip/pipeline/dispatcher.go.
+func (m *Manager) dispatch(ctx context.Context, p Pipeline) Pipeline {
+	switch v := p.(type) {
+	case ClaimOwnershipPipeline:
+		return m.handleClaimOwnership(ctx, v)
+	case RegisterPipeline:
+		return m.handleRegister(ctx, v)
+	case MarkActivePipeline:
+		return m.handleMarkActive(ctx, v)
+	default:
+		m.logger.Warnw("dispatch: unknown pipeline type",
+			"did", p.DID(), "type", fmt.Sprintf("%T", p))
+		return nil
 	}
-	return out
 }

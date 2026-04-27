@@ -15,11 +15,13 @@ import (
 	"gorm.io/gorm/clause"
 )
 
-// stageMarkActive implements the "Update status" pipeline step on the success
-// path: clears any prior error and resets the transient retry counter.
-// Skips DB writes if the DID was already active locally (renewal loop carries
-// the binding) — avoids one upsert tuple per tick per DID at scale.
-func (m *Manager) stageMarkActive(ctx context.Context, rec *Record) error {
+// handleMarkActive implements the "Update status" pipeline step on the
+// success path: clears any prior error and resets the transient retry
+// counter. Skips DB writes if the DID was already locally active (renewal
+// loop carries the binding) — avoids one upsert tuple per tick per DID at
+// scale. Always terminal; returns nil.
+func (m *Manager) handleMarkActive(ctx context.Context, p MarkActivePipeline) Pipeline {
+	rec := p.Record
 	if rec.Outcome == OutcomeAlreadyActive {
 		return nil
 	}
@@ -29,8 +31,8 @@ func (m *Manager) stageMarkActive(ctx context.Context, rec *Record) error {
 	return nil
 }
 
-// markStatus writes a (sip_status, sip_error) pair. Used by stages that
-// detect a terminal/failure condition before stageMarkActive runs.
+// markStatus writes a (sip_status, sip_error) pair. Used by handlers that
+// detect a terminal/failure condition before MarkActivePipeline runs.
 func (m *Manager) markStatus(ctx context.Context, deploymentID uint64, status, errMsg string) {
 	m.upsertOption(ctx, deploymentID, OptKeySIPStatus, status)
 	m.upsertOption(ctx, deploymentID, OptKeySIPError, errMsg)
