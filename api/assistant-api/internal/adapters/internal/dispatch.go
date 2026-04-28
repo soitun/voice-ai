@@ -43,9 +43,7 @@ func (r *genericRequestor) OnPacket(ctx context.Context, pkts ...internal_type.P
 			internal_type.TTSInterruptPacket,
 			internal_type.LLMInterruptPacket,
 			internal_type.STTInterruptPacket,
-			internal_type.TurnChangePacket,
-			internal_type.LLMToolCallPacket,
-			internal_type.LLMToolResultPacket:
+			internal_type.TurnChangePacket:
 			r.criticalCh <- e
 
 		// Input — inbound audio pipeline, VAD, STT, EOS
@@ -58,7 +56,8 @@ func (r *genericRequestor) OnPacket(ctx context.Context, pkts ...internal_type.P
 			internal_type.SpeechToTextPacket,
 			internal_type.EndOfSpeechPacket,
 			internal_type.InterimEndOfSpeechPacket,
-			internal_type.UserInputPacket:
+			internal_type.UserInputPacket,
+			internal_type.LLMToolResultPacket:
 			r.inputCh <- e
 
 		// Output — LLM generation, TTS, outbound pipeline
@@ -71,7 +70,8 @@ func (r *genericRequestor) OnPacket(ctx context.Context, pkts ...internal_type.P
 			internal_type.TTSTextPacket,
 			internal_type.TTSDonePacket,
 			internal_type.TextToSpeechAudioPacket,
-			internal_type.TextToSpeechEndPacket:
+			internal_type.TextToSpeechEndPacket,
+			internal_type.LLMToolCallPacket:
 			r.outputCh <- e
 
 		// Low — recording, metrics, persistence, events
@@ -1049,8 +1049,8 @@ func (talking *genericRequestor) handleToolCall(ctx context.Context, vl internal
 
 	if msg, ok := vl.Arguments["message"]; ok && msg != "" {
 		talking.OnPacket(ctx,
-			internal_type.STTInterruptPacket{ContextID: vl.ContextID},
-			internal_type.InjectMessagePacket{ContextID: talking.GetID(), Text: msg})
+			internal_type.TTSInterruptPacket{ContextID: vl.ContextID},
+			internal_type.InjectMessagePacket{ContextID: vl.ContextID, Text: msg})
 	}
 
 	talking.Notify(ctx, &protos.ConversationToolCall{

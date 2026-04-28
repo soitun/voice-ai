@@ -311,7 +311,6 @@ func TestOnPacket_RoutesToCorrectChannel(t *testing.T) {
 		{"TTSInterruptPacket", internal_type.TTSInterruptPacket{ContextID: "c"}, "critical"},
 		{"LLMInterruptPacket", internal_type.LLMInterruptPacket{ContextID: "c"}, "critical"},
 		{"TurnChangePacket", internal_type.TurnChangePacket{ContextID: "c", PreviousContextID: "p"}, "critical"},
-		{"LLMToolCallPacket_Action", internal_type.LLMToolCallPacket{ContextID: "c", Action: protos.ToolCallAction_TOOL_CALL_ACTION_END_CONVERSATION}, "critical"},
 		{"InjectMessagePacket", internal_type.InjectMessagePacket{ContextID: "c"}, "output"},
 
 		// Input
@@ -325,6 +324,7 @@ func TestOnPacket_RoutesToCorrectChannel(t *testing.T) {
 		{"EndOfSpeechPacket", internal_type.EndOfSpeechPacket{ContextID: "c"}, "input"},
 		{"InterimEndOfSpeechPacket", internal_type.InterimEndOfSpeechPacket{ContextID: "c"}, "input"},
 		{"UserInputPacket", internal_type.UserInputPacket{ContextID: "c"}, "input"},
+		{"LLMToolResultPacket", internal_type.LLMToolResultPacket{ContextID: "c", Action: protos.ToolCallAction_TOOL_CALL_ACTION_END_CONVERSATION}, "input"},
 
 		// Output
 		{"LLMResponseDeltaPacket", internal_type.LLMResponseDeltaPacket{ContextID: "c"}, "output"},
@@ -334,14 +334,15 @@ func TestOnPacket_RoutesToCorrectChannel(t *testing.T) {
 		{"TTSTextPacket", internal_type.TTSTextPacket{ContextID: "c"}, "output"},
 		{"TextToSpeechAudioPacket", internal_type.TextToSpeechAudioPacket{ContextID: "c"}, "output"},
 		{"TextToSpeechEndPacket", internal_type.TextToSpeechEndPacket{ContextID: "c"}, "output"},
+		{"LLMToolCallPacket_Action", internal_type.LLMToolCallPacket{ContextID: "c", Action: protos.ToolCallAction_TOOL_CALL_ACTION_END_CONVERSATION}, "output"},
 
 		// Low
 		{"RecordUserAudioPacket", internal_type.RecordUserAudioPacket{ContextID: "c"}, "low"},
 		{"RecordAssistantAudioPacket", internal_type.RecordAssistantAudioPacket{ContextID: "c"}, "low"},
 		{"SaveMessagePacket", internal_type.SaveMessagePacket{ContextID: "c"}, "low"},
 		{"ConversationEventPacket", internal_type.ConversationEventPacket{ContextID: "c"}, "low"},
-		{"LLMToolCallPacket", internal_type.LLMToolCallPacket{ContextID: "c"}, "critical"},
-		{"LLMToolResultPacket", internal_type.LLMToolResultPacket{ContextID: "c"}, "critical"},
+		{"LLMToolCallPacket", internal_type.LLMToolCallPacket{ContextID: "c"}, "output"},
+		{"LLMToolResultPacket", internal_type.LLMToolResultPacket{ContextID: "c"}, "input"},
 		{"UserMessageMetricPacket", internal_type.UserMessageMetricPacket{ContextID: "c"}, "low"},
 		{"AssistantMessageMetricPacket", internal_type.AssistantMessageMetricPacket{ContextID: "c"}, "low"},
 	}
@@ -1624,6 +1625,14 @@ func (t *realisticTTSStub) Transform(ctx context.Context, pkt internal_type.Pack
 		return nil
 	}
 
+	// Only speech packets consume the synthesizer state machine.
+	_, isText := pkt.(internal_type.TTSTextPacket)
+	_, isDone := pkt.(internal_type.TTSDonePacket)
+	if !isText && !isDone {
+		t.mu.Unlock()
+		return nil
+	}
+
 	// If in "completed" state, new text is dropped (stale connection)
 	if t.state == "completed" {
 		t.droppedCount++
@@ -1720,6 +1729,14 @@ func (t *statefulTTSStub) Transform(ctx context.Context, pkt internal_type.Packe
 	if _, ok := pkt.(internal_type.InterruptionDetectedPacket); ok {
 		t.state = "ready"
 		t.initCount++
+		t.mu.Unlock()
+		return nil
+	}
+
+	// Only speech packets consume the synthesizer state machine.
+	_, isText := pkt.(internal_type.TTSTextPacket)
+	_, isDone := pkt.(internal_type.TTSDonePacket)
+	if !isText && !isDone {
 		t.mu.Unlock()
 		return nil
 	}
