@@ -17,7 +17,6 @@ import (
 	"testing"
 	"time"
 
-	internal_agent_executor "github.com/rapidaai/api/assistant-api/internal"
 	internal_assistant_entity "github.com/rapidaai/api/assistant-api/internal/entity/assistants"
 	internal_conversation_entity "github.com/rapidaai/api/assistant-api/internal/entity/conversations"
 	internal_type "github.com/rapidaai/api/assistant-api/internal/type"
@@ -225,7 +224,7 @@ type mockToolExecutor struct {
 	closeCalled bool
 }
 
-var _ internal_agent_executor.ToolExecutor = (*mockToolExecutor)(nil)
+var _ internal_tool.ToolExecutor = (*mockToolExecutor)(nil)
 
 func (m *mockToolExecutor) Initialize(context.Context, internal_type.Communication) error {
 	return nil
