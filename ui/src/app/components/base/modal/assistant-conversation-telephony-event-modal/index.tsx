@@ -64,52 +64,55 @@ export const AssistantConversationTelephonyEventDialog: FC<AssistantConversation
               </div>
 
               {/* Rows */}
-              {events.map((event, index) => (
-                <div key={event.getId()} className="flex flex-col">
-                  <button
-                    onClick={() =>
-                      setExpandedRow(
-                        expandedRow === event.getId() ? null : event.getId(),
-                      )
-                    }
-                    className="w-full grid grid-cols-7 gap-2 px-4 py-3 text-left border-b hover:bg-gray-50 dark:hover:bg-gray-950 transition-colors text-sm"
-                  >
-                    <div className="col-span-2 font-mono text-xs truncate">
-                      {event.getId()}
-                    </div>
-                    <div className="col-span-2 font-medium capitalize">
-                      {event.getEventtype()}
-                    </div>
-                    <div className="col-span-2  text-xs">
-                      {toHumanReadableDateTime(event.getCreateddate()!)}
-                    </div>
-                    <div className="col-span-1 flex justify-end">
-                      <ChevronDown
-                        className={`w-4 h-4 text-gray-400 transition-transform`}
-                      />
-                    </div>
-                  </button>
+              {events.map(event => {
+                const createdDate = event.getCreateddate();
+                return (
+                  <div key={event.getId()} className="flex flex-col">
+                    <button
+                      onClick={() =>
+                        setExpandedRow(
+                          expandedRow === event.getId() ? null : event.getId(),
+                        )
+                      }
+                      className="w-full grid grid-cols-7 gap-2 px-4 py-3 text-left border-b hover:bg-gray-50 dark:hover:bg-gray-950 transition-colors text-sm"
+                    >
+                      <div className="col-span-2 font-mono text-xs truncate">
+                        {event.getId()}
+                      </div>
+                      <div className="col-span-2 font-medium capitalize">
+                        {event.getEventtype()}
+                      </div>
+                      <div className="col-span-2  text-xs">
+                        {createdDate ? toHumanReadableDateTime(createdDate) : 'N/A'}
+                      </div>
+                      <div className="col-span-1 flex justify-end">
+                        <ChevronDown
+                          className={`w-4 h-4 text-gray-400 transition-transform`}
+                        />
+                      </div>
+                    </button>
 
-                  {expandedRow === event.getId() && (
-                    <>
-                      <p className="text-xs font-semibold text-gray-700 uppercase tracking-wide px-3 py-2">
-                        Payload (Raw)
-                      </p>
-                      <CodeHighlighting
-                        lang="json"
-                        className="h-[200px] !text-xs"
-                        lineNumbers={false}
-                        foldGutter={false}
-                        code={JSON.stringify(
-                          event.getPayload()?.toJavaScript(),
-                          null,
-                          2,
-                        )}
-                      />
-                    </>
-                  )}
-                </div>
-              ))}
+                    {expandedRow === event.getId() && (
+                      <>
+                        <p className="text-xs font-semibold text-gray-700 uppercase tracking-wide px-3 py-2">
+                          Payload (Raw)
+                        </p>
+                        <CodeHighlighting
+                          language="json"
+                          className="h-[200px] !text-xs"
+                          lineNumbers={false}
+                          foldGutter={false}
+                          code={JSON.stringify(
+                            event.getPayload()?.toJavaScript(),
+                            null,
+                            2,
+                          )}
+                        />
+                      </>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </ModalBody>
         </div>

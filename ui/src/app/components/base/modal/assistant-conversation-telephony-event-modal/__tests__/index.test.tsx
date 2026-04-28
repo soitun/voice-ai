@@ -15,21 +15,6 @@ jest.mock('@/app/components/code-highlighting', () => ({
   ),
 }));
 
-jest.mock('@/app/components/carbon/table-toolbar-filter', () => ({
-  TableToolbarFilter: ({ onApplyFilter, onResetFilter }: any) => (
-    <div>
-      <button onClick={() => onApplyFilter(new Set(['session']))}>Apply Session Filter</button>
-      <button onClick={() => onResetFilter()}>Reset Filter</button>
-    </div>
-  ),
-}));
-
-jest.mock('@carbon/react', () => ({
-  DismissibleTag: ({ text, onClose }: any) => (
-    <button onClick={onClose}>tag-{text}</button>
-  ),
-}));
-
 jest.mock('@/utils/date', () => ({
   toHumanReadableDateTime: jest.fn(() => 'formatted-date'),
 }));
@@ -78,7 +63,7 @@ describe('AssistantConversationTelephonyEventDialog', () => {
     expect(screen.getByText('N/A')).toBeInTheDocument();
   });
 
-  it('filters rows by selected component type', () => {
+  it('renders all event rows without filtering controls', () => {
     render(
       <AssistantConversationTelephonyEventDialog
         modalOpen
@@ -92,10 +77,8 @@ describe('AssistantConversationTelephonyEventDialog', () => {
 
     expect(screen.getByText('evt_session')).toBeInTheDocument();
     expect(screen.getByText('evt_llm')).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole('button', { name: 'Apply Session Filter' }));
-
-    expect(screen.getByText('evt_session')).toBeInTheDocument();
-    expect(screen.queryByText('evt_llm')).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'Apply Session Filter' }),
+    ).not.toBeInTheDocument();
   });
 });
