@@ -1581,7 +1581,8 @@ func (t *ttsStub) getPackets() []internal_type.Packet {
 // realisticTTSStub simulates real-world TTS provider behavior:
 //   - After completing a speak cycle (TTSDonePacket processed),
 //     the provider enters "completed" state (connection stale).
-//   - An InterruptionDetectedPacket reinitializes the connection → "ready" state.
+//   - A TTSInterruptPacket (legacy: InterruptionDetectedPacket) reinitializes
+//     the connection → "ready" state.
 //   - New text in "ready" state is spoken normally.
 //   - New text in "completed" state is silently dropped (stale connection).
 //   - Includes a synthDelay to simulate real TTS API latency.
@@ -1608,7 +1609,14 @@ func (t *realisticTTSStub) Transform(ctx context.Context, pkt internal_type.Pack
 	cb := t.onPacket
 	audio := t.audio
 
-	// Handle interrupt — reinitializes the connection
+	// Handle interrupt — reinitializes the connection.
+	// Keep legacy InterruptionDetectedPacket support for backward compatibility.
+	if _, ok := pkt.(internal_type.TTSInterruptPacket); ok {
+		t.state = "ready"
+		t.interruptCount++
+		t.mu.Unlock()
+		return nil
+	}
 	if _, ok := pkt.(internal_type.InterruptionDetectedPacket); ok {
 		t.state = "ready"
 		t.interruptCount++
@@ -1669,8 +1677,9 @@ func (t *realisticTTSStub) getCounters() (interrupts, speaks, emits, dropped int
 //   - After completing a speak cycle (TTSDonePacket → audio emitted),
 //     the provider enters "completed" state.
 //   - In "completed" state, new text is silently dropped (connection is stale).
-//   - An InterruptionDetectedPacket reinitializes the connection, moving the
-//     provider back to "ready" state so it can speak again.
+//   - A TTSInterruptPacket (legacy: InterruptionDetectedPacket) reinitializes
+//     the connection, moving the provider back to "ready" state so it can
+//     speak again.
 //
 // This reproduces the production bug where idle message audio is missing
 // because no TTSInterruptPacket is sent to reinitialize the TTS provider.
@@ -1700,7 +1709,14 @@ func (t *statefulTTSStub) Transform(ctx context.Context, pkt internal_type.Packe
 	cb := t.onPacket
 	audio := t.audio
 
-	// Handle interrupt — reinitializes the connection
+	// Handle interrupt — reinitializes the connection.
+	// Keep legacy InterruptionDetectedPacket support for backward compatibility.
+	if _, ok := pkt.(internal_type.TTSInterruptPacket); ok {
+		t.state = "ready"
+		t.initCount++
+		t.mu.Unlock()
+		return nil
+	}
 	if _, ok := pkt.(internal_type.InterruptionDetectedPacket); ok {
 		t.state = "ready"
 		t.initCount++

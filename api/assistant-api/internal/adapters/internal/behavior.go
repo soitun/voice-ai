@@ -187,9 +187,11 @@ func (r *genericRequestor) onIdleTimeout(ctx context.Context) error {
 	// InjectMessagePacket routes to outputCh; the context must be rotated
 	// before enqueueing so GetID() returns the new context.
 	r.Transition(Interrupted)
+	contextID := r.GetID()
+
 	if err := r.OnPacket(ctx,
-		internal_type.TTSInterruptPacket{ContextID: r.GetID()},
-		internal_type.InjectMessagePacket{ContextID: r.GetID(), Text: timeoutContent},
+		internal_type.TTSInterruptPacket{ContextID: contextID},
+		internal_type.InjectMessagePacket{ContextID: contextID, Text: timeoutContent},
 		internal_type.ConversationEventPacket{
 			Name: "behavior",
 			Data: map[string]string{
@@ -199,7 +201,7 @@ func (r *genericRequestor) onIdleTimeout(ctx context.Context) error {
 			},
 			Time: time.Now(),
 		},
-		internal_type.StartIdleTimeoutPacket{ContextID: r.GetID()},
+		internal_type.StartIdleTimeoutPacket{ContextID: contextID},
 	); err != nil {
 		r.logger.Errorf("error while sending idle timeout message: %v", err)
 	}

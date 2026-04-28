@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sync"
 
 	internal_assistant_entity "github.com/rapidaai/api/assistant-api/internal/entity/assistants"
 	internal_tool "github.com/rapidaai/api/assistant-api/internal/tool/internal"
@@ -170,14 +171,20 @@ func (executor *toolExecutor) registerToolDefinitions(registrations []toolRegist
 }
 
 func (executor *toolExecutor) executeTools(ctx context.Context, contextID string, calls []*protos.ToolCall, communication internal_type.Communication) {
+	var wg sync.WaitGroup
 	for _, call := range calls {
 		funC, ok := executor.getTool(call.GetFunction().GetName())
 		if !ok {
 			executor.logger.Errorf("No tool found for function: %s", call.GetFunction().GetName())
 			continue
 		}
-		funC.Call(ctx, contextID, call.GetId(), executor.parseArgument(call.GetFunction().GetArguments()), communication)
+		wg.Add(1)
+		go func(c *protos.ToolCall, caller internal_tool.ToolCaller) {
+			defer wg.Done()
+			caller.Call(ctx, contextID, c.GetId(), executor.parseArgument(c.GetFunction().GetArguments()), communication)
+		}(call, funC)
 	}
+	wg.Wait()
 }
 
 // Run dispatches strongly-typed tool pipeline stages.

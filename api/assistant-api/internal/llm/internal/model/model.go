@@ -367,7 +367,9 @@ func (e *modelAssistantExecutor) onCompletion(ctx context.Context, communication
 			Data: map[string]string{"type": "tool_block_superseded", "reason": "new_tool_block"},
 		})
 	}
-
+	if len(toolCalls) > 0 {
+		e.toolExecutor.ExecuteAll(ctx, contextID, toolCalls, communication)
+	}
 	communication.OnPacket(ctx,
 		internal_type.LLMResponseDonePacket{ContextID: contextID, Text: responseText},
 		internal_type.ConversationEventPacket{ContextID: contextID, Name: "llm", Time: time.Now(),
@@ -379,10 +381,6 @@ func (e *modelAssistantExecutor) onCompletion(ctx context.Context, communication
 		},
 		internal_type.AssistantMessageMetricPacket{ContextID: contextID, Metrics: e.buildCompletionMetrics(metrics)},
 	)
-
-	if len(toolCalls) > 0 {
-		e.toolExecutor.ExecuteAll(ctx, contextID, toolCalls, communication)
-	}
 }
 
 // =============================================================================
