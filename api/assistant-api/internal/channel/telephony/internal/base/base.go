@@ -20,7 +20,6 @@ import (
 	"github.com/rapidaai/protos"
 )
 
-
 // TelephonyOption configures a BaseTelephonyStreamer.
 type TelephonyOption func(*telephonyConfig)
 

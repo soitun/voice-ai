@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rapidaai/pkg/commons"
 	internal_type "github.com/rapidaai/api/assistant-api/internal/type"
+	"github.com/rapidaai/pkg/commons"
 	"github.com/rapidaai/protos"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc/metadata"

@@ -121,7 +121,7 @@ func TestModel_MultiTurn_5Turn_WithContextSwitchDuringPendingTool(t *testing.T) 
 	e.handleResponse(context.Background(), comm, &protos.ChatResponse{
 		RequestId: "s1", Success: true,
 		Data: &protos.Message{
-			Role: "assistant",
+			Role:    "assistant",
 			Message: &protos.Message_Assistant{Assistant: &protos.AssistantMessage{Contents: []string{"s1 done"}}},
 		},
 		Metrics: []*protos.Metric{{Name: "token_count", Value: "1"}},
@@ -157,7 +157,7 @@ func TestModel_MultiTurn_5Turn_WithContextSwitchDuringPendingTool(t *testing.T) 
 	e.handleResponse(context.Background(), comm, &protos.ChatResponse{
 		RequestId: "s3", Success: true,
 		Data: &protos.Message{
-			Role: "assistant",
+			Role:    "assistant",
 			Message: &protos.Message_Assistant{Assistant: &protos.AssistantMessage{Contents: []string{"s3 done"}}},
 		},
 		Metrics: []*protos.Metric{{Name: "token_count", Value: "2"}},
@@ -168,7 +168,7 @@ func TestModel_MultiTurn_5Turn_WithContextSwitchDuringPendingTool(t *testing.T) 
 	e.handleResponse(context.Background(), comm, &protos.ChatResponse{
 		RequestId: "s4", Success: true,
 		Data: &protos.Message{
-			Role: "assistant",
+			Role:    "assistant",
 			Message: &protos.Message_Assistant{Assistant: &protos.AssistantMessage{Contents: []string{"s4 done"}}},
 		},
 		Metrics: []*protos.Metric{{Name: "token_count", Value: "2"}},
@@ -195,7 +195,7 @@ func TestModel_MultiTurn_5Turn_WithContextSwitchDuringPendingTool(t *testing.T) 
 	e.handleResponse(context.Background(), comm, &protos.ChatResponse{
 		RequestId: "s5", Success: true,
 		Data: &protos.Message{
-			Role: "assistant",
+			Role:    "assistant",
 			Message: &protos.Message_Assistant{Assistant: &protos.AssistantMessage{Contents: []string{"s5 done"}}},
 		},
 		Metrics: []*protos.Metric{{Name: "token_count", Value: "2"}},

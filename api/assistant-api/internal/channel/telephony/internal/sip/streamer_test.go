@@ -97,9 +97,9 @@ func TestSend_ConversationDisconnection_PreservesExplicitReason(t *testing.T) {
 		disc, ok := msg.(*protos.ConversationDisconnection)
 		require.True(t, ok, "expected ConversationDisconnection, got %T", msg)
 		assert.Equal(t, protos.ConversationDisconnection_DISCONNECTION_TYPE_MAX_DURATION, disc.GetType())
-		case <-time.After(time.Second):
-			t.Fatal("timed out waiting for requeued ConversationDisconnection")
-		}
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for requeued ConversationDisconnection")
+	}
 }
 
 func TestSend_TransferConversation_UsesTransferToKey(t *testing.T) {

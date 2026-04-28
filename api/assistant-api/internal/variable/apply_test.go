@@ -14,14 +14,14 @@ func TestApply_DefaultNamespaces(t *testing.T) {
 	r := NewDefaultRegistry()
 
 	mapping := map[string]string{
-		"assistant.id":            "agent_id",
-		"conversation.id":         "conv_id",
-		"argument.foo":            "foo_out",
-		"system.current_date":     "today",
-		"client.direction":        "dir",
-		"option.max_tokens":       "max",
-		"unknown.namespace":       "ignored",
-		"system.does_not_exist":   "skipped",
+		"assistant.id":          "agent_id",
+		"conversation.id":       "conv_id",
+		"argument.foo":          "foo_out",
+		"system.current_date":   "today",
+		"client.direction":      "dir",
+		"option.max_tokens":     "max",
+		"unknown.namespace":     "ignored",
+		"system.does_not_exist": "skipped",
 	}
 
 	out := r.Apply(mapping, src, ResolveContext{})
