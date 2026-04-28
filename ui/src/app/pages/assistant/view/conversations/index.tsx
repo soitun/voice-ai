@@ -68,8 +68,16 @@ export function Conversations({ currentAssistant }: ConversationProps) {
 
   const onDateSelect = (to: Date, from: Date) => {
     assistantConversationListAction.setCriterias([
-      { k: 'assistant_conversations.created_date', v: toDateString(from), logic: '>=' },
-      { k: 'assistant_conversations.created_date', v: toDateString(to), logic: '<=' },
+      {
+        k: 'assistant_conversations.created_date',
+        v: toDateString(from),
+        logic: '>=',
+      },
+      {
+        k: 'assistant_conversations.created_date',
+        v: toDateString(to),
+        logic: '<=',
+      },
     ]);
   };
 
@@ -86,13 +94,25 @@ export function Conversations({ currentAssistant }: ConversationProps) {
       const [, filterType, filterValue] = match;
       switch (filterType) {
         case 'id':
-          criterias.push({ k: 'assistant_conversations.id', v: filterValue, logic: '=' });
+          criterias.push({
+            k: 'assistant_conversations.id',
+            v: filterValue,
+            logic: '=',
+          });
           break;
         case 'source':
-          criterias.push({ k: 'assistant_conversations.source', v: filterValue, logic: '=' });
+          criterias.push({
+            k: 'assistant_conversations.source',
+            v: filterValue,
+            logic: '=',
+          });
           break;
         case 'status':
-          criterias.push({ k: 'assistant_conversations.status', v: filterValue, logic: '=' });
+          criterias.push({
+            k: 'assistant_conversations.status',
+            v: filterValue,
+            logic: '=',
+          });
           break;
       }
     }
@@ -195,7 +215,9 @@ export function Conversations({ currentAssistant }: ConversationProps) {
     setDownloading(false);
   };
 
-  const visibleColumns = assistantConversationListAction.columns.filter(c => c.visible);
+  const visibleColumns = assistantConversationListAction.columns.filter(
+    c => c.visible,
+  );
 
   return (
     <div className="h-full flex flex-col flex-1">
@@ -272,7 +294,11 @@ export function Conversations({ currentAssistant }: ConversationProps) {
                     )}
                     {assistantConversationListAction.visibleColumn(
                       'assistant_id',
-                    ) && <TableCell className="!text-xs">{row.getAssistantid()}</TableCell>}
+                    ) && (
+                      <TableCell className="!text-xs">
+                        {row.getAssistantid()}
+                      </TableCell>
+                    )}
 
                     {assistantConversationListAction.visibleColumn(
                       'assistant_provider_model_id',
@@ -298,7 +324,9 @@ export function Conversations({ currentAssistant }: ConversationProps) {
                         {row.getIdentifier()}
                       </TableCell>
                     )}
-                    {assistantConversationListAction.visibleColumn('source') && (
+                    {assistantConversationListAction.visibleColumn(
+                      'source',
+                    ) && (
                       <TableCell>
                         <SourceIndicator source={row.getSource()} />
                       </TableCell>
@@ -312,7 +340,9 @@ export function Conversations({ currentAssistant }: ConversationProps) {
                       </TableCell>
                     )}
 
-                    {assistantConversationListAction.visibleColumn('action') && (
+                    {assistantConversationListAction.visibleColumn(
+                      'action',
+                    ) && (
                       <TableCell>
                         <div className="flex items-center gap-0">
                           {row.getTelephonyeventsList().length > 0 && (
@@ -322,7 +352,9 @@ export function Conversations({ currentAssistant }: ConversationProps) {
                               renderIcon={Phone}
                               iconDescription="View telephony status"
                               onClick={() => {
-                                setTelephonyEvents(row.getTelephonyeventsList());
+                                setTelephonyEvents(
+                                  row.getTelephonyeventsList(),
+                                );
                                 setTelephonyStatusOpen(true);
                               }}
                             />
@@ -358,7 +390,9 @@ export function Conversations({ currentAssistant }: ConversationProps) {
                       </TableCell>
                     )}
 
-                    {assistantConversationListAction.visibleColumn('status') && (
+                    {assistantConversationListAction.visibleColumn(
+                      'status',
+                    ) && (
                       <TableCell>
                         <CarbonStatusIndicator
                           state={getStatusMetric(row.getMetricsList())}
@@ -372,7 +406,9 @@ export function Conversations({ currentAssistant }: ConversationProps) {
                       <TableCell className="!text-xs whitespace-nowrap">
                         {row.getCreateddate() && (
                           <DefinitionTooltip
-                            definition={toDate(row.getCreateddate()!).toUTCString()}
+                            definition={toDate(
+                              row.getCreateddate()!,
+                            ).toUTCString()}
                             openOnHover
                           >
                             {toDate(row.getCreateddate()!).toLocaleString()}

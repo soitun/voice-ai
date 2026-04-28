@@ -8,6 +8,7 @@ package internal_telephony_base
 
 import (
 	"encoding/base64"
+	"strings"
 
 	internal_audio "github.com/rapidaai/api/assistant-api/internal/audio"
 	internal_audio_resampler "github.com/rapidaai/api/assistant-api/internal/audio/resampler"
@@ -204,10 +205,51 @@ func (base *BaseTelephonyStreamer) SourceAudioConfig() *protos.AudioConfig {
 }
 
 // CreateConnectionRequest builds the initial ConversationInitialization message.
+// Carries non-empty client.* metadata in the init payload so the requestor's
+// in-memory state is populated at connect time — avoids races with downstream
+// metadata writes that only persist to DB. Empty fields are omitted so they
+// can't overwrite previously-stored values during resume.
 func (base *BaseTelephonyStreamer) CreateConnectionRequest() *protos.ConversationInitialization {
+	clientMetadata := map[string]interface{}{
+		"client.direction":          base.callCtx.Direction,
+		"client.telephony_provider": base.callCtx.Provider,
+	}
+	if v := base.callCtx.CallerNumber; v != "" {
+		clientMetadata["client.phone"] = v
+	}
+	if v := base.callCtx.FromNumber; v != "" {
+		clientMetadata["client.assistant_phone"] = v
+	}
+	if v := base.callCtx.ChannelUUID; v != "" {
+		clientMetadata["client.provider_call_id"] = v
+	}
+	if v := base.callCtx.ContextID; v != "" {
+		clientMetadata["client.context_id"] = v
+	}
+	metadata, _ := utils.InterfaceMapToAnyMap(clientMetadata)
 	return &protos.ConversationInitialization{
 		AssistantConversationId: base.GetConversationId(),
 		Assistant:               base.GetAssistantDefinition(),
 		StreamMode:              protos.StreamMode_STREAM_MODE_AUDIO,
+		Metadata:                metadata,
 	}
+}
+
+// SplitTransferTargets parses a multi-target transfer_to argument into an
+// ordered list of targets joined by commons.SEPARATOR. Empty/whitespace
+// entries are dropped. If parsing yields nothing, the original raw string is
+// returned as a single-element slice so callers always have at least one
+// candidate to act on.
+func (base *BaseTelephonyStreamer) SplitTransferTargets(raw string) []string {
+	parts := strings.Split(raw, commons.SEPARATOR)
+	targets := make([]string, 0, len(parts))
+	for _, p := range parts {
+		if t := strings.TrimSpace(p); t != "" {
+			targets = append(targets, t)
+		}
+	}
+	if len(targets) == 0 {
+		return []string{raw}
+	}
+	return targets
 }

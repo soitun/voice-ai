@@ -43,6 +43,18 @@ describe('transfer-call default options', () => {
     expect(byKey['tool.transfer_delay']).toBe('350');
   });
 
+  it('defaults transfer delay to 500 when not provided', () => {
+    const options = GetTransferCallDefaultOptions([
+      createMetadata('tool.transfer_to', '+14155551234'),
+      createMetadata('tool.transfer_message', 'Please hold while I transfer you.'),
+    ]);
+
+    const byKey = Object.fromEntries(
+      options.map(option => [option.getKey(), option.getValue()]),
+    );
+    expect(byKey['tool.transfer_delay']).toBe('500');
+  });
+
   it('validates transfer destination as required', () => {
     const error = ValidateTransferCallDefaultOptions([
       createMetadata('tool.transfer_message', 'message'),

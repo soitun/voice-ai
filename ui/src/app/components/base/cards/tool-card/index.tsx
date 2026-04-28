@@ -1,9 +1,17 @@
 import { FC, HTMLAttributes } from 'react';
-import { BaseCard, CardDescription, CardTitle } from '@/app/components/base/cards';
+import {
+  BaseCard,
+  CardDescription,
+  CardTitle,
+} from '@/app/components/base/cards';
 import { cn } from '@/utils';
 import { AssistantTool } from '@rapidaai/react';
 import { BUILDIN_TOOLS } from '@/llm-tools';
 import { Tag, ButtonSet } from '@carbon/react';
+import {
+  getToolConditionSource,
+  getToolConditionSourceLabel,
+} from '@/app/components/tools/common';
 import {
   PrimaryButton,
   DangerGhostButton,
@@ -33,6 +41,9 @@ export const SelectToolCard: FC<ToolCardProps> = ({
   const toolDescription = hasProtobufMethods
     ? tool.getDescription?.()
     : (tool as any).description;
+  const conditionSource = hasProtobufMethods
+    ? getToolConditionSource(tool.getExecutionoptionsList?.())
+    : getToolConditionSource((tool as any).buildinToolConfig?.parameters || []);
 
   const toolMeta = BUILDIN_TOOLS.find(x => x.code === executionMethod);
 
@@ -57,14 +68,23 @@ export const SelectToolCard: FC<ToolCardProps> = ({
           </div>
           <div className="flex items-center gap-1">
             {toolMeta && (
-              <Tag type="gray" size="sm">{toolMeta.name}</Tag>
+              <Tag type="gray" size="sm">
+                {toolMeta.name}
+              </Tag>
             )}
             {isMCP && (
-              <Tag type="purple" size="sm">MCP</Tag>
+              <Tag type="purple" size="sm">
+                MCP
+              </Tag>
             )}
             {!toolMeta && !isMCP && (
               <Tag type="gray" size="sm" className="capitalize">
                 {executionMethod.replace(/_/g, ' ')}
+              </Tag>
+            )}
+            {conditionSource !== 'all' && (
+              <Tag type="blue" size="sm">
+                Source: {getToolConditionSourceLabel(conditionSource)}
               </Tag>
             )}
           </div>

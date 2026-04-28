@@ -191,7 +191,14 @@ func (vng *vonageWebsocketStreamer) Send(response internal_type.Stream) error {
 				vng.Input(disc)
 			}
 		case protos.ToolCallAction_TOOL_CALL_ACTION_TRANSFER_CONVERSATION:
-			vng.Logger.Warnw("Vonage call transfer not yet implemented", "to", data.GetArgs()["to"])
+			// Vonage transfer is NOT implemented. A blind transfer would be
+			// possible via the Voice API "Transfer Call" PUT
+			// (https://api.nexmo.com/v1/calls/{uuid}) with an NCCO containing a
+			// `connect` action — equivalent to Twilio `<Dial>`. That path would
+			// support post_transfer_action=end_call only. resume_ai would
+			// require a B2BUA bridge (separate outbound call + WebSocket
+			// reconnect on hangup) which Vonage does not natively support.
+			vng.Logger.Warnw("Vonage call transfer not yet implemented", "transfer_to", data.GetArgs()["transfer_to"])
 			vng.Input(&protos.ConversationToolCallResult{
 				Id:     data.GetId(),
 				ToolId: data.GetToolId(), Name: data.GetName(), Action: data.GetAction(),

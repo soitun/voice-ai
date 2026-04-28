@@ -9,6 +9,7 @@ package channel_webrtc
 import (
 	"sync"
 	"testing"
+	"time"
 
 	channel_base "github.com/rapidaai/api/assistant-api/internal/channel/base"
 	webrtc_internal "github.com/rapidaai/api/assistant-api/internal/channel/webrtc/internal"
@@ -208,4 +209,34 @@ func TestSend_EndConversation(t *testing.T) {
 	}
 	err := s.Send(msg)
 	assert.NoError(t, err)
+}
+
+func TestSend_TransferConversation_PushesFailedResult(t *testing.T) {
+	t.Parallel()
+	s := newTestStreamer(t)
+
+	msg := &protos.ConversationToolCall{
+		Id:     "tc-transfer",
+		ToolId: "tool-transfer",
+		Name:   "transfer_call",
+		Action: protos.ToolCallAction_TOOL_CALL_ACTION_TRANSFER_CONVERSATION,
+		Args:   map[string]string{"transfer_to": "+15551234567"},
+	}
+
+	err := s.Send(msg)
+	require.NoError(t, err)
+
+	select {
+	case incoming := <-s.CriticalCh:
+		result, ok := incoming.(*protos.ConversationToolCallResult)
+		require.True(t, ok, "expected ConversationToolCallResult, got %T", incoming)
+		assert.Equal(t, "tc-transfer", result.GetId())
+		assert.Equal(t, "tool-transfer", result.GetToolId())
+		assert.Equal(t, "transfer_call", result.GetName())
+		assert.Equal(t, protos.ToolCallAction_TOOL_CALL_ACTION_TRANSFER_CONVERSATION, result.GetAction())
+		assert.Equal(t, "failed", result.GetResult()["status"])
+		assert.Contains(t, result.GetResult()["reason"], "transfer not supported for WebRTC")
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for ConversationToolCallResult")
+	}
 }

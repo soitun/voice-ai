@@ -6,7 +6,12 @@ import { FC } from 'react';
 import { LinkNotification } from '@/app/components/carbon/notification';
 import { useGlobalNavigation } from '@/hooks/use-global-navigator';
 import { toHumanReadableRelativeTime } from '@/utils/date';
-import { Breadcrumb, BreadcrumbItem, ComboButton, MenuItem } from '@carbon/react';
+import {
+  Breadcrumb,
+  BreadcrumbItem,
+  ComboButton,
+  MenuItem,
+} from '@carbon/react';
 
 export const Overview: FC<{ currentAssistant: Assistant }> = ({
   currentAssistant,
@@ -40,7 +45,9 @@ export const Overview: FC<{ currentAssistant: Assistant }> = ({
               <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 tabular-nums">
                 Last updated{' '}
                 {toHumanReadableRelativeTime(
-                  currentAssistant.getAssistantprovidermodel()?.getCreateddate()!,
+                  currentAssistant
+                    .getAssistantprovidermodel()
+                    ?.getCreateddate()!,
                 )}
               </p>
             )}

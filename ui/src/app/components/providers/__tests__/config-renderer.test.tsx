@@ -152,11 +152,26 @@ jest.mock('@carbon/react', () => {
           ),
         ),
       ),
-    ComboBox: ({ id, titleText, items = [], selectedItem, onChange }: any) =>
+    ComboBox: ({
+      id,
+      titleText,
+      items = [],
+      selectedItem,
+      onChange,
+      onBlur,
+      placeholder,
+    }: any) =>
       React.createElement(
         'div',
         null,
         titleText ? React.createElement('span', null, titleText) : null,
+        React.createElement('input', {
+          id: `${id}-input`,
+          defaultValue: selectedItem?.name || '',
+          placeholder: placeholder || '',
+          onChange: () => {},
+          onBlur,
+        }),
         React.createElement(
           'select',
           {
@@ -1025,6 +1040,60 @@ describe('ConfigRenderer', () => {
 
       const slider = screen.getByRole('slider') as HTMLInputElement;
       expect(slider.value).toBe('0.33');
+    });
+
+    it('accepts custom model value in combobox and preserves it on rerender', () => {
+      const customModelConfig: CategoryConfig = {
+        parameters: [
+          {
+            key: 'model.id',
+            label: 'Model',
+            type: 'dropdown',
+            required: true,
+            customValue: true,
+            data: 'models.json',
+            valueField: 'id',
+          },
+        ],
+      };
+
+      const { rerender } = render(
+        <ConfigRenderer
+          provider="test"
+          category="text"
+          config={customModelConfig}
+          parameters={[]}
+          onParameterChange={mockOnChange}
+        />,
+      );
+
+      const modelInput = screen.getByPlaceholderText('Select model');
+      fireEvent.change(modelInput, { target: { value: 'custom-model-x' } });
+      fireEvent.blur(modelInput);
+
+      expect(mockOnChange).toHaveBeenCalled();
+      const committedParams = mockOnChange.mock.calls
+        .map(call => call[0] as Metadata[])
+        .find(params =>
+          params.some(
+            m => m.getKey() === 'model.id' && m.getValue() === 'custom-model-x',
+          ),
+        );
+      expect(committedParams).toBeDefined();
+
+      rerender(
+        <ConfigRenderer
+          provider="test"
+          category="text"
+          config={customModelConfig}
+          parameters={committedParams!}
+          onParameterChange={mockOnChange}
+        />,
+      );
+
+      expect(screen.getByPlaceholderText('Select model')).toHaveValue(
+        'custom-model-x',
+      );
     });
   });
 

@@ -216,7 +216,6 @@ func (ct *cartesiaTTS) Transform(ctx context.Context, in internal_type.Packet) e
 		return nil
 
 	case internal_type.TTSTextPacket:
-		// Fallback reconnect: handles Initialize() failure or an unintentional drop.
 		if connection == nil {
 			if err := ct.Initialize(); err != nil {
 				ct.onPacket(internal_type.TTSErrorPacket{

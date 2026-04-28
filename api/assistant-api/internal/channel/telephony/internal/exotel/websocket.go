@@ -170,6 +170,12 @@ func (exotel *exotelWebsocketStreamer) Send(response internal_type.Stream) error
 				exotel.Input(disc)
 			}
 		case protos.ToolCallAction_TOOL_CALL_ACTION_TRANSFER_CONVERSATION:
+			// Exotel transfer is NOT supported. Exotel exposes call-flow level
+			// "Connect" applets but no live mid-call transfer API on the
+			// streaming WebSocket leg. A blind transfer would require building
+			// an out-of-band Connect/Dial app and redirecting via the Exotel
+			// HTTP API; resume_ai is not feasible without a B2BUA bridge
+			// (Exotel does not provide an SDP/RTP path to bridge against).
 			exotel.Logger.Warnw("Call transfer not supported for Exotel")
 			exotel.Input(&protos.ConversationToolCallResult{
 				Id:     data.GetId(),

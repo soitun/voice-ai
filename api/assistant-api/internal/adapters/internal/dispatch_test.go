@@ -9,11 +9,12 @@ import (
 	"testing"
 	"time"
 
-	internal_agent_executor "github.com/rapidaai/api/assistant-api/internal/agent/executor"
 	internal_assistant_entity "github.com/rapidaai/api/assistant-api/internal/entity/assistants"
 	internal_conversation_entity "github.com/rapidaai/api/assistant-api/internal/entity/conversations"
 	internal_message_gorm "github.com/rapidaai/api/assistant-api/internal/entity/messages"
+	internal_llm "github.com/rapidaai/api/assistant-api/internal/llm"
 	internal_services "github.com/rapidaai/api/assistant-api/internal/services"
+	internal_tool "github.com/rapidaai/api/assistant-api/internal/tool"
 	internal_type "github.com/rapidaai/api/assistant-api/internal/type"
 	"github.com/rapidaai/pkg/commons"
 	gorm_model "github.com/rapidaai/pkg/models/gorm"
@@ -45,7 +46,7 @@ type executorStub struct {
 	err     error
 }
 
-var _ internal_agent_executor.AssistantExecutor = (*executorStub)(nil)
+var _ internal_llm.AssistantExecutor = (*executorStub)(nil)
 
 func (e *executorStub) Initialize(context.Context, internal_type.Communication, *protos.ConversationInitialization) error {
 	return nil
@@ -57,8 +58,8 @@ func (e *executorStub) Execute(_ context.Context, _ internal_type.Communication,
 	e.mu.Unlock()
 	return e.err
 }
-func (e *executorStub) GetToolExecutor() internal_agent_executor.ToolExecutor { return nil }
-func (e *executorStub) Close(context.Context) error                           { return nil }
+func (e *executorStub) GetToolExecutor() internal_tool.ToolExecutor { return nil }
+func (e *executorStub) Close(context.Context) error                 { return nil }
 func (e *executorStub) getPackets() []internal_type.Packet {
 	e.mu.Lock()
 	defer e.mu.Unlock()
@@ -154,6 +155,33 @@ func (n *noopConversationService) ApplyMessageMetadata(_ context.Context, _ rapi
 	return nil, nil
 }
 
+// noopAssistantToolService prevents nil dereference in low-dispatcher tool-log handlers.
+type noopAssistantToolService struct {
+	internal_services.AssistantToolService
+}
+
+func (n *noopAssistantToolService) CreateLog(
+	_ context.Context,
+	_ rapida_types.SimplePrinciple,
+	_, _ uint64,
+	_, _, _ string,
+	_ type_enums.RecordState,
+	_ []byte,
+) (*internal_assistant_entity.AssistantToolLog, error) {
+	return &internal_assistant_entity.AssistantToolLog{}, nil
+}
+
+func (n *noopAssistantToolService) UpdateLog(
+	_ context.Context,
+	_ rapida_types.SimplePrinciple,
+	_ string,
+	_ uint64,
+	_ type_enums.RecordState,
+	_ []byte,
+) (*internal_assistant_entity.AssistantToolLog, error) {
+	return &internal_assistant_entity.AssistantToolLog{}, nil
+}
+
 // vadStub captures Process calls.
 type vadStub struct {
 	mu      sync.Mutex
@@ -232,6 +260,7 @@ func newTestRequestor(t *testing.T, ctx context.Context) *genericRequestor {
 		assistant:             &internal_assistant_entity.Assistant{},
 		assistantConversation: &internal_conversation_entity.AssistantConversation{Audited: gorm_model.Audited{Id: 1}},
 		conversationService:   &noopConversationService{},
+		assistantToolService:  &noopAssistantToolService{},
 		histories:             make([]internal_type.MessagePacket, 0),
 		criticalCh:            make(chan packetEnvelope, 256),
 		inputCh:               make(chan packetEnvelope, 4096),
@@ -282,7 +311,6 @@ func TestOnPacket_RoutesToCorrectChannel(t *testing.T) {
 		{"TTSInterruptPacket", internal_type.TTSInterruptPacket{ContextID: "c"}, "critical"},
 		{"LLMInterruptPacket", internal_type.LLMInterruptPacket{ContextID: "c"}, "critical"},
 		{"TurnChangePacket", internal_type.TurnChangePacket{ContextID: "c", PreviousContextID: "p"}, "critical"},
-		{"LLMToolCallPacket_Action", internal_type.LLMToolCallPacket{ContextID: "c", Action: protos.ToolCallAction_TOOL_CALL_ACTION_END_CONVERSATION}, "critical"},
 		{"InjectMessagePacket", internal_type.InjectMessagePacket{ContextID: "c"}, "output"},
 
 		// Input
@@ -296,6 +324,7 @@ func TestOnPacket_RoutesToCorrectChannel(t *testing.T) {
 		{"EndOfSpeechPacket", internal_type.EndOfSpeechPacket{ContextID: "c"}, "input"},
 		{"InterimEndOfSpeechPacket", internal_type.InterimEndOfSpeechPacket{ContextID: "c"}, "input"},
 		{"UserInputPacket", internal_type.UserInputPacket{ContextID: "c"}, "input"},
+		{"LLMToolResultPacket", internal_type.LLMToolResultPacket{ContextID: "c", Action: protos.ToolCallAction_TOOL_CALL_ACTION_END_CONVERSATION}, "input"},
 
 		// Output
 		{"LLMResponseDeltaPacket", internal_type.LLMResponseDeltaPacket{ContextID: "c"}, "output"},
@@ -305,14 +334,15 @@ func TestOnPacket_RoutesToCorrectChannel(t *testing.T) {
 		{"TTSTextPacket", internal_type.TTSTextPacket{ContextID: "c"}, "output"},
 		{"TextToSpeechAudioPacket", internal_type.TextToSpeechAudioPacket{ContextID: "c"}, "output"},
 		{"TextToSpeechEndPacket", internal_type.TextToSpeechEndPacket{ContextID: "c"}, "output"},
+		{"LLMToolCallPacket_Action", internal_type.LLMToolCallPacket{ContextID: "c", Action: protos.ToolCallAction_TOOL_CALL_ACTION_END_CONVERSATION}, "output"},
 
 		// Low
 		{"RecordUserAudioPacket", internal_type.RecordUserAudioPacket{ContextID: "c"}, "low"},
 		{"RecordAssistantAudioPacket", internal_type.RecordAssistantAudioPacket{ContextID: "c"}, "low"},
 		{"SaveMessagePacket", internal_type.SaveMessagePacket{ContextID: "c"}, "low"},
 		{"ConversationEventPacket", internal_type.ConversationEventPacket{ContextID: "c"}, "low"},
-		{"LLMToolCallPacket", internal_type.LLMToolCallPacket{ContextID: "c"}, "critical"},
-		{"LLMToolResultPacket", internal_type.LLMToolResultPacket{ContextID: "c"}, "critical"},
+		{"LLMToolCallPacket", internal_type.LLMToolCallPacket{ContextID: "c"}, "output"},
+		{"LLMToolResultPacket", internal_type.LLMToolResultPacket{ContextID: "c"}, "input"},
 		{"UserMessageMetricPacket", internal_type.UserMessageMetricPacket{ContextID: "c"}, "low"},
 		{"AssistantMessageMetricPacket", internal_type.AssistantMessageMetricPacket{ContextID: "c"}, "low"},
 	}
@@ -1058,8 +1088,8 @@ func (e *e2eExecutorStub) Execute(_ context.Context, comm internal_type.Communic
 	}
 	return nil
 }
-func (e *e2eExecutorStub) GetToolExecutor() internal_agent_executor.ToolExecutor { return nil }
-func (e *e2eExecutorStub) Close(context.Context) error                           { return nil }
+func (e *e2eExecutorStub) GetToolExecutor() internal_tool.ToolExecutor { return nil }
+func (e *e2eExecutorStub) Close(context.Context) error                 { return nil }
 func (e *e2eExecutorStub) getPackets() []internal_type.Packet {
 	e.mu.Lock()
 	defer e.mu.Unlock()
@@ -1552,7 +1582,8 @@ func (t *ttsStub) getPackets() []internal_type.Packet {
 // realisticTTSStub simulates real-world TTS provider behavior:
 //   - After completing a speak cycle (TTSDonePacket processed),
 //     the provider enters "completed" state (connection stale).
-//   - An InterruptionDetectedPacket reinitializes the connection → "ready" state.
+//   - A TTSInterruptPacket (legacy: InterruptionDetectedPacket) reinitializes
+//     the connection → "ready" state.
 //   - New text in "ready" state is spoken normally.
 //   - New text in "completed" state is silently dropped (stale connection).
 //   - Includes a synthDelay to simulate real TTS API latency.
@@ -1579,10 +1610,25 @@ func (t *realisticTTSStub) Transform(ctx context.Context, pkt internal_type.Pack
 	cb := t.onPacket
 	audio := t.audio
 
-	// Handle interrupt — reinitializes the connection
+	// Handle interrupt — reinitializes the connection.
+	// Keep legacy InterruptionDetectedPacket support for backward compatibility.
+	if _, ok := pkt.(internal_type.TTSInterruptPacket); ok {
+		t.state = "ready"
+		t.interruptCount++
+		t.mu.Unlock()
+		return nil
+	}
 	if _, ok := pkt.(internal_type.InterruptionDetectedPacket); ok {
 		t.state = "ready"
 		t.interruptCount++
+		t.mu.Unlock()
+		return nil
+	}
+
+	// Only speech packets consume the synthesizer state machine.
+	_, isText := pkt.(internal_type.TTSTextPacket)
+	_, isDone := pkt.(internal_type.TTSDonePacket)
+	if !isText && !isDone {
 		t.mu.Unlock()
 		return nil
 	}
@@ -1640,8 +1686,9 @@ func (t *realisticTTSStub) getCounters() (interrupts, speaks, emits, dropped int
 //   - After completing a speak cycle (TTSDonePacket → audio emitted),
 //     the provider enters "completed" state.
 //   - In "completed" state, new text is silently dropped (connection is stale).
-//   - An InterruptionDetectedPacket reinitializes the connection, moving the
-//     provider back to "ready" state so it can speak again.
+//   - A TTSInterruptPacket (legacy: InterruptionDetectedPacket) reinitializes
+//     the connection, moving the provider back to "ready" state so it can
+//     speak again.
 //
 // This reproduces the production bug where idle message audio is missing
 // because no TTSInterruptPacket is sent to reinitialize the TTS provider.
@@ -1671,10 +1718,25 @@ func (t *statefulTTSStub) Transform(ctx context.Context, pkt internal_type.Packe
 	cb := t.onPacket
 	audio := t.audio
 
-	// Handle interrupt — reinitializes the connection
+	// Handle interrupt — reinitializes the connection.
+	// Keep legacy InterruptionDetectedPacket support for backward compatibility.
+	if _, ok := pkt.(internal_type.TTSInterruptPacket); ok {
+		t.state = "ready"
+		t.initCount++
+		t.mu.Unlock()
+		return nil
+	}
 	if _, ok := pkt.(internal_type.InterruptionDetectedPacket); ok {
 		t.state = "ready"
 		t.initCount++
+		t.mu.Unlock()
+		return nil
+	}
+
+	// Only speech packets consume the synthesizer state machine.
+	_, isText := pkt.(internal_type.TTSTextPacket)
+	_, isDone := pkt.(internal_type.TTSDonePacket)
+	if !isText && !isDone {
 		t.mu.Unlock()
 		return nil
 	}
@@ -2292,29 +2354,29 @@ func TestBug_IdleTimeoutCount_ResetByInterruption(t *testing.T) {
 			"idleTimeoutCount should be %d after %d idle timeouts, but got %d (reset by handleInterruption?)", i, i, currentCount)
 	}
 
-	// After `backoff` idle timeouts, the next call should emit END_CONVERSATION.
+	// After `backoff` idle timeouts, the next call should emit IDLE_TIMEOUT disconnection.
 	t.Log("--- final idle timeout (should trigger disconnect) ---")
 	err := r.onIdleTimeout(ctx)
 	require.NoError(t, err)
 
-	// Verify END_CONVERSATION directive was emitted
-	directiveFound := false
+	// Verify disconnection notification was emitted
+	disconnectionFound := false
 	require.Eventually(t, func() bool {
 		sent := streamer.getSent()
 		for _, msg := range sent {
-			if d, ok := msg.(*protos.ConversationToolCall); ok {
-				if d.GetAction() == protos.ToolCallAction_TOOL_CALL_ACTION_END_CONVERSATION {
-					directiveFound = true
+			if d, ok := msg.(*protos.ConversationDisconnection); ok {
+				if d.GetType() == protos.ConversationDisconnection_DISCONNECTION_TYPE_IDLE_TIMEOUT {
+					disconnectionFound = true
 					return true
 				}
 			}
 		}
 		return false
 	}, 3*time.Second, 20*time.Millisecond,
-		"END_CONVERSATION directive should be emitted after %d idle timeouts", backoff)
+		"IDLE_TIMEOUT disconnection should be emitted after %d idle timeouts", backoff)
 
-	assert.True(t, directiveFound, "conversation should have been ended after reaching idle timeout backoff threshold")
-	t.Logf("idle timeout backoff test complete: directiveFound=%v", directiveFound)
+	assert.True(t, disconnectionFound, "conversation should be disconnected after reaching idle timeout backoff threshold")
+	t.Logf("idle timeout backoff test complete: disconnectionFound=%v", disconnectionFound)
 }
 
 // =============================================================================
@@ -2549,32 +2611,32 @@ func TestScenario_WelcomeThenIdleTimeoutsUntilDisconnect(t *testing.T) {
 		t.Logf("  idle timeout %d: text ✓, TTS ✓, audio ✓, count=%d", i, r.idleTimeoutCount)
 	}
 
-	// === Final step: Next idle timeout should trigger END_CONVERSATION ===
+	// === Final step: Next idle timeout should trigger IDLE_TIMEOUT disconnection ===
 	t.Logf("=== Step %d: Final idle timeout (should disconnect, count=%d, backoff=%d) ===", backoff+2, r.idleTimeoutCount, backoff)
 
 	err = r.onIdleTimeout(ctx)
 	require.NoError(t, err)
 
-	// Allow dispatcher to process the directive
+	// Allow dispatcher to process the disconnection
 	time.Sleep(200 * time.Millisecond)
 
-	// Verify END_CONVERSATION directive was sent
-	directiveFound := false
+	// Verify IDLE_TIMEOUT disconnection was sent
+	disconnectionFound := false
 	require.Eventually(t, func() bool {
 		sent := streamer.getSent()
 		for _, msg := range sent {
-			if d, ok := msg.(*protos.ConversationToolCall); ok {
-				if d.GetAction() == protos.ToolCallAction_TOOL_CALL_ACTION_END_CONVERSATION {
-					directiveFound = true
+			if d, ok := msg.(*protos.ConversationDisconnection); ok {
+				if d.GetType() == protos.ConversationDisconnection_DISCONNECTION_TYPE_IDLE_TIMEOUT {
+					disconnectionFound = true
 					return true
 				}
 			}
 		}
 		return false
 	}, 3*time.Second, 20*time.Millisecond,
-		"END_CONVERSATION should fire after %d idle timeouts (backoff threshold)", backoff)
+		"IDLE_TIMEOUT disconnection should fire after %d idle timeouts (backoff threshold)", backoff)
 
-	assert.True(t, directiveFound)
+	assert.True(t, disconnectionFound)
 
 	// Count how many idle messages were sent. Each idle message produces 2 text
 	// sends (delta + done via TTSTextPacket), so expect backoff*2 text entries.

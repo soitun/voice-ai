@@ -1,8 +1,10 @@
 package internal_sip_telephony
 
 import (
+	"net/http/httptest"
 	"testing"
 
+	"github.com/gin-gonic/gin"
 	"github.com/rapidaai/api/assistant-api/config"
 	"github.com/rapidaai/pkg/commons"
 	"github.com/rapidaai/protos"
@@ -147,5 +149,37 @@ func TestParseConfig_InvalidJSONHeadersIgnored(t *testing.T) {
 
 	if cfg.CustomHeaders != nil {
 		t.Fatalf("expected nil custom headers for invalid JSON, got %v", cfg.CustomHeaders)
+	}
+}
+
+func TestReceiveCall_PopulatesDialedNumberFromFallbackParams(t *testing.T) {
+	telephony := newSIPTelephonyForTest()
+
+	gin.SetMode(gin.TestMode)
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	req := httptest.NewRequest("GET", "/?caller=15551234567&destination=18005550100&call_id=sip-call-1", nil)
+	c.Request = req
+
+	info, err := telephony.ReceiveCall(c)
+	if err != nil {
+		t.Fatalf("ReceiveCall() error = %v", err)
+	}
+
+	if info.CallerNumber != "15551234567" {
+		t.Fatalf("expected CallerNumber 15551234567, got %q", info.CallerNumber)
+	}
+	if info.FromNumber != "18005550100" {
+		t.Fatalf("expected FromNumber from destination fallback, got %q", info.FromNumber)
+	}
+	if info.ChannelUUID != "sip-call-1" {
+		t.Fatalf("expected ChannelUUID sip-call-1, got %q", info.ChannelUUID)
+	}
+	payload, ok := info.StatusInfo.Payload.(map[string]string)
+	if !ok {
+		t.Fatalf("expected map[string]string payload, got %T", info.StatusInfo.Payload)
+	}
+	if got := payload["destination"]; got != "18005550100" {
+		t.Fatalf("expected status payload destination=18005550100, got %q", got)
 	}
 }

@@ -252,6 +252,25 @@ func (f InjectMessagePacket) ContextId() string { return f.ContextID }
 func (f InjectMessagePacket) Content() string   { return f.Text }
 func (f InjectMessagePacket) Role() string      { return "rapida" }
 
+// StartIdleTimeoutPacket explicitly (re)starts the idle timeout timer.
+// Routed on outputCh so producers can order it relative to InjectMessagePacket
+// and TTS output packets that share the same channel.
+type StartIdleTimeoutPacket struct {
+	ContextID string
+}
+
+func (f StartIdleTimeoutPacket) ContextId() string { return f.ContextID }
+
+// StopIdleTimeoutPacket explicitly stops the idle timeout timer.
+// ResetCount = true also clears the consecutive idle backoff counter
+// (used when the user actively engages, not for system-driven stops).
+type StopIdleTimeoutPacket struct {
+	ContextID  string
+	ResetCount bool
+}
+
+func (f StopIdleTimeoutPacket) ContextId() string { return f.ContextID }
+
 // =============================================================================
 // LLM Pipeline — execute -> delta -> done -> error -> tools
 // =============================================================================

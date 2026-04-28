@@ -85,28 +85,22 @@ func (r *genericRequestor) initializeGreeting(ctx context.Context, behavior *int
 			Data: map[string]string{"type": "greeting", "text_chars": fmt.Sprintf("%d", len(greetingContent))},
 			Time: time.Now(),
 		},
+		internal_type.StartIdleTimeoutPacket{ContextID: r.GetID()},
 	); err != nil {
 		r.logger.Errorf("error while sending greeting message: %v", err)
 	}
 }
 
-// restartTimers restarts idle timeout and max session duration timers from scratch.
-// Called after an action tool call completes (e.g., transfer returns to agent).
-func (r *genericRequestor) restartTimers(ctx context.Context) {
-	behavior, err := r.GetBehavior()
-	if err != nil {
-		return
-	}
-	r.startIdleTimeoutTimer(ctx)
-	r.initializeMaxSessionDuration(ctx, behavior)
-}
-
 // initializeIdleTimeout starts the idle timeout timer if configured.
+// Goes through the packet pipeline so initialization shares the same timer
+// lifecycle path as every other start/stop site.
 func (r *genericRequestor) initializeIdleTimeout(ctx context.Context, behavior *internal_assistant_entity.AssistantDeploymentBehavior) {
 	if behavior.IdleTimeout == nil || *behavior.IdleTimeout <= 0 {
 		return
 	}
-	r.startIdleTimeoutTimer(ctx)
+	if err := r.OnPacket(ctx, internal_type.StartIdleTimeoutPacket{ContextID: r.GetID()}); err != nil {
+		r.logger.Errorf("error enqueueing start idle timeout packet: %v", err)
+	}
 }
 
 // initializeMaxSessionDuration sets up the max session duration timer if configured.
@@ -139,12 +133,14 @@ func (r *genericRequestor) OnError(ctx context.Context) error {
 
 	r.Transition(Interrupted)
 	if err := r.OnPacket(ctx,
+		internal_type.TTSInterruptPacket{ContextID: r.GetID()},
 		internal_type.InjectMessagePacket{ContextID: r.GetID(), Text: mistakeContent},
 		internal_type.ConversationEventPacket{
 			Name: "behavior",
 			Data: map[string]string{"type": "error", "text_chars": fmt.Sprintf("%d", len(mistakeContent))},
 			Time: time.Now(),
 		},
+		internal_type.StartIdleTimeoutPacket{ContextID: r.GetID()},
 	); err != nil {
 		r.logger.Errorf("error while sending error message: %v", err)
 	}
@@ -191,14 +187,11 @@ func (r *genericRequestor) onIdleTimeout(ctx context.Context) error {
 	// InjectMessagePacket routes to outputCh; the context must be rotated
 	// before enqueueing so GetID() returns the new context.
 	r.Transition(Interrupted)
-	// Reinitialize TTS synchronously — the provider enters "completed" state
-	// after speaking and needs an interrupt to accept new text. Calling inline
-	// guarantees TTS is ready before InjectMessagePacket reaches handleSpeakText.
-	if r.textToSpeechTransformer != nil {
-		r.textToSpeechTransformer.Transform(ctx, internal_type.InterruptionDetectedPacket{ContextID: r.GetID()})
-	}
+	contextID := r.GetID()
+
 	if err := r.OnPacket(ctx,
-		internal_type.InjectMessagePacket{ContextID: r.GetID(), Text: timeoutContent},
+		internal_type.TTSInterruptPacket{ContextID: contextID},
+		internal_type.InjectMessagePacket{ContextID: contextID, Text: timeoutContent},
 		internal_type.ConversationEventPacket{
 			Name: "behavior",
 			Data: map[string]string{
@@ -208,6 +201,7 @@ func (r *genericRequestor) onIdleTimeout(ctx context.Context) error {
 			},
 			Time: time.Now(),
 		},
+		internal_type.StartIdleTimeoutPacket{ContextID: contextID},
 	); err != nil {
 		r.logger.Errorf("error while sending idle timeout message: %v", err)
 	}
@@ -226,39 +220,11 @@ func (r *genericRequestor) getIdleTimeoutMessage(behavior *internal_assistant_en
 	return defaultTimeoutMessage
 }
 
-// StartIdleTimeoutTimer starts a timer that triggers OnIdleTimeout when the bot
-// has spoken but the user hasn't responded within the configured duration.
-// The inputDuration parameter extends the idle timeout to account for user input time.
-func (r *genericRequestor) startIdleTimeoutTimer(ctx context.Context, inputDuration ...time.Duration) {
-	if r.idleTimeoutTimer != nil {
-		r.idleTimeoutTimer.Stop()
-	}
-
-	behavior, err := r.GetBehavior()
-	if err != nil {
-		return
-	}
-
-	if behavior.IdleTimeout == nil || *behavior.IdleTimeout == 0 {
-		return
-	}
-
-	timeoutDuration := time.Duration(*behavior.IdleTimeout) * time.Second
-	if len(inputDuration) > 0 && inputDuration[0] > 0 {
-		timeoutDuration += inputDuration[0]
-	}
-
-	r.idleTimeoutDeadline = time.Now().Add(timeoutDuration)
-	r.idleTimeoutTimer = time.AfterFunc(timeoutDuration, func() {
-		if err := r.onIdleTimeout(ctx); err != nil {
-			r.logger.Errorf("error while handling idle timeout: %v", err)
-		}
-	})
-}
-
 // extendIdleTimeoutTimer pushes the existing idle timeout further into the future
 // by the given duration. Used to account for buffered TTS audio that the client
-// is still playing back.
+// is still playing back. Per-chunk hot path called from handleTTSAudio on the
+// output dispatcher goroutine — not converted to a packet to avoid per-chunk
+// channel hops. No-op if the timer is not currently running.
 func (r *genericRequestor) extendIdleTimeoutTimer(d time.Duration) {
 	if r.idleTimeoutTimer == nil || d <= 0 {
 		return
@@ -267,23 +233,4 @@ func (r *genericRequestor) extendIdleTimeoutTimer(d time.Duration) {
 	if remaining := time.Until(r.idleTimeoutDeadline); remaining > 0 {
 		r.idleTimeoutTimer.Reset(remaining)
 	}
-}
-
-// stopIdleTimeoutTimerAndResetCount stops the timer AND resets the consecutive
-// idle backoff counter. Used when the user actually speaks — signaling active
-// engagement and breaking the consecutive idle chain.
-func (r *genericRequestor) stopIdleTimeoutTimerAndResetCount() {
-	r.stopIdleTimeoutTimer()
-	r.idleTimeoutCount = 0
-}
-
-// stopIdleTimeoutTimer stops the idle timeout timer without resetting the
-// retry count. The count is only reset when the user actually speaks
-// (handleNormalizedText), not when a system-generated interrupt fires.
-func (r *genericRequestor) stopIdleTimeoutTimer() {
-	if r.idleTimeoutTimer != nil {
-		r.idleTimeoutTimer.Stop()
-		r.idleTimeoutTimer = nil
-	}
-	r.idleTimeoutDeadline = time.Time{}
 }

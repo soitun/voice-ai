@@ -235,7 +235,7 @@ func (s *Session) isValidTransition(from, to CallState) bool {
 		CallStateConnected:       {CallStateOnHold, CallStateTransferring, CallStateEnding},
 		CallStateOnHold:          {CallStateConnected, CallStateEnding},
 		CallStateTransferring:    {CallStateConnected, CallStateBridgeConnected, CallStateEnding},
-		CallStateBridgeConnected: {CallStateEnding},
+		CallStateBridgeConnected: {CallStateConnected, CallStateEnding},
 	}
 
 	allowed, exists := validTransitions[from]

@@ -19,26 +19,15 @@ import (
 
 // Store provides operations to save and retrieve call contexts from Postgres.
 //
-// Call contexts are session-scoped records that bridge the HTTP call-setup request
-// (inbound webhook or outbound gRPC) and the media connection (AudioSocket/WebSocket).
-//
-// Status lifecycle: PENDING → CLAIMED
-//   - Save creates with PENDING (call in progress)
-//   - Claim transitions to CLAIMED (call ended, context consumed)
-//   - Get reads regardless of status (async callbacks may arrive anytime)
+// Call contexts bridge the HTTP call-setup request (inbound webhook or outbound
+// gRPC) and the media connection. Status lifecycle: PENDING → CLAIMED. Save
+// creates PENDING; Claim atomically marks the context consumed by the media
+// path; Get reads regardless of status. Claim is idempotent at the call level
+// — only the first caller wins, subsequent callers get an error.
 type Store interface {
-	// Save stores a call context with status PENDING and a generated contextId.
 	Save(ctx context.Context, cc *CallContext) (string, error)
-
-	// Get retrieves a call context by contextId regardless of status.
-	// Used by outbound dispatcher (read call info) and async callbacks.
 	Get(ctx context.Context, contextID string) (*CallContext, error)
-
-	// Claim atomically transitions PENDING → CLAIMED. Only one caller wins.
-	// Called when the call session ends to mark the context as consumed.
 	Claim(ctx context.Context, contextID string) (*CallContext, error)
-
-	// UpdateField sets a single column on an existing call context.
 	UpdateField(ctx context.Context, contextID, field, value string) error
 }
 

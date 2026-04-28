@@ -90,6 +90,26 @@ export const ConfigRenderer: React.FC<{
       onParameterChange(updatedParams);
       return;
     }
+    if (sourceParam.customValue && nextModelValue !== '') {
+      const data = sourceParam.data
+        ? loadProviderData(provider, sourceParam.data)
+        : [];
+      const valueField = sourceParam.valueField || 'id';
+      const hasCatalogMatch = data.some((item: any) => {
+        const catalogValue = item?.[valueField];
+        if (catalogValue !== undefined && String(catalogValue) === nextModelValue) {
+          return true;
+        }
+        return (
+          typeof item?.name === 'string' &&
+          item.name.toLowerCase() === nextModelValue.toLowerCase()
+        );
+      });
+      if (!hasCatalogMatch) {
+        onParameterChange(updatedParams);
+        return;
+      }
+    }
 
     const includeCredential = updatedParams.some(
       p => p.getKey() === 'rapida.credential_id',
@@ -420,7 +440,22 @@ const DropdownField: React.FC<{
   const data = param.data ? loadProviderData(provider, param.data) : [];
   const valueField = param.valueField || 'id';
   const selectedItem =
-    data.find((item: any) => item[valueField] === value) || null;
+    data.find((item: any) => item[valueField] === value) ||
+    (param.customValue && value
+      ? { [valueField]: value, name: value }
+      : null);
+  const commitCustomValue = (rawInput: string) => {
+    const inputValue = rawInput?.trim();
+    if (!param.customValue || !inputValue) return;
+    const hasMatch = data.some(
+      (d: any) =>
+        String(d.name || '').toLowerCase() === inputValue.toLowerCase() ||
+        String(d[valueField] || '') === inputValue,
+    );
+    if (!hasMatch) {
+      onChange(inputValue);
+    }
+  };
 
   if (param.customValue || param.searchable) {
     return (
@@ -432,20 +467,18 @@ const DropdownField: React.FC<{
           selectedItem={selectedItem}
           itemToString={(item: any) => item?.name || ''}
           placeholder={`Select ${param.label.toLowerCase()}`}
-          onChange={({ selectedItem: item }: any) => {
+          onChange={({ selectedItem: item, inputValue }: any) => {
             if (item) {
-              onChange(item[valueField], item);
+              const selectedValue =
+                item[valueField] ?? item.name ?? inputValue ?? '';
+              if (selectedValue) {
+                onChange(String(selectedValue), item);
+              }
+              return;
             }
+            commitCustomValue(inputValue || '');
           }}
-          onInputChange={(inputValue: string) => {
-            if (
-              param.customValue &&
-              inputValue &&
-              !data.find((d: any) => d.name === inputValue)
-            ) {
-              onChange(inputValue);
-            }
-          }}
+          onBlur={(e: any) => commitCustomValue(e?.target?.value || '')}
           allowCustomValue={param.customValue}
           helperText={param.helpText}
         />
@@ -615,17 +648,36 @@ function renderTextMainDropdown(
   const valueField = param.valueField || 'id';
   const currentValue = getParamValue(param.key);
   const selectedItem =
-    data.find((x: any) => x[valueField] === currentValue) || null;
+    data.find((x: any) => x[valueField] === currentValue) ||
+    (param.customValue && currentValue
+      ? { [valueField]: currentValue, name: currentValue }
+      : null);
+  const commitCustom = (rawInput: string) => {
+    const vl = rawInput?.trim();
+    if (!vl) return;
+    const hasMatch = data.some(
+      (d: any) =>
+        String(d.name || '').toLowerCase() === vl.toLowerCase() ||
+        String(d[valueField] || '') === vl,
+    );
+    if (!hasMatch) {
+      handleCustom(vl);
+    }
+  };
 
   const handleSelect = (item: any) => {
     if (!item) return;
+    const selectedValue = item[valueField] ?? item.name;
+    if (!selectedValue) return;
     if (param.linkedField) {
       updateMultipleParameters(
         [
-          { key: param.key, value: item[valueField] },
+          { key: param.key, value: String(selectedValue) },
           {
             key: param.linkedField.key,
-            value: item[param.linkedField.sourceField] ?? item[valueField],
+            value:
+              item[param.linkedField.sourceField] ??
+              String(selectedValue),
           },
         ],
         param,
@@ -659,14 +711,11 @@ function renderTextMainDropdown(
         selectedItem={selectedItem}
         itemToString={(item: any) => item?.name || ''}
         placeholder="Select model"
-        onChange={({ selectedItem: item }: any) => {
+        onChange={({ selectedItem: item, inputValue }: any) => {
           if (item) handleSelect(item);
+          else commitCustom(inputValue || '');
         }}
-        onInputChange={(inputValue: string) => {
-          if (inputValue && !data.find((d: any) => d.name === inputValue)) {
-            handleCustom(inputValue);
-          }
-        }}
+        onBlur={(e: any) => commitCustom(e?.target?.value || '')}
         allowCustomValue
       />
     );

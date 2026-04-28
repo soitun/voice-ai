@@ -200,6 +200,14 @@ func (t *sipTelephony) ReceiveCall(c *gin.Context) (*internal_type.CallInfo, err
 		return nil, fmt.Errorf("missing caller information")
 	}
 
+	dialedNumber := c.Query("to")
+	if dialedNumber == "" {
+		dialedNumber = c.Query("called")
+	}
+	if dialedNumber == "" {
+		dialedNumber = c.Query("destination")
+	}
+
 	queryParams := make(map[string]string, len(c.Request.URL.Query()))
 	for key, values := range c.Request.URL.Query() {
 		queryParams[key] = values[0]
@@ -207,6 +215,7 @@ func (t *sipTelephony) ReceiveCall(c *gin.Context) (*internal_type.CallInfo, err
 
 	info := &internal_type.CallInfo{
 		CallerNumber: clientNumber,
+		FromNumber:   dialedNumber,
 		Provider:     sipProvider,
 		Status:       "SUCCESS",
 		StatusInfo:   internal_type.StatusInfo{Event: "webhook", Payload: queryParams},

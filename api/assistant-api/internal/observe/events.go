@@ -19,9 +19,6 @@ const (
 	// ComponentSession is the conversation session lifecycle.
 	ComponentSession = "session"
 
-	// ComponentSIP is the SIP signaling layer.
-	ComponentSIP = "sip"
-
 	// ComponentTelephony is the telephony provider layer (Twilio, Asterisk, etc.)
 	ComponentTelephony = "telephony"
 
@@ -104,6 +101,7 @@ const (
 	EventResume            = "resume"
 	EventReInvite          = "reinvite"
 	EventTransferRequested = "transfer_requested"
+	EventTransferring      = "transferring"
 	EventTransferConnected = "transfer_connected"
 	EventTransferCompleted = "transfer_completed"
 	EventTransferFailed    = "transfer_failed"
@@ -112,10 +110,12 @@ const (
 	EventDTMF              = "dtmf"
 
 	// --- WebRTC-specific ---
-	EventICEConnected     = "ice_connected"
-	EventICEFailed        = "ice_failed"
-	EventPeerConnected    = "peer_connected"
-	EventPeerDisconnected = "peer_disconnected"
+	EventICEConnected       = "ice_connected"
+	EventICEFailed          = "ice_failed"
+	EventPeerConnected      = "peer_connected"
+	EventPeerFailed         = "peer_failed"
+	EventPeerDisconnected   = "peer_disconnected"
+	EventAudioTrackReceived = "audio_track_received"
 
 	// --- Tool ---
 	EventToolCallStarted   = "tool_call_started"
@@ -206,11 +206,15 @@ const (
 )
 
 // ClientMetadata returns standardized client metadata for a conversation.
-// Called from both session.go (telephony channels) and media.go (SIP).
+// Each field is emitted only when non-empty so callers can pass "" for fields
+// already covered by ConversationInitialization.Metadata.
 func ClientMetadata(phone, assistantPhone, direction, provider, providerCallID, contextID, codec, sampleRate string) []*types.Metadata {
-	md := []*types.Metadata{
-		types.NewMetadata(ClientDirection, direction),
-		types.NewMetadata(ClientTelephonyProvider, provider),
+	md := make([]*types.Metadata, 0, 8)
+	if direction != "" {
+		md = append(md, types.NewMetadata(ClientDirection, direction))
+	}
+	if provider != "" {
+		md = append(md, types.NewMetadata(ClientTelephonyProvider, provider))
 	}
 	if phone != "" {
 		md = append(md, types.NewMetadata(ClientPhone, phone))

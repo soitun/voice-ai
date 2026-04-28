@@ -43,9 +43,7 @@ func (r *genericRequestor) OnPacket(ctx context.Context, pkts ...internal_type.P
 			internal_type.TTSInterruptPacket,
 			internal_type.LLMInterruptPacket,
 			internal_type.STTInterruptPacket,
-			internal_type.TurnChangePacket,
-			internal_type.LLMToolCallPacket,
-			internal_type.LLMToolResultPacket:
+			internal_type.TurnChangePacket:
 			r.criticalCh <- e
 
 		// Input — inbound audio pipeline, VAD, STT, EOS
@@ -58,7 +56,8 @@ func (r *genericRequestor) OnPacket(ctx context.Context, pkts ...internal_type.P
 			internal_type.SpeechToTextPacket,
 			internal_type.EndOfSpeechPacket,
 			internal_type.InterimEndOfSpeechPacket,
-			internal_type.UserInputPacket:
+			internal_type.UserInputPacket,
+			internal_type.LLMToolResultPacket:
 			r.inputCh <- e
 
 		// Output — LLM generation, TTS, outbound pipeline
@@ -66,10 +65,13 @@ func (r *genericRequestor) OnPacket(ctx context.Context, pkts ...internal_type.P
 			internal_type.LLMResponseDonePacket,
 			internal_type.ErrorPacket,
 			internal_type.InjectMessagePacket,
+			internal_type.StartIdleTimeoutPacket,
+			internal_type.StopIdleTimeoutPacket,
 			internal_type.TTSTextPacket,
 			internal_type.TTSDonePacket,
 			internal_type.TextToSpeechAudioPacket,
-			internal_type.TextToSpeechEndPacket:
+			internal_type.TextToSpeechEndPacket,
+			internal_type.LLMToolCallPacket:
 			r.outputCh <- e
 
 		// Low — recording, metrics, persistence, events
@@ -267,6 +269,10 @@ func (r *genericRequestor) dispatch(ctx context.Context, p internal_type.Packet)
 		// Static / system-injected
 	case internal_type.InjectMessagePacket:
 		r.handleInjectMessagePacket(ctx, vl)
+	case internal_type.StartIdleTimeoutPacket:
+		r.handleStartIdleTimeoutPacket(ctx, vl)
+	case internal_type.StopIdleTimeoutPacket:
+		r.handleStopIdleTimeoutPacket(ctx, vl)
 	case internal_type.TextToSpeechAudioPacket:
 		r.handleTTSAudio(ctx, vl)
 	case internal_type.TextToSpeechEndPacket:
@@ -458,7 +464,11 @@ func (talking *genericRequestor) callInputNormalizer(ctx context.Context, vl int
 }
 
 func (talking *genericRequestor) handleUserInput(ctx context.Context, vl internal_type.UserInputPacket) {
-	talking.stopIdleTimeoutTimerAndResetCount()
+	talking.OnPacket(ctx, internal_type.StopIdleTimeoutPacket{
+		ContextID: talking.GetID(), ResetCount: true,
+	})
+
+	//
 	if err := talking.Transition(LLMGenerating); err != nil {
 		talking.logger.Errorf("messaging transition error: %v", err)
 	}
@@ -513,7 +523,7 @@ func (talking *genericRequestor) handleInterruption(ctx context.Context, vl inte
 
 	switch vl.Source {
 	case internal_type.InterruptionSourceWord:
-		talking.stopIdleTimeoutTimer()
+		talking.OnPacket(ctx, internal_type.StopIdleTimeoutPacket{ContextID: vl.ContextID})
 		if err := talking.callEndOfSpeech(ctx, vl); err != nil {
 			talking.logger.Errorf("end of speech error: %v", err)
 		}
@@ -649,7 +659,7 @@ func (talking *genericRequestor) handleLLMDone(ctx context.Context, vl internal_
 		})
 		return
 	}
-	talking.startIdleTimeoutTimer(ctx)
+	talking.OnPacket(ctx, internal_type.StartIdleTimeoutPacket{ContextID: vl.ContextID})
 	if err := talking.Transition(LLMGenerated); err != nil {
 		talking.logger.Errorf("messaging transition error: %v", err)
 	}
@@ -782,7 +792,6 @@ func (talking *genericRequestor) handleInjectMessagePacket(ctx context.Context, 
 		if err := talking.Transition(LLMGenerated); err != nil {
 			talking.logger.Errorf("messaging transition error: %v", err)
 		}
-		talking.startIdleTimeoutTimer(ctx)
 	} else {
 		// Fallback: LLMResponseDelta/Done flow through handleLLMDelta/handleLLMDone
 		// which handle save, metrics, transition, and idle timer.
@@ -790,6 +799,46 @@ func (talking *genericRequestor) handleInjectMessagePacket(ctx context.Context, 
 			internal_type.LLMResponseDeltaPacket{ContextID: contextID, Text: vl.Text},
 			internal_type.LLMResponseDonePacket{ContextID: contextID, Text: vl.Text},
 		)
+	}
+}
+
+// handleStartIdleTimeoutPacket (re)starts the idle timeout timer.
+// All timer state lives here — there is no synchronous start path elsewhere.
+// Routed on outputCh so producers can order it relative to InjectMessagePacket
+// and TTS output packets on the same channel.
+func (talking *genericRequestor) handleStartIdleTimeoutPacket(ctx context.Context, vl internal_type.StartIdleTimeoutPacket) {
+	if talking.idleTimeoutTimer != nil {
+		talking.idleTimeoutTimer.Stop()
+	}
+	behavior, err := talking.GetBehavior()
+	if err != nil {
+		return
+	}
+	if behavior.IdleTimeout == nil || *behavior.IdleTimeout == 0 {
+		return
+	}
+
+	timeoutDuration := time.Duration(*behavior.IdleTimeout) * time.Second
+	talking.idleTimeoutDeadline = time.Now().Add(timeoutDuration)
+	talking.idleTimeoutTimer = time.AfterFunc(timeoutDuration, func() {
+		if err := talking.onIdleTimeout(ctx); err != nil {
+			talking.logger.Errorf("error while handling idle timeout: %v", err)
+		}
+	})
+}
+
+// handleStopIdleTimeoutPacket stops the idle timeout timer.
+// ResetCount=true also clears the consecutive idle backoff counter
+// (used when the user actively engages, not for system-driven stops).
+func (talking *genericRequestor) handleStopIdleTimeoutPacket(ctx context.Context, vl internal_type.StopIdleTimeoutPacket) {
+	if talking.idleTimeoutTimer != nil {
+		talking.idleTimeoutTimer.Stop()
+		talking.idleTimeoutTimer = nil
+	}
+	talking.idleTimeoutDeadline = time.Time{}
+
+	if vl.ResetCount {
+		talking.idleTimeoutCount = 0
 	}
 }
 
@@ -816,7 +865,7 @@ func (talking *genericRequestor) handleTTSDone(ctx context.Context, vl internal_
 	if vl.ContextID != talking.GetID() {
 		return
 	}
-	talking.startIdleTimeoutTimer(ctx)
+
 	if talking.textToSpeechTransformer != nil && talking.GetMode().Audio() {
 		if err := talking.textToSpeechTransformer.Transform(ctx, vl); err != nil {
 			talking.logger.Errorf("tts done: failed to send final: %v", err)
@@ -997,13 +1046,24 @@ func (talking *genericRequestor) handleToolCall(ctx context.Context, vl internal
 		Data:      map[string]string{observe.DataType: observe.EventToolCallStarted, "name": vl.Name, "id": vl.ToolID, "action": vl.Action.String()},
 		Time:      time.Now(),
 	})
+
+	if msg, ok := vl.Arguments["message"]; ok && msg != "" {
+		talking.OnPacket(ctx,
+			internal_type.TTSInterruptPacket{ContextID: vl.ContextID},
+			internal_type.InjectMessagePacket{ContextID: vl.ContextID, Text: msg})
+	}
+
 	talking.Notify(ctx, &protos.ConversationToolCall{
 		Id: vl.ContextID, ToolId: vl.ToolID, Name: vl.Name,
 		Action: vl.Action, Args: vl.Arguments, Time: timestamppb.Now(),
 	})
 
 	if vl.Action != protos.ToolCallAction_TOOL_CALL_ACTION_UNSPECIFIED {
-		talking.stopIdleTimeoutTimer()
+		// Stop idle timer via packet so it is ordered AFTER any InjectMessagePacket
+		// enqueued above on outputCh — otherwise inject's auto-restart races us.
+		talking.OnPacket(ctx, internal_type.StopIdleTimeoutPacket{
+			ContextID: talking.GetID(), ResetCount: true,
+		})
 		if talking.maxSessionTimer != nil {
 			talking.maxSessionTimer.Stop()
 		}
@@ -1026,25 +1086,20 @@ func (talking *genericRequestor) handleToolCall(ctx context.Context, vl internal
 }
 
 func (talking *genericRequestor) handleToolResult(ctx context.Context, vl internal_type.LLMToolResultPacket) {
-	// Event (fast, stays on critical)
-	talking.OnPacket(ctx, internal_type.ConversationEventPacket{
-		ContextID: vl.ContextID,
-		Name:      observe.ComponentTool,
-		Data:      map[string]string{observe.DataType: observe.EventToolCallCompleted, "name": vl.Name, "id": vl.ToolID},
-		Time:      time.Now(),
-	})
-
-	if vl.Action != protos.ToolCallAction_TOOL_CALL_ACTION_UNSPECIFIED {
-		talking.restartTimers(ctx)
-	}
-
-	// DB write → lowCh (non-blocking)
 	res, _ := json.Marshal(vl)
-	talking.OnPacket(ctx, internal_type.ToolLogUpdatePacket{
-		ContextID: vl.ContextID, ToolID: vl.ToolID, Response: res,
-	})
+	talking.OnPacket(ctx,
+		internal_type.TTSInterruptPacket{ContextID: vl.ContextID},
+		internal_type.StartIdleTimeoutPacket{ContextID: vl.ContextID},
+		internal_type.ToolLogUpdatePacket{
+			ContextID: vl.ContextID, ToolID: vl.ToolID, Response: res,
+		},
+		internal_type.ConversationEventPacket{
+			ContextID: vl.ContextID,
+			Name:      observe.ComponentTool,
+			Data:      map[string]string{observe.DataType: observe.EventToolCallCompleted, "name": vl.Name, "id": vl.ToolID},
+			Time:      time.Now(),
+		})
 
-	// Executor → async goroutine
 	if talking.assistantExecutor != nil {
 		utils.Go(ctx, func() {
 			if err := talking.assistantExecutor.Execute(ctx, talking, vl); err != nil {
@@ -1090,10 +1145,11 @@ func (talking *genericRequestor) handleConversationEvent(ctx context.Context, vl
 	})
 	if talking.observer != nil {
 		talking.observer.EventCollectors().Collect(ctx, observe.EventRecord{
-			MessageID: contextID,
-			Name:      vl.Name,
-			Data:      vl.Data,
-			Time:      vl.Time,
+			ConversationID: talking.observer.Meta().AssistantConversationID,
+			MessageID:      contextID,
+			Name:           vl.Name,
+			Data:           vl.Data,
+			Time:           vl.Time,
 		})
 	}
 }

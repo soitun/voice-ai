@@ -12,10 +12,10 @@ import (
 	"fmt"
 	"slices"
 	"strconv"
-	"strings"
 	"time"
 
 	internal_assistant_entity "github.com/rapidaai/api/assistant-api/internal/entity/assistants"
+	"github.com/rapidaai/api/assistant-api/internal/variable"
 	"github.com/rapidaai/pkg/clients/rest"
 	"github.com/rapidaai/pkg/commons"
 	"github.com/rapidaai/pkg/types"
@@ -226,82 +226,12 @@ func (h *ConversationHooks) executeWebhook(ctx context.Context, event string, ar
 }
 
 // parse transforms template mappings into actual arguments using conversation state.
+// Resolution is delegated to the shared variable resolver — see
+// api/assistant-api/internal/variable.
 func (h *ConversationHooks) parse(event utils.AssistantWebhookEvent, mapping map[string]string) map[string]interface{} {
-	arguments := make(map[string]interface{})
-	snap := h.snap
-
-	for key, value := range mapping {
-		if k, ok := strings.CutPrefix(key, "event."); ok {
-			switch k {
-			case "type":
-				arguments[value] = event.Get()
-			case "data":
-				analysisData := make(map[string]interface{})
-				for k, v := range snap.Metadata {
-					if analysisKey, ok := strings.CutPrefix(k, "analysis."); ok {
-						analysisData[analysisKey] = v
-					}
-				}
-				arguments[value] = map[string]interface{}{
-					"assistant": map[string]interface{}{
-						"id":      fmt.Sprintf("%d", snap.Assistant.Id),
-						"version": fmt.Sprintf("vrsn_%d", snap.Assistant.AssistantProviderId),
-					},
-					"conversation": map[string]interface{}{
-						"id":       fmt.Sprintf("%d", snap.Conversation.ID),
-						"messages": simplifyHistory(snap.Histories),
-					},
-					"analysis": analysisData,
-				}
-			}
-		}
-		if k, ok := strings.CutPrefix(key, "assistant."); ok {
-			switch k {
-			case "id":
-				arguments[value] = fmt.Sprintf("%d", snap.Assistant.Id)
-			case "version":
-				arguments[value] = fmt.Sprintf("vrsn_%d", snap.Assistant.AssistantProviderId)
-			}
-		}
-		if k, ok := strings.CutPrefix(key, "conversation."); ok {
-			switch k {
-			case "id":
-				arguments[value] = fmt.Sprintf("%d", snap.Conversation.ID)
-			case "messages":
-				arguments[value] = simplifyHistory(snap.Histories)
-			}
-		}
-		if k, ok := strings.CutPrefix(key, "argument."); ok {
-			if v, ok := snap.Arguments[k]; ok {
-				arguments[value] = v
-			}
-		}
-		if k, ok := strings.CutPrefix(key, "metadata."); ok {
-			if v, ok := snap.Metadata[k]; ok {
-				arguments[value] = v
-			}
-		}
-		if k, ok := strings.CutPrefix(key, "option."); ok {
-			if v, ok := snap.Options[k]; ok {
-				arguments[value] = v
-			}
-		}
-		if strings.HasPrefix(key, "analysis.") {
-			if v, ok := snap.Metadata[key]; ok {
-				arguments[value] = v
-			}
-		}
-	}
-	return arguments
-}
-
-// simplifyHistory converts message entries to webhook/analysis payload format.
-func simplifyHistory(msgs []MessageEntry) []map[string]string {
-	out := make([]map[string]string, 0, len(msgs))
-	for _, m := range msgs {
-		out = append(out, map[string]string{"role": m.Role, "message": m.Content})
-	}
-	return out
+	registry := variable.NewDefaultRegistry().With("event", &variable.EventNamespace{})
+	src := NewSnapshotSource(h.snap)
+	return registry.Apply(mapping, src, variable.ResolveContext{Event: event.Get()})
 }
 
 // doHTTP performs the actual HTTP request.

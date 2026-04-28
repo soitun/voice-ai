@@ -71,11 +71,15 @@ type opensearchMetricDoc struct {
 }
 
 func (e *OpenSearchExporter) ExportEvent(ctx context.Context, meta telemetry.SessionMeta, rec telemetry.EventRecord) error {
+	conversationID := rec.ConversationID
+	if conversationID == 0 {
+		conversationID = meta.AssistantConversationID
+	}
 	doc := opensearchEventDoc{
 		ProjectID:               meta.ProjectID,
 		OrganizationID:          meta.OrganizationID,
 		AssistantID:             meta.AssistantID,
-		AssistantConversationID: meta.AssistantConversationID,
+		AssistantConversationID: conversationID,
 		MessageID:               rec.MessageID,
 		Name:                    rec.Name,
 		Data:                    rec.Data,

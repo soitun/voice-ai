@@ -15,6 +15,11 @@ const RESERVED_VARIABLE_KEYS = [
   'assistant.name',
   'assistant.id',
   'assistant.description',
+  'client.phone',
+  'client.assistant_phone',
+  'client.direction',
+  'client.telephony_provider',
+  'client.provider_call_id',
   'conversation.id',
   'conversation.identifier',
   'conversation.source',
@@ -35,6 +40,14 @@ const RESERVED_VARIABLE_RUNTIME_VALUE: Record<string, string> = {
   'assistant.name': 'Assistant name',
   'assistant.id': 'Assistant identifier',
   'assistant.description': 'Assistant description',
+  'client.phone':
+    "Client's phone number (caller on inbound, callee on outbound)",
+  'client.assistant_phone': 'Our phone number / DID',
+  'client.direction': 'inbound or outbound',
+  'client.telephony_provider':
+    'sip, twilio, vonage, exotel, asterisk, webrtc',
+  'client.provider_call_id':
+    'Provider-specific call ID (CallSid, UUID, SIP Call-ID, etc.)',
   'conversation.id': 'Conversation ID',
   'conversation.identifier': 'Conversation identifier',
   'conversation.source': 'Conversation source',

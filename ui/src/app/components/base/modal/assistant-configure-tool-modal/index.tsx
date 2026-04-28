@@ -122,7 +122,10 @@ export const ConfigureAssistantToolDialog: FC<
   const onChangeBuildinToolConfig = (code: string) => {
     setBuildinToolConfig({
       code: code,
-      parameters: GetDefaultToolConfigIfInvalid(code, []),
+      parameters: GetDefaultToolConfigIfInvalid(
+        code,
+        buildinToolConfig.parameters,
+      ),
     });
     setToolDefinition(
       GetDefaultToolDefintion(code, {

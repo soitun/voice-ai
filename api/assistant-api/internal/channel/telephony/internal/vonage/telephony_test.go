@@ -356,7 +356,7 @@ func TestSend_TransferConversation_PushesFailedResult(t *testing.T) {
 		ToolId: "tool-xfer",
 		Name:   "transfer_call",
 		Action: protos.ToolCallAction_TOOL_CALL_ACTION_TRANSFER_CONVERSATION,
-		Args:   map[string]string{"to": "+15551234567"},
+		Args:   map[string]string{"transfer_to": "+15551234567"},
 	}
 
 	err = vng.Send(toolCall)

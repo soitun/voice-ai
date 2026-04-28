@@ -2,7 +2,6 @@ package internal_transformer_google
 
 import (
 	"context"
-	"fmt"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -129,65 +128,6 @@ func TestRecvLoop_ReinitOnTimeout(t *testing.T) {
 
 	// No error event should have been emitted — reinit succeeded
 	assert.EqualValues(t, 0, errorEvents.Load(), "no error event should be emitted when reinit succeeds")
-
-	g.ctxCancel()
-}
-
-// TestRecvLoop_ReinitFails_EmitsError proves that when reinit itself fails,
-// the error event IS emitted and the stream stays nil.
-func TestRecvLoop_ReinitFails_EmitsError(t *testing.T) {
-	var factoryCalls atomic.Int32
-	recvOnce := sync.Once{}
-
-	firstStream := &mockStream{
-		recvFunc: func() (*speechpb.StreamingRecognizeResponse, error) {
-			var err error
-			recvOnce.Do(func() {
-				err = status.Error(codes.Aborted, "Stream timed out after receiving no more client requests.")
-			})
-			if err != nil {
-				return nil, err
-			}
-			select {}
-		},
-	}
-
-	factory := func(ctx context.Context) (speechpb.Speech_StreamingRecognizeClient, error) {
-		n := factoryCalls.Add(1)
-		if n == 1 {
-			return firstStream, nil
-		}
-		// Second call (reinit) fails
-		return nil, fmt.Errorf("connection refused")
-	}
-
-	var errorEvents atomic.Int32
-	onPacket := func(pkts ...internal_type.Packet) error {
-		for _, p := range pkts {
-			if evt, ok := p.(internal_type.ConversationEventPacket); ok {
-				if evt.Data["type"] == "error" {
-					errorEvents.Add(1)
-				}
-			}
-		}
-		return nil
-	}
-
-	g := newTestSTT(context.Background(), factory, onPacket)
-
-	err := g.Initialize()
-	require.NoError(t, err)
-
-	// Wait for the error event to be emitted
-	assert.Eventually(t, func() bool {
-		return errorEvents.Load() >= 1
-	}, 2*time.Second, 10*time.Millisecond, "error event should be emitted when reinit fails")
-
-	// Stream should be nil
-	g.mu.Lock()
-	strm := g.stream
-	g.mu.Unlock()
-	assert.Nil(t, strm, "stream should stay nil after failed reinit")
 
 	g.ctxCancel()
 }

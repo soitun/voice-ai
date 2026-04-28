@@ -1,8 +1,8 @@
 import { Metadata } from '@rapidaai/react';
 import { FC, useCallback, useMemo } from 'react';
-import { cn } from '@/utils';
-import { Dropdown } from '@carbon/react';
+import { Dropdown, Select, SelectItem, Tooltip } from '@carbon/react';
 import { CONFIG } from '@/configs';
+import { Information } from '@carbon/icons-react';
 import { ConfigureAPIRequest } from '@/app/components/tools/api-request';
 import {
   GetAPIRequestDefaultOptions,
@@ -29,6 +29,7 @@ import {
   ValidateMCPDefaultOptions,
 } from '@/app/components/tools/mcp/constant';
 import { ConfigureTransferCall } from '@/app/components/tools/transfer-call';
+import { InputGroup } from '../input-group/index';
 import {
   GetTransferCallDefaultOptions,
   ValidateTransferCallDefaultOptions,
@@ -41,7 +42,16 @@ import {
   KnowledgeRetrievalToolDefintion,
   TransferCallToolDefintion,
 } from '@/llm-tools';
-import { ConfigureToolProps } from './common';
+import {
+  ConfigureToolProps,
+  getToolConditionEntries,
+  TOOL_CONDITION_SOURCE_OPTIONS,
+  validateToolConditionMetadata,
+  withToolConditionEntries,
+  withNormalizedToolCondition,
+} from './common';
+
+const CONDITION_OPTIONS = [{ label: 'equals', value: '=' }];
 
 // ============================================================================
 // Types
@@ -192,7 +202,10 @@ export const GetDefaultToolConfigIfInvalid = (
   parameters: Metadata[],
 ): Metadata[] => {
   const config = getToolConfig(code);
-  return config.getDefaultOptions(parameters);
+  return withNormalizedToolCondition(
+    config.getDefaultOptions(parameters),
+    parameters,
+  );
 };
 
 /**
@@ -206,29 +219,15 @@ export const ValidateToolDefaultOptions = (
   if (!isValidToolCode(code)) {
     return `Invalid tool code: ${code}`;
   }
-  return TOOL_REGISTRY[code].validateOptions(parameters);
+  return (
+    TOOL_REGISTRY[code].validateOptions(parameters) ||
+    validateToolConditionMetadata(parameters)
+  );
 };
 
 // ============================================================================
 // Components
 // ============================================================================
-
-const ToolOptionRenderer: FC<{ icon: string; name: string }> = ({
-  icon,
-  name,
-}) => (
-  <span className="inline-flex items-center gap-2 sm:gap-2.5 max-w-full text-sm font-medium">
-    <img
-      alt=""
-      loading="lazy"
-      width={16}
-      height={16}
-      className="w-4 h-4 align-middle block shrink-0"
-      src={icon}
-    />
-    <span className="truncate capitalize">{name}</span>
-  </span>
-);
 
 const ConfigureBuildinTool: FC<{
   toolDefinition: ToolDefinition;
@@ -277,9 +276,33 @@ export const BuildinTool: FC<{
   inputClass,
   showDefinitionForm = true,
 }) => {
+  const conditionEntries = useMemo(
+    () => getToolConditionEntries(config.parameters),
+    [config.parameters],
+  );
+  const sourceCondition = useMemo(
+    () =>
+      conditionEntries.find(entry => entry.key === 'source') || {
+        key: 'source',
+        condition: '=',
+        value: 'all',
+      },
+    [conditionEntries],
+  );
+  const selectedSourceOption = useMemo(
+    () =>
+      TOOL_CONDITION_SOURCE_OPTIONS.find(
+        option => option.value === sourceCondition.value,
+      ) || TOOL_CONDITION_SOURCE_OPTIONS[0],
+    [sourceCondition.value],
+  );
+
   const handleParameterChange = useCallback(
     (params: Metadata[]) => {
-      onChangeConfig({ ...config, parameters: params });
+      onChangeConfig({
+        ...config,
+        parameters: withNormalizedToolCondition(params, config.parameters),
+      });
     },
     [config, onChangeConfig],
   );
@@ -297,16 +320,162 @@ export const BuildinTool: FC<{
     [config.code, availableTools],
   );
 
-  const renderOption = useCallback(
-    (tool: { icon: string; name: string }) => (
-      <ToolOptionRenderer icon={tool.icon} name={tool.name} />
-    ),
-    [],
-  );
-
   return (
     <>
-      <div className="p-6">
+      <InputGroup
+        title="Condition"
+        className="relative z-20"
+        childClass="overflow-visible relative z-20"
+      >
+        <div className="mb-2 text-xs text-gray-500 flex items-center gap-1">
+          <span>Rule</span>
+          <Tooltip
+            align="right"
+            label="This rule is tested before the tool is added to the LLM tool list."
+          >
+            <Information size={14} />
+          </Tooltip>
+        </div>
+        <table className="w-full border-collapse border border-gray-200 dark:border-gray-700 text-sm [&_input]:!border-none [&_.cds--text-input]:!border-none [&_.cds--text-input]:!outline-none [&_.cds--select-input]:!border-none [&_.cds--form-item]:!m-0">
+          <thead>
+            <tr className="bg-gray-50 dark:bg-gray-900">
+              <th className="text-left text-xs font-medium text-gray-500 dark:text-gray-400 px-3 py-2 border-b border-r border-gray-200 dark:border-gray-700 w-1/4">
+                <span className="inline-flex items-center gap-1">
+                  Key
+                  <Tooltip
+                    align="right"
+                    label="The variable to evaluate for this condition. 'source' refers to the channel the call is coming from."
+                  >
+                    <Information size={11} />
+                  </Tooltip>
+                </span>
+              </th>
+              <th className="text-left text-xs font-medium text-gray-500 dark:text-gray-400 px-3 py-2 border-b border-r border-gray-200 dark:border-gray-700 w-1/4">
+                <span className="inline-flex items-center gap-1">
+                  Condition
+                  <Tooltip
+                    align="right"
+                    label="The condition to evaluate for this variable."
+                  >
+                    <Information size={11} />
+                  </Tooltip>
+                </span>
+              </th>
+              <th className="text-left text-xs font-medium text-gray-500 dark:text-gray-400 px-3 py-2 border-b border-gray-200 dark:border-gray-700">
+                <span className="inline-flex items-center gap-1">
+                  Value
+                  <Tooltip
+                    align="right"
+                    label="The value to compare against the variable."
+                  >
+                    <Information size={11} />
+                  </Tooltip>
+                </span>
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr className="border-b border-gray-200 dark:border-gray-700 last:border-b-0">
+              <td className="border-r border-gray-200 dark:border-gray-700 p-0">
+                <Select
+                  id="tool-condition-key"
+                  labelText=""
+                  hideLabel
+                  value={sourceCondition.key}
+                  onChange={e => {
+                    const next = [
+                      {
+                        key: e.target.value,
+                        condition: sourceCondition.condition,
+                        value: sourceCondition.value,
+                      },
+                    ];
+                    onChangeConfig({
+                      ...config,
+                      parameters: withToolConditionEntries(
+                        config.parameters,
+                        next,
+                      ),
+                    });
+                  }}
+                  size="md"
+                >
+                  <SelectItem value="source" text="Source" />
+                </Select>
+              </td>
+              <td className="border-r border-gray-200 dark:border-gray-700 p-0">
+                <Select
+                  id="tool-condition-op"
+                  labelText=""
+                  hideLabel
+                  value={sourceCondition.condition}
+                  onChange={e => {
+                    const next = [
+                      {
+                        key: sourceCondition.key,
+                        condition: e.target.value,
+                        value: sourceCondition.value,
+                      },
+                    ];
+                    onChangeConfig({
+                      ...config,
+                      parameters: withToolConditionEntries(
+                        config.parameters,
+                        next,
+                      ),
+                    });
+                  }}
+                  size="md"
+                >
+                  {CONDITION_OPTIONS.map(option => (
+                    <SelectItem
+                      key={option.value}
+                      value={option.value}
+                      text={option.label}
+                    />
+                  ))}
+                </Select>
+              </td>
+
+              <td className="p-0 min-w-[240px]">
+                <Select
+                  id="tool-condition-source-value"
+                  labelText=""
+                  hideLabel
+                  value={selectedSourceOption.value}
+                  onChange={e => {
+                    const next = [
+                      {
+                        key: sourceCondition.key,
+                        condition: sourceCondition.condition,
+                        value: e.target.value,
+                      },
+                    ];
+                    onChangeConfig({
+                      ...config,
+                      parameters: withToolConditionEntries(
+                        config.parameters,
+                        next,
+                      ),
+                    });
+                  }}
+                  size="md"
+                >
+                  {TOOL_CONDITION_SOURCE_OPTIONS.map(option => (
+                    <SelectItem
+                      key={option.value}
+                      value={option.value}
+                      text={option.label}
+                    />
+                  ))}
+                </Select>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </InputGroup>
+
+      <InputGroup title="Action">
         <Dropdown
           id="tool-action-select"
           titleText="Action"
@@ -318,7 +487,7 @@ export const BuildinTool: FC<{
             if (selectedItem) onChangeBuildinTool(selectedItem.code);
           }}
         />
-      </div>
+      </InputGroup>
 
       <ConfigureBuildinTool
         toolDefinition={toolDefinition}

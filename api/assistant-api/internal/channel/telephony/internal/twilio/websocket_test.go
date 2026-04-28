@@ -168,7 +168,7 @@ func TestSend_TransferConversation_MissingTarget(t *testing.T) {
 		ToolId: "tool-transfer",
 		Name:   "transfer_call",
 		Action: protos.ToolCallAction_TOOL_CALL_ACTION_TRANSFER_CONVERSATION,
-		Args:   map[string]string{"to": ""},
+		Args:   map[string]string{"transfer_to": ""},
 	}
 
 	err := tws.Send(toolCall)
@@ -196,7 +196,7 @@ func TestSend_TransferConversation_NoCallUUID(t *testing.T) {
 		ToolId: "tool-transfer",
 		Name:   "transfer_call",
 		Action: protos.ToolCallAction_TOOL_CALL_ACTION_TRANSFER_CONVERSATION,
-		Args:   map[string]string{"to": "+15551234567"},
+		Args:   map[string]string{"transfer_to": "+15551234567"},
 	}
 
 	err := tws.Send(toolCall)

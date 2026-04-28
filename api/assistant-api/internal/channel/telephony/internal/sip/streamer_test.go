@@ -101,3 +101,58 @@ func TestSend_ConversationDisconnection_PreservesExplicitReason(t *testing.T) {
 		t.Fatal("timed out waiting for requeued ConversationDisconnection")
 	}
 }
+
+func TestSend_TransferConversation_UsesTransferToKey(t *testing.T) {
+	s := newTestSIPStreamer(t)
+
+	var gotTargets []string
+	var gotMessage string
+	var gotPostTransferAction string
+	s.SetOnTransferInitiated(func(targets []string, message string, postTransferAction string) {
+		gotTargets = append([]string(nil), targets...)
+		gotMessage = message
+		gotPostTransferAction = postTransferAction
+	})
+
+	err := s.Send(&protos.ConversationToolCall{
+		Id:     "ctx-transfer",
+		ToolId: "tool-transfer",
+		Name:   "transfer_call",
+		Action: protos.ToolCallAction_TOOL_CALL_ACTION_TRANSFER_CONVERSATION,
+		Args: map[string]string{
+			"transfer_to":          "+15550001111" + commons.SEPARATOR + "sip:agent@example.com",
+			"message":              "Please hold while I transfer your call.",
+			"post_transfer_action": "end_call",
+		},
+	})
+	require.NoError(t, err)
+
+	assert.Equal(t, []string{"+15550001111", "sip:agent@example.com"}, gotTargets)
+	assert.Equal(t, "Please hold while I transfer your call.", gotMessage)
+	assert.Equal(t, "end_call", gotPostTransferAction)
+}
+
+func TestSend_TransferConversation_MissingTransferTarget(t *testing.T) {
+	s := newTestSIPStreamer(t)
+
+	err := s.Send(&protos.ConversationToolCall{
+		Id:     "ctx-transfer-missing",
+		ToolId: "tool-transfer",
+		Name:   "transfer_call",
+		Action: protos.ToolCallAction_TOOL_CALL_ACTION_TRANSFER_CONVERSATION,
+		Args:   map[string]string{"transfer_to": ""},
+	})
+	require.NoError(t, err)
+
+	select {
+	case msg := <-s.CriticalCh:
+		result, ok := msg.(*protos.ConversationToolCallResult)
+		require.True(t, ok, "expected ConversationToolCallResult, got %T", msg)
+		assert.Equal(t, "ctx-transfer-missing", result.GetId())
+		assert.Equal(t, "tool-transfer", result.GetToolId())
+		assert.Equal(t, "failed", result.GetResult()["status"])
+		assert.Contains(t, result.GetResult()["reason"], "missing transfer target")
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for ConversationToolCallResult")
+	}
+}
