@@ -18,7 +18,10 @@ export const InputGroup: FC<InputGroupProps> = ({
   return (
     <section
       {...props}
-      className={cn('border-b border-gray-200 dark:border-gray-800', props.className)}
+      className={cn(
+        'border-b border-gray-200 dark:border-gray-800',
+        props.className,
+      )}
     >
       {/* Carbon accordion trigger */}
       <div
@@ -34,7 +37,10 @@ export const InputGroup: FC<InputGroupProps> = ({
         </div>
         <ChevronDown
           size={16}
-          className={cn('text-gray-500 transition-transform duration-200', isExpanded && 'rotate-180')}
+          className={cn(
+            'text-gray-500 transition-transform duration-200',
+            isExpanded && 'rotate-180',
+          )}
         />
       </div>
       <AnimatePresence>

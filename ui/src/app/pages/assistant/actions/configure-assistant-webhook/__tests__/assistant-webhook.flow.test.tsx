@@ -90,6 +90,14 @@ jest.mock('@/app/components/carbon/form', () => {
   const React = require('react');
   return {
     Stack: ({ children }: any) => React.createElement('div', null, children),
+    FormGroup: ({ children, legendText, messageText }: any) =>
+      React.createElement(
+        'fieldset',
+        null,
+        legendText ? React.createElement('legend', null, legendText) : null,
+        messageText ? React.createElement('div', null, messageText) : null,
+        children,
+      ),
     TextInput: ({ id, labelText, value, onChange, placeholder, hideLabel }: any) =>
       React.createElement(
         'div',
@@ -117,6 +125,65 @@ jest.mock('@/app/components/carbon/form', () => {
           placeholder,
           'data-testid': id,
         }),
+      ),
+  };
+});
+
+jest.mock('@/app/components/carbon/dropdown', () => {
+  const React = require('react');
+  return {
+    MultiSelect: ({
+      id,
+      items = [],
+      selectedItems = [],
+      itemToString,
+      onChange,
+      label,
+      titleText,
+      helperText,
+    }: any) =>
+      React.createElement(
+        'div',
+        null,
+        titleText ? React.createElement('div', null, titleText) : null,
+        label ? React.createElement('label', { htmlFor: id }, label) : null,
+        React.createElement(
+          'select',
+          {
+            id,
+            multiple: true,
+            'data-testid': id,
+            value: selectedItems.map((item: any) => item.id),
+            onChange: (e: any) => {
+              const values = Array.from(e.target.selectedOptions).map(
+                (option: any) => option.value,
+              );
+              const next = items.filter((item: any) => values.includes(item.id));
+              onChange?.({ selectedItems: next });
+            },
+          },
+          items.map((item: any) =>
+            React.createElement(
+              'option',
+              { key: item.id, value: item.id },
+              itemToString ? itemToString(item) : item.label || item.name || item.id,
+            ),
+          ),
+        ),
+        helperText ? React.createElement('div', null, helperText) : null,
+      ),
+  };
+});
+
+jest.mock('@/app/components/input-group', () => {
+  const React = require('react');
+  return {
+    InputGroup: ({ title, children }: any) =>
+      React.createElement(
+        'section',
+        null,
+        title ? React.createElement('div', null, title) : null,
+        children,
       ),
   };
 });
@@ -150,6 +217,7 @@ jest.mock('@carbon/react', () => {
   const React = require('react');
   return {
     ButtonSet: ({ children }: any) => React.createElement('div', null, children),
+    Tooltip: ({ children }: any) => React.createElement('span', null, children),
     Select: ({ id, labelText, value, onChange, children, hideLabel }: any) =>
       React.createElement(
         'div',
@@ -268,6 +336,26 @@ describe('Assistant webhook flows', () => {
     ).toBeInTheDocument();
   });
 
+  it('create webhook preselects assistant id for a new assistant payload parameter', () => {
+    render(<CreateAssistantWebhook assistantId="assistant-1" />);
+
+    fireEvent.change(screen.getByTestId('webhook-endpoint'), {
+      target: { value: 'https://api.example.com/webhook' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Add parameter' }));
+    fireEvent.change(screen.getByTestId('param-val-2'), {
+      target: { value: 'assistant_id' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+
+    expect(
+      screen.queryByText('Empty parameter keys or values are not allowed.'),
+    ).not.toBeInTheDocument();
+    expect(screen.getByText('Events')).toBeInTheDocument();
+  });
+
   it('create webhook submits with selected event and configuration', async () => {
     render(<CreateAssistantWebhook assistantId="assistant-1" />);
 
@@ -277,7 +365,9 @@ describe('Assistant webhook flows', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
     fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
 
-    fireEvent.click(screen.getByLabelText('conversation.begin'));
+    const eventSelect = screen.getByTestId('webhook-events') as HTMLSelectElement;
+    eventSelect.options[0].selected = true;
+    fireEvent.change(eventSelect);
     fireEvent.change(screen.getByTestId('webhook-max-retries'), {
       target: { value: '2' },
     });
