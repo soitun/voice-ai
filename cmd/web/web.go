@@ -311,10 +311,6 @@ func (app *AppRunner) Migrate() error {
 		return fmt.Errorf("failed to get current working directory: %w", err)
 	}
 	migrationsPath := fmt.Sprintf("file://%s/api/web-api/migrations", currentDir)
-
-	app.Logger.Infof("Looking for migration files at path: %s", migrationsPath)
-	app.Logger.Infof("Using DSN for migration: %s", dsn)
-
 	m, err := migrate.New(migrationsPath, dsn)
 	if err != nil {
 		return fmt.Errorf("migration initialization failed: %w", err)
