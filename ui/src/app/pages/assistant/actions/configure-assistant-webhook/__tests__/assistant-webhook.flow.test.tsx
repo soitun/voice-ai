@@ -356,6 +356,25 @@ describe('Assistant webhook flows', () => {
     expect(screen.getByText('Events')).toBeInTheDocument();
   });
 
+  it('create webhook validates headers when key is present without value', () => {
+    render(<CreateAssistantWebhook assistantId="assistant-1" />);
+
+    fireEvent.change(screen.getByTestId('webhook-endpoint'), {
+      target: { value: 'https://api.example.com/webhook' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Add header' }));
+    fireEvent.change(screen.getByTestId('header-key-0'), {
+      target: { value: 'Authorization' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+
+    expect(
+      screen.getByText('Headers with a key must also include a value.'),
+    ).toBeInTheDocument();
+  });
+
   it('create webhook submits with selected event and configuration', async () => {
     render(<CreateAssistantWebhook assistantId="assistant-1" />);
 
@@ -414,6 +433,26 @@ describe('Assistant webhook flows', () => {
 
     expect(
       screen.getByText('Please provide a valid server URL for the webhook.'),
+    ).toBeInTheDocument();
+  });
+
+  it('update webhook validates headers when key is present without value', async () => {
+    render(<UpdateAssistantWebhook assistantId="assistant-1" />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('webhook-endpoint')).toHaveValue(
+        'https://hooks.example.com/incoming',
+      );
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+    fireEvent.change(screen.getByTestId('header-val-0'), {
+      target: { value: '' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+
+    expect(
+      screen.getByText('Headers with a key must also include a value.'),
     ).toBeInTheDocument();
   });
 

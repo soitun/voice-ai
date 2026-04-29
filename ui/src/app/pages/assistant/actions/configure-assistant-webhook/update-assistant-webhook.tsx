@@ -192,6 +192,13 @@ export const UpdateAssistantWebhook: FC<{ assistantId: string }> = ({
 
   const validatePayload = (): boolean => {
     setErrorMessage('');
+    const headersMissingValue = headers.some(
+      header => header.key.trim() !== '' && header.value.trim() === '',
+    );
+    if (headersMissingValue) {
+      setErrorMessage('Headers with a key must also include a value.');
+      return false;
+    }
     if (parameters.length === 0) {
       setErrorMessage(
         'Please provide one or more parameters which can be passed as data to your server.',
