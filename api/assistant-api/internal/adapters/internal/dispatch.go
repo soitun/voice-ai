@@ -1088,17 +1088,32 @@ func (talking *genericRequestor) handleToolCall(ctx context.Context, vl internal
 func (talking *genericRequestor) handleToolResult(ctx context.Context, vl internal_type.LLMToolResultPacket) {
 	res, _ := json.Marshal(vl)
 	talking.OnPacket(ctx,
-		internal_type.TTSInterruptPacket{ContextID: vl.ContextID},
-		internal_type.StartIdleTimeoutPacket{ContextID: vl.ContextID},
 		internal_type.ToolLogUpdatePacket{
 			ContextID: vl.ContextID, ToolID: vl.ToolID, Response: res,
 		},
+		internal_type.TTSInterruptPacket{ContextID: vl.ContextID},
+		internal_type.StartIdleTimeoutPacket{ContextID: vl.ContextID},
 		internal_type.ConversationEventPacket{
 			ContextID: vl.ContextID,
 			Name:      observe.ComponentTool,
 			Data:      map[string]string{observe.DataType: observe.EventToolCallCompleted, "name": vl.Name, "id": vl.ToolID},
 			Time:      time.Now(),
 		})
+
+	switch vl.Action {
+	case protos.ToolCallAction_TOOL_CALL_ACTION_END_CONVERSATION:
+		talking.Notify(ctx, &protos.ConversationDisconnection{
+			Type: protos.ConversationDisconnection_DISCONNECTION_TYPE_TOOL,
+		})
+		return
+	case protos.ToolCallAction_TOOL_CALL_ACTION_TRANSFER_CONVERSATION:
+		if vl.Result["next_action"] == "end_call" {
+			talking.Notify(ctx, &protos.ConversationDisconnection{
+				Type: protos.ConversationDisconnection_DISCONNECTION_TYPE_TOOL,
+			})
+			return
+		}
+	}
 
 	if talking.assistantExecutor != nil {
 		utils.Go(ctx, func() {

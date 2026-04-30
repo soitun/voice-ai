@@ -842,8 +842,9 @@ func (m *SIPEngine) pipelineCallStart(ctx context.Context, session *sip_infra.Se
 						status, _ := session.GetMetadata(sip_infra.MetadataBridgeTransferStatus)
 						statusStr, _ := status.(string)
 						ts.PushToolCallResult(toolCtxIDStr, toolIDStr, "transfer_call", protos.ToolCallAction_TOOL_CALL_ACTION_TRANSFER_CONVERSATION, map[string]string{
-							"status": statusStr,
-							"reason": fmt.Sprintf("Transfer to %s %s", primaryTarget, statusStr),
+							"status":      statusStr,
+							"reason":      fmt.Sprintf("Transfer to %s %s", primaryTarget, statusStr),
+							"next_action": postTransferAction,
 						})
 					}
 				},

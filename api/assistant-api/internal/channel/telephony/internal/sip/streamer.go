@@ -185,10 +185,6 @@ func (s *Streamer) Send(response internal_type.Stream) error {
 			s.PushToolCallResult(data.GetId(), data.GetToolId(), data.GetName(), data.GetAction(), map[string]string{
 				"status": "completed",
 			})
-			if disc := s.Disconnect(protos.ConversationDisconnection_DISCONNECTION_TYPE_TOOL); disc != nil {
-				s.Input(disc)
-			}
-			s.endSession()
 		case protos.ToolCallAction_TOOL_CALL_ACTION_TRANSFER_CONVERSATION:
 			raw := data.GetArgs()["transfer_to"]
 			if raw == "" {

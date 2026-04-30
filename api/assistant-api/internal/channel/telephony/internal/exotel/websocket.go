@@ -156,6 +156,9 @@ func (exotel *exotelWebsocketStreamer) Send(response internal_type.Stream) error
 		if disc := exotel.Disconnect(data.GetType()); disc != nil {
 			exotel.Input(disc)
 		}
+		// Exotel has no REST API to terminate a call; closing the WebSocket is
+		// the only way to signal the stream end and release the call leg.
+		exotel.Cancel()
 	case *protos.ConversationToolCall:
 		switch data.GetAction() {
 		case protos.ToolCallAction_TOOL_CALL_ACTION_END_CONVERSATION:
@@ -166,9 +169,6 @@ func (exotel *exotelWebsocketStreamer) Send(response internal_type.Stream) error
 				Action: data.GetAction(),
 				Result: map[string]string{"status": "completed"},
 			})
-			if disc := exotel.Disconnect(protos.ConversationDisconnection_DISCONNECTION_TYPE_TOOL); disc != nil {
-				exotel.Input(disc)
-			}
 		case protos.ToolCallAction_TOOL_CALL_ACTION_TRANSFER_CONVERSATION:
 			// Exotel transfer is NOT supported. Exotel exposes call-flow level
 			// "Connect" applets but no live mid-call transfer API on the
@@ -180,7 +180,7 @@ func (exotel *exotelWebsocketStreamer) Send(response internal_type.Stream) error
 			exotel.Input(&protos.ConversationToolCallResult{
 				Id:     data.GetId(),
 				ToolId: data.GetToolId(), Name: data.GetName(), Action: data.GetAction(),
-				Result: map[string]string{"status": "failed", "reason": "transfer not supported for Exotel"},
+				Result: map[string]string{"status": "failed", "reason": "transfer not supported for Exotel", "next_action": "end_call"},
 			})
 		}
 	}

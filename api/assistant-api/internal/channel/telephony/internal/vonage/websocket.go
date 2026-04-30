@@ -152,32 +152,19 @@ func (vng *vonageWebsocketStreamer) Send(response internal_type.Stream) error {
 		if disc := vng.Disconnect(data.GetType()); disc != nil {
 			vng.Input(disc)
 		}
+		vng.Cancel()
 	case *protos.ConversationToolCall:
 		switch data.GetAction() {
 		case protos.ToolCallAction_TOOL_CALL_ACTION_END_CONVERSATION:
+			result := map[string]string{"status": "completed"}
 			if vng.GetConversationUuid() != "" {
 				cAuth, err := vonageAuth(vng.VaultCredential())
 				if err != nil {
 					vng.Logger.Errorf("Error creating Vonage client:", err)
-					vng.Input(&protos.ConversationToolCallResult{
-						Id: data.GetId(), ToolId: data.GetToolId(), Name: data.GetName(), Action: data.GetAction(),
-						Result: map[string]string{"status": "failed", "reason": fmt.Sprintf("vonage client error: %v", err)},
-					})
-					if disc := vng.Disconnect(protos.ConversationDisconnection_DISCONNECTION_TYPE_TOOL); disc != nil {
-						vng.Input(disc)
-					}
-					return nil
-				}
-				if _, _, err := vonage.NewVoiceClient(cAuth).Hangup(vng.GetConversationUuid()); err != nil {
+					result = map[string]string{"status": "failed", "reason": fmt.Sprintf("vonage client error: %v", err)}
+				} else if _, _, err := vonage.NewVoiceClient(cAuth).Hangup(vng.GetConversationUuid()); err != nil {
 					vng.Logger.Errorf("Error ending Vonage call:", err)
-					vng.Input(&protos.ConversationToolCallResult{
-						Id: data.GetId(), ToolId: data.GetToolId(), Name: data.GetName(), Action: data.GetAction(),
-						Result: map[string]string{"status": "failed", "reason": fmt.Sprintf("hangup failed: %v", err)},
-					})
-					if disc := vng.Disconnect(protos.ConversationDisconnection_DISCONNECTION_TYPE_TOOL); disc != nil {
-						vng.Input(disc)
-					}
-					return nil
+					result = map[string]string{"status": "failed", "reason": fmt.Sprintf("hangup failed: %v", err)}
 				}
 			}
 			vng.Input(&protos.ConversationToolCallResult{
@@ -185,11 +172,8 @@ func (vng *vonageWebsocketStreamer) Send(response internal_type.Stream) error {
 				ToolId: data.GetToolId(),
 				Name:   data.GetName(),
 				Action: data.GetAction(),
-				Result: map[string]string{"status": "completed"},
+				Result: result,
 			})
-			if disc := vng.Disconnect(protos.ConversationDisconnection_DISCONNECTION_TYPE_TOOL); disc != nil {
-				vng.Input(disc)
-			}
 		case protos.ToolCallAction_TOOL_CALL_ACTION_TRANSFER_CONVERSATION:
 			// Vonage transfer is NOT implemented. A blind transfer would be
 			// possible via the Voice API "Transfer Call" PUT
@@ -202,7 +186,7 @@ func (vng *vonageWebsocketStreamer) Send(response internal_type.Stream) error {
 			vng.Input(&protos.ConversationToolCallResult{
 				Id:     data.GetId(),
 				ToolId: data.GetToolId(), Name: data.GetName(), Action: data.GetAction(),
-				Result: map[string]string{"status": "failed", "reason": "transfer not supported for Vonage"},
+				Result: map[string]string{"status": "failed", "reason": "transfer not supported for Vonage", "next_action": "end_call"},
 			})
 		}
 	}

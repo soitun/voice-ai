@@ -799,9 +799,6 @@ func (s *webrtcStreamer) Send(response internal_type.Stream) error {
 				Action: data.GetAction(),
 				Result: map[string]string{"status": "completed"},
 			})
-			if disc := s.Disconnect(protos.ConversationDisconnection_DISCONNECTION_TYPE_TOOL); disc != nil {
-				s.Input(disc)
-			}
 		case protos.ToolCallAction_TOOL_CALL_ACTION_TRANSFER_CONVERSATION:
 			// WebRTC transfer is NOT supported. WebRTC peers connect directly
 			// to the assistant — there is no PSTN/SIP leg to hand off. A
@@ -815,7 +812,7 @@ func (s *webrtcStreamer) Send(response internal_type.Stream) error {
 				ToolId: data.GetToolId(),
 				Name:   data.GetName(),
 				Action: data.GetAction(),
-				Result: map[string]string{"status": "failed", "reason": "transfer not supported for WebRTC"},
+				Result: map[string]string{"status": "failed", "reason": "transfer not supported for WebRTC", "next_action": "end_call"},
 			})
 		}
 	case *protos.ConversationError:

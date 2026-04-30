@@ -165,40 +165,23 @@ func (tws *twilioWebsocketStreamer) Send(response internal_type.Stream) error {
 		if disc := tws.Disconnect(data.GetType()); disc != nil {
 			tws.Input(disc)
 		}
+		tws.Cancel()
 	case *protos.ConversationToolCall:
 		switch data.GetAction() {
 		case protos.ToolCallAction_TOOL_CALL_ACTION_END_CONVERSATION:
+			result := map[string]string{"status": "completed"}
 			if tws.GetConversationUuid() != "" {
 				client, err := twilioClient(tws.VaultCredential())
 				if err != nil {
 					tws.Logger.Errorf("Error creating Twilio client:", err)
-					tws.Input(&protos.ConversationToolCallResult{
-						Id:     data.GetId(),
-						ToolId: data.GetToolId(),
-						Name:   data.GetName(),
-						Action: data.GetAction(),
-						Result: map[string]string{"status": "failed", "reason": fmt.Sprintf("twilio client error: %v", err)},
-					})
-					if disc := tws.Disconnect(protos.ConversationDisconnection_DISCONNECTION_TYPE_TOOL); disc != nil {
-						tws.Input(disc)
+					result = map[string]string{"status": "failed", "reason": fmt.Sprintf("twilio client error: %v", err)}
+				} else {
+					params := &openapi.UpdateCallParams{}
+					params.SetStatus("completed")
+					if _, err := client.Api.UpdateCall(tws.GetConversationUuid(), params); err != nil {
+						tws.Logger.Errorf("Error ending Twilio call:", err)
+						result = map[string]string{"status": "failed", "reason": fmt.Sprintf("end call failed: %v", err)}
 					}
-					return nil
-				}
-				params := &openapi.UpdateCallParams{}
-				params.SetStatus("completed")
-				if _, err := client.Api.UpdateCall(tws.GetConversationUuid(), params); err != nil {
-					tws.Logger.Errorf("Error ending Twilio call:", err)
-					tws.Input(&protos.ConversationToolCallResult{
-						Id:     data.GetId(),
-						ToolId: data.GetToolId(),
-						Name:   data.GetName(),
-						Action: data.GetAction(),
-						Result: map[string]string{"status": "failed", "reason": fmt.Sprintf("end call failed: %v", err)},
-					})
-					if disc := tws.Disconnect(protos.ConversationDisconnection_DISCONNECTION_TYPE_TOOL); disc != nil {
-						tws.Input(disc)
-					}
-					return nil
 				}
 			}
 			tws.Input(&protos.ConversationToolCallResult{
@@ -206,11 +189,8 @@ func (tws *twilioWebsocketStreamer) Send(response internal_type.Stream) error {
 				ToolId: data.GetToolId(),
 				Name:   data.GetName(),
 				Action: data.GetAction(),
-				Result: map[string]string{"status": "completed"},
+				Result: result,
 			})
-			if disc := tws.Disconnect(protos.ConversationDisconnection_DISCONNECTION_TYPE_TOOL); disc != nil {
-				tws.Input(disc)
-			}
 		case protos.ToolCallAction_TOOL_CALL_ACTION_TRANSFER_CONVERSATION:
 			// Twilio transfer is a blind transfer via REST `UpdateCall` with TwiML
 			// `<Dial>`. Twilio takes over the leg; the AI WebSocket is closed by
@@ -231,7 +211,7 @@ func (tws *twilioWebsocketStreamer) Send(response internal_type.Stream) error {
 				tws.Input(&protos.ConversationToolCallResult{
 					Id:     data.GetId(),
 					ToolId: data.GetToolId(), Name: data.GetName(), Action: data.GetAction(),
-					Result: map[string]string{"status": "failed", "reason": "missing target or call ID"},
+					Result: map[string]string{"status": "failed", "reason": "missing target or call ID", "next_action": "end_call"},
 				})
 				return nil
 			}
@@ -246,7 +226,7 @@ func (tws *twilioWebsocketStreamer) Send(response internal_type.Stream) error {
 				tws.Input(&protos.ConversationToolCallResult{
 					Id:     data.GetId(),
 					ToolId: data.GetToolId(), Name: data.GetName(), Action: data.GetAction(),
-					Result: map[string]string{"status": "failed", "reason": fmt.Sprintf("twilio client error: %v", err)},
+					Result: map[string]string{"status": "failed", "reason": fmt.Sprintf("twilio client error: %v", err), "next_action": "end_call"},
 				})
 				return nil
 			}
@@ -256,22 +236,19 @@ func (tws *twilioWebsocketStreamer) Send(response internal_type.Stream) error {
 				tws.Input(&protos.ConversationToolCallResult{
 					Id:     data.GetId(),
 					ToolId: data.GetToolId(), Name: data.GetName(), Action: data.GetAction(),
-					Result: map[string]string{"status": "failed", "reason": fmt.Sprintf("transfer failed: %v", err)},
+					Result: map[string]string{"status": "failed", "reason": fmt.Sprintf("transfer failed: %v", err), "next_action": "end_call"},
 				})
 			} else {
-				// "dispatched" — Twilio accepted the redirect; we cannot observe
-				// whether the target rang, answered, declined, or timed out
-				// because the AI WebSocket is closed by Cancel() below.
 				tws.Input(&protos.ConversationToolCallResult{
 					Id:     data.GetId(),
 					ToolId: data.GetToolId(), Name: data.GetName(), Action: data.GetAction(),
 					Result: map[string]string{
-						"status": "dispatched",
-						"reason": "transfer dispatched to Twilio; outcome not observed",
+						"status":      "dispatched",
+						"reason":      "transfer dispatched to Twilio; outcome not observed",
+						"next_action": "end_call",
 					},
 				})
 			}
-			tws.Cancel()
 		}
 	}
 	return nil
