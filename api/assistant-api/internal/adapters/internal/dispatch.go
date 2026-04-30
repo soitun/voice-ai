@@ -1040,13 +1040,17 @@ func (talking *genericRequestor) handleAssistantMessageMetadata(ctx context.Cont
 
 func (talking *genericRequestor) handleToolCall(ctx context.Context, vl internal_type.LLMToolCallPacket) {
 	talking.logger.Debugf("tool-call-> %+v", vl)
+	req, _ := json.Marshal(vl)
 	// Notify client + emit event (fast, stays on critical)
 	talking.OnPacket(ctx, internal_type.ConversationEventPacket{
 		ContextID: vl.ContextID,
 		Name:      observe.ComponentTool,
 		Data:      map[string]string{observe.DataType: observe.EventToolCallStarted, "name": vl.Name, "id": vl.ToolID, "action": vl.Action.String()},
 		Time:      time.Now(),
-	})
+	}, internal_type.ToolLogCreatePacket{
+		ContextID: vl.ContextID, ToolID: vl.ToolID, Name: vl.Name, Request: req,
+	},
+	)
 
 	if msg, ok := vl.Arguments["message"]; ok && msg != "" {
 		talking.OnPacket(ctx,
@@ -1069,12 +1073,6 @@ func (talking *genericRequestor) handleToolCall(ctx context.Context, vl internal
 			talking.maxSessionTimer.Stop()
 		}
 	}
-
-	// DB write → lowCh (non-blocking)
-	req, _ := json.Marshal(vl)
-	talking.OnPacket(ctx, internal_type.ToolLogCreatePacket{
-		ContextID: vl.ContextID, ToolID: vl.ToolID, Name: vl.Name, Request: req,
-	})
 
 	// Executor → async goroutine
 	if talking.assistantExecutor != nil {
