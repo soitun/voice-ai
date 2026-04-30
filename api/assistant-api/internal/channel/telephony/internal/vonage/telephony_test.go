@@ -274,16 +274,7 @@ func TestSend_EndConversation_PushesToolCallResult(t *testing.T) {
 		t.Fatal("expected a ConversationToolCallResult on CriticalCh, but channel was empty")
 	}
 
-	select {
-	case msg := <-vng.CriticalCh:
-		disc, ok := msg.(*protos.ConversationDisconnection)
-		require.True(t, ok, "expected *protos.ConversationDisconnection, got %T", msg)
-		assert.Equal(t, protos.ConversationDisconnection_DISCONNECTION_TYPE_TOOL, disc.GetType())
-	default:
-		t.Fatal("expected a ConversationDisconnection on CriticalCh, but channel was empty")
-	}
-
-	// Streamer context should remain open; teardown is owned by Talk loop.
+	// Context should remain open; disconnect is owned by handleToolResult in adapter layer.
 	select {
 	case <-vng.Ctx.Done():
 		t.Fatal("expected streamer context to remain open after END_CONVERSATION")

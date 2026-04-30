@@ -28,7 +28,7 @@ func newTestSIPStreamer(t *testing.T) *Streamer {
 	}
 }
 
-func TestSend_EndConversation_PushesToolResultAndToolDisconnection(t *testing.T) {
+func TestSend_EndConversation_PushesToolResult(t *testing.T) {
 	s := newTestSIPStreamer(t)
 
 	err := s.Send(&protos.ConversationToolCall{
@@ -50,15 +50,7 @@ func TestSend_EndConversation_PushesToolResultAndToolDisconnection(t *testing.T)
 		t.Fatal("timed out waiting for ConversationToolCallResult")
 	}
 
-	select {
-	case msg := <-s.CriticalCh:
-		disc, ok := msg.(*protos.ConversationDisconnection)
-		require.True(t, ok, "expected ConversationDisconnection, got %T", msg)
-		assert.Equal(t, protos.ConversationDisconnection_DISCONNECTION_TYPE_TOOL, disc.GetType())
-	case <-time.After(time.Second):
-		t.Fatal("timed out waiting for ConversationDisconnection")
-	}
-
+	// Context should remain open; disconnect is owned by handleToolResult in adapter layer.
 	select {
 	case <-s.Context().Done():
 		t.Fatal("streamer context should remain open; teardown is owned by Talk loop")

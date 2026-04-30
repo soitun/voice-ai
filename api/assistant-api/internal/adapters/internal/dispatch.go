@@ -1039,6 +1039,7 @@ func (talking *genericRequestor) handleAssistantMessageMetadata(ctx context.Cont
 // =============================================================================
 
 func (talking *genericRequestor) handleToolCall(ctx context.Context, vl internal_type.LLMToolCallPacket) {
+	talking.logger.Debugf("tool-call-> %+v", vl)
 	// Notify client + emit event (fast, stays on critical)
 	talking.OnPacket(ctx, internal_type.ConversationEventPacket{
 		ContextID: vl.ContextID,
@@ -1086,18 +1087,13 @@ func (talking *genericRequestor) handleToolCall(ctx context.Context, vl internal
 }
 
 func (talking *genericRequestor) handleToolResult(ctx context.Context, vl internal_type.LLMToolResultPacket) {
+	talking.logger.Debugf("tool-call-> %+v", vl)
 	res, _ := json.Marshal(vl)
+
+	// for tool call first persist the tool then do anything else, this ensures that even if the process crashes after this point we have a record of the tool call and its result
 	talking.OnPacket(ctx,
 		internal_type.ToolLogUpdatePacket{
 			ContextID: vl.ContextID, ToolID: vl.ToolID, Response: res,
-		},
-		internal_type.TTSInterruptPacket{ContextID: vl.ContextID},
-		internal_type.StartIdleTimeoutPacket{ContextID: vl.ContextID},
-		internal_type.ConversationEventPacket{
-			ContextID: vl.ContextID,
-			Name:      observe.ComponentTool,
-			Data:      map[string]string{observe.DataType: observe.EventToolCallCompleted, "name": vl.Name, "id": vl.ToolID},
-			Time:      time.Now(),
 		})
 
 	switch vl.Action {
@@ -1115,6 +1111,17 @@ func (talking *genericRequestor) handleToolResult(ctx context.Context, vl intern
 		}
 	}
 
+	talking.OnPacket(
+		ctx,
+		internal_type.TTSInterruptPacket{ContextID: vl.ContextID},
+		internal_type.StartIdleTimeoutPacket{ContextID: vl.ContextID},
+		internal_type.ConversationEventPacket{
+			ContextID: vl.ContextID,
+			Name:      observe.ComponentTool,
+			Data:      map[string]string{observe.DataType: observe.EventToolCallCompleted, "name": vl.Name, "id": vl.ToolID},
+			Time:      time.Now(),
+		},
+	)
 	if talking.assistantExecutor != nil {
 		utils.Go(ctx, func() {
 			if err := talking.assistantExecutor.Execute(ctx, talking, vl); err != nil {

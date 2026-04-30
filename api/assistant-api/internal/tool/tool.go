@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/google/uuid"
 	internal_assistant_entity "github.com/rapidaai/api/assistant-api/internal/entity/assistants"
 	internal_tool "github.com/rapidaai/api/assistant-api/internal/tool/internal"
 	internal_tool_local "github.com/rapidaai/api/assistant-api/internal/tool/internal/local"
@@ -179,9 +180,17 @@ func (executor *toolExecutor) executeTools(ctx context.Context, contextID string
 			continue
 		}
 		wg.Add(1)
+		// executor.logger.Infof("Executing tool args: %v", call)
+
 		go func(c *protos.ToolCall, caller internal_tool.ToolCaller) {
+			toolCallID := c.GetId()
+			if toolCallID == "" {
+				// sometime LLM may not provide a tool call ID,
+				// in that case we generate one to ensure idempotency and traceability of tool calls
+				toolCallID = fmt.Sprintf("%s-%s", c.GetFunction().GetName(), uuid.New().String())
+			}
 			defer wg.Done()
-			caller.Call(ctx, contextID, c.GetId(), executor.parseArgument(c.GetFunction().GetArguments()), communication)
+			caller.Call(ctx, contextID, toolCallID, executor.parseArgument(c.GetFunction().GetArguments()), communication)
 		}(call, funC)
 	}
 	wg.Wait()

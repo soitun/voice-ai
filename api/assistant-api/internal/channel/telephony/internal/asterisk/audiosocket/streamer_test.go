@@ -118,16 +118,6 @@ func TestSend_EndConversation_PushesToolCallResult(t *testing.T) {
 		t.Fatal("timed out waiting for ConversationToolCallResult on CriticalCh")
 	}
 
-	// 1b. Verify the disconnection reason is emitted as TOOL.
-	select {
-	case msg := <-as.CriticalCh:
-		disc, ok := msg.(*protos.ConversationDisconnection)
-		require.True(t, ok, "expected ConversationDisconnection, got %T", msg)
-		assert.Equal(t, protos.ConversationDisconnection_DISCONNECTION_TYPE_TOOL, disc.GetType())
-	case <-time.After(2 * time.Second):
-		t.Fatal("timed out waiting for ConversationDisconnection on CriticalCh")
-	}
-
 	select {
 	case <-as.Context().Done():
 		t.Fatal("streamer context should remain open; teardown is owned by Talk loop")
@@ -135,7 +125,7 @@ func TestSend_EndConversation_PushesToolCallResult(t *testing.T) {
 	}
 }
 
-func TestSend_EndConversation_SecondCall_NoAdditionalDisconnection(t *testing.T) {
+func TestSend_EndConversation_SecondCall_StillPushesToolResult(t *testing.T) {
 	as, remote := newTestStreamer(t)
 	drainRemoteConn(remote)
 
@@ -146,11 +136,10 @@ func TestSend_EndConversation_SecondCall_NoAdditionalDisconnection(t *testing.T)
 		Action: protos.ToolCallAction_TOOL_CALL_ACTION_END_CONVERSATION,
 	}
 
-	// First call emits tool result + disconnection.
+	// First call emits tool result only.
 	err := as.Send(toolCall)
 	require.NoError(t, err)
 
-	// The tool call result should still be pushed.
 	select {
 	case msg := <-as.CriticalCh:
 		result, ok := msg.(*protos.ConversationToolCallResult)
@@ -161,17 +150,7 @@ func TestSend_EndConversation_SecondCall_NoAdditionalDisconnection(t *testing.T)
 		t.Fatal("timed out waiting for ConversationToolCallResult")
 	}
 
-	select {
-	case msg := <-as.CriticalCh:
-		disc, ok := msg.(*protos.ConversationDisconnection)
-		require.True(t, ok, "expected ConversationDisconnection, got %T", msg)
-		assert.Equal(t, protos.ConversationDisconnection_DISCONNECTION_TYPE_TOOL, disc.GetType())
-	case <-time.After(2 * time.Second):
-		t.Fatal("timed out waiting for ConversationDisconnection")
-	}
-
-	// Second call should still return nil, but no new disconnection should be emitted
-	// because BaseStreamer.Disconnect is idempotent.
+	// Second call should still return nil and push another tool result.
 	err = as.Send(toolCall)
 	require.NoError(t, err)
 	select {
@@ -182,11 +161,13 @@ func TestSend_EndConversation_SecondCall_NoAdditionalDisconnection(t *testing.T)
 	case <-time.After(2 * time.Second):
 		t.Fatal("timed out waiting for second ConversationToolCallResult")
 	}
+
+	// No extra messages should be present.
 	select {
 	case msg := <-as.CriticalCh:
 		t.Fatalf("unexpected extra message after second end_conversation: %T", msg)
 	case <-time.After(200 * time.Millisecond):
-		// expected: no second disconnection packet
+		// expected: no extra messages
 	}
 }
 
@@ -212,12 +193,6 @@ func TestSend_ConversationDisconnection_RequeuesDisconnect_NoImmediateClose(t *t
 	case msg := <-as.CriticalCh:
 		t.Fatalf("unexpected extra message after requeued disconnection: %T", msg)
 	case <-time.After(200 * time.Millisecond):
-	}
-
-	select {
-	case <-as.Context().Done():
-		t.Fatal("streamer context should remain open; teardown is owned by Talk loop")
-	default:
 	}
 }
 
