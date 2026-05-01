@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/rapidaai/api/assistant-api/config"
 	internal_adapter "github.com/rapidaai/api/assistant-api/internal/adapters"
@@ -786,7 +787,7 @@ func (m *SIPEngine) pipelineCallStart(ctx context.Context, session *sip_infra.Se
 	}
 
 	type transferable interface {
-		SetOnTransferInitiated(func(targets []string, message string, postTransferAction string))
+		SetOnTransferInitiated(func(targets []string, postTransferAction string))
 		SetBridgeOutRTP(*sip_infra.RTPHandler)
 		ClearBridgeTarget()
 		StopRingback()
@@ -796,12 +797,40 @@ func (m *SIPEngine) pipelineCallStart(ctx context.Context, session *sip_infra.Se
 		Input(internal_type.Stream)
 	}
 	if ts, ok := streamer.(transferable); ok {
-		ts.SetOnTransferInitiated(func(targets []string, message string, postTransferAction string) {
+		ts.SetOnTransferInitiated(func(targets []string, postTransferAction string) {
 			toolID, _ := session.GetMetadata("tool_id")
 			toolIDStr, _ := toolID.(string)
 			toolCtxID, _ := session.GetMetadata("tool_context_id")
 			toolCtxIDStr, _ := toolCtxID.(string)
 			primaryTarget := targets[0]
+			conversationID := strconv.FormatUint(cc.ConversationID, 10)
+			legID := string(session.GetInfo().Direction)
+			emitTransferEvent := func(eventType string, data map[string]string) {
+				payload := map[string]string{
+					"event_type":  eventType,
+					"call_id":     callID,
+					"leg_id":      legID,
+					"transfer_id": toolCtxIDStr,
+					"attempt_id":  "",
+					"from_state":  "",
+					"to_state":    "",
+					"reason":      "",
+					"sip_method":  "",
+					"sip_status":  "",
+					"target":      "",
+					"duration_ms": "",
+					"error":       "",
+				}
+				for k, v := range data {
+					payload[k] = v
+				}
+				ts.Input(&protos.ConversationEvent{
+					Id:   conversationID,
+					Name: observe.ComponentTelephony,
+					Data: payload,
+					Time: timestamppb.Now(),
+				})
+			}
 			m.dispatcher.OnPipeline(m.ctx, sip_infra.TransferInitiatedPipeline{
 				ID:                 callID,
 				Session:            session,
@@ -810,25 +839,32 @@ func (m *SIPEngine) pipelineCallStart(ctx context.Context, session *sip_infra.Se
 				Config:             sipConfig,
 				PostTransferAction: postTransferAction,
 				OnAttempt: func(target string, attempt int, total int) {
-					ts.Input(&protos.ConversationEvent{
-						Id:   callID,
-						Name: observe.ComponentTelephony,
-						Data: map[string]string{
-							observe.DataType:     observe.EventTransferring,
-							observe.DataProvider: "sip",
-							observe.DataTarget:   target,
-							"attempt":            strconv.Itoa(attempt),
-							"total":              strconv.Itoa(total),
-						},
-						Time: timestamppb.Now(),
+					emitTransferEvent("transfer_attempt", map[string]string{
+						observe.DataType:     observe.EventTransferring,
+						observe.DataProvider: "sip",
+						observe.DataTarget:   target,
+						"attempt_id":         strconv.Itoa(attempt),
+						"reason":             "dial_attempt",
+						"total":              strconv.Itoa(total),
 					})
 				},
 				OnConnected: func(outboundRTP *sip_infra.RTPHandler) {
 					ts.StopRingback()
 					ts.SetBridgeOutRTP(outboundRTP)
+					emitTransferEvent("transfer_connected", map[string]string{
+						"target":     primaryTarget,
+						"from_state": "transferring",
+						"to_state":   "bridge_connected",
+						"reason":     "target_answered",
+					})
 				},
 				OnFailed: func() {
 					ts.ExitTransferMode()
+					emitTransferEvent("transfer_failed", map[string]string{
+						"target": primaryTarget,
+						"reason": "dial_failed",
+						"error":  fmt.Sprintf("transfer to %s failed", primaryTarget),
+					})
 					if toolIDStr != "" {
 						ts.PushToolCallResult(toolCtxIDStr, toolIDStr, "transfer_call", protos.ToolCallAction_TOOL_CALL_ACTION_TRANSFER_CONVERSATION, map[string]string{
 							"status":      "failed",
@@ -839,6 +875,21 @@ func (m *SIPEngine) pipelineCallStart(ctx context.Context, session *sip_infra.Se
 				},
 				OnTeardown: func() {
 					ts.ClearBridgeTarget()
+					durationMs := ""
+					if d, ok := session.GetMetadata(sip_infra.MetadataBridgeTransferDuration); ok {
+						if duration, ok := d.(string); ok && duration != "" {
+							if parsed, err := time.ParseDuration(duration); err == nil {
+								durationMs = strconv.FormatInt(parsed.Milliseconds(), 10)
+							}
+						}
+					}
+					emitTransferEvent("transfer_teardown", map[string]string{
+						"target":      primaryTarget,
+						"from_state":  "bridge_connected",
+						"to_state":    "connected",
+						"reason":      "bridge_end",
+						"duration_ms": durationMs,
+					})
 					if toolIDStr != "" {
 						status, _ := session.GetMetadata(sip_infra.MetadataBridgeTransferStatus)
 						statusStr, _ := status.(string)
@@ -851,6 +902,12 @@ func (m *SIPEngine) pipelineCallStart(ctx context.Context, session *sip_infra.Se
 				},
 				OnResumeAI: func() {
 					ts.ExitTransferMode()
+					emitTransferEvent("transfer_resume_ai", map[string]string{
+						"target":     primaryTarget,
+						"from_state": "bridge_connected",
+						"to_state":   "connected",
+						"reason":     "handoff_to_ai",
+					})
 				},
 				OnOperatorAudio: func(audio []byte) { ts.PushBridgeOperatorAudio(audio) },
 			})

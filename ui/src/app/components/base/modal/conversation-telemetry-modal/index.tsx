@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useDeferredValue, useEffect, useState } from 'react';
 import {
   AssistantDefinition,
   ConnectionConfig,
@@ -51,6 +51,31 @@ interface Chip {
 type CriteriaInput = {
   key: string;
   value: string;
+};
+
+type TelemetrySearchQuery = {
+  freeTextTerms: string[];
+  filters: {
+    type: string[];
+    component: string[];
+    scope: string[];
+    name: string[];
+    conversationId: string[];
+    messageId: string[];
+    contextId: string[];
+  };
+};
+
+type TelemetrySearchDocument = {
+  kind: 'event' | 'metric';
+  componentType: string;
+  typeLabel: string;
+  name: string;
+  scope: string;
+  conversationId: string;
+  messageId: string;
+  contextId: string;
+  rawText: string;
 };
 
 type TelemetryRow =
@@ -116,6 +141,124 @@ export const buildTelemetryCriteriaInputs = (
   return out;
 };
 
+const createEmptyTelemetrySearchQuery = (): TelemetrySearchQuery => ({
+  freeTextTerms: [],
+  filters: {
+    type: [],
+    component: [],
+    scope: [],
+    name: [],
+    conversationId: [],
+    messageId: [],
+    contextId: [],
+  },
+});
+
+const tokenizeTelemetrySearchQuery = (value: string): string[] =>
+  (value.match(/"[^"]+"|\S+/g) || [])
+    .map(token => token.trim())
+    .filter(Boolean)
+    .map(token =>
+      token.startsWith('"') && token.endsWith('"')
+        ? token.slice(1, -1).trim()
+        : token,
+    )
+    .filter(Boolean);
+
+const normalizeTelemetrySearchField = (field: string): string => {
+  switch (field.toLowerCase()) {
+    case 'event':
+      return 'name';
+    case 'conversation':
+      return 'conversationId';
+    case 'message':
+      return 'messageId';
+    case 'context':
+      return 'contextId';
+    default:
+      return field.toLowerCase();
+  }
+};
+
+export const parseTelemetrySearchQuery = (
+  value: string,
+): TelemetrySearchQuery => {
+  const query = createEmptyTelemetrySearchQuery();
+
+  tokenizeTelemetrySearchQuery(value).forEach(token => {
+    const delimiterIndex = token.indexOf(':');
+    if (delimiterIndex <= 0) {
+      query.freeTextTerms.push(token.toLowerCase());
+      return;
+    }
+
+    const field = normalizeTelemetrySearchField(
+      token.slice(0, delimiterIndex).trim(),
+    );
+    const fieldValue = token.slice(delimiterIndex + 1).trim().toLowerCase();
+
+    if (!fieldValue) {
+      return;
+    }
+
+    switch (field) {
+      case 'type':
+      case 'component':
+      case 'scope':
+      case 'name':
+      case 'conversationId':
+      case 'messageId':
+      case 'contextId':
+        query.filters[field].push(fieldValue);
+        break;
+      default:
+        query.freeTextTerms.push(token.toLowerCase());
+    }
+  });
+
+  return query;
+};
+
+export const matchesTelemetrySearchDocument = (
+  document: TelemetrySearchDocument,
+  query: TelemetrySearchQuery,
+): boolean => {
+  const contains = (source: string, term: string) =>
+    source.toLowerCase().includes(term);
+  const matchesAny = (values: string[], candidate: string) =>
+    values.length === 0 || values.some(value => contains(candidate, value));
+
+  if (
+    query.freeTextTerms.some(
+      term =>
+        !contains(document.typeLabel, term) && !contains(document.rawText, term),
+    )
+  ) {
+    return false;
+  }
+
+  if (!matchesAny(query.filters.type, document.kind)) return false;
+  if (!matchesAny(query.filters.component, document.componentType)) return false;
+  if (!matchesAny(query.filters.scope, document.scope)) return false;
+  if (!matchesAny(query.filters.name, document.name)) return false;
+  if (!matchesAny(query.filters.conversationId, document.conversationId))
+    return false;
+  if (!matchesAny(query.filters.contextId, document.contextId)) return false;
+
+  if (
+    query.filters.messageId.length > 0 &&
+    !query.filters.messageId.some(
+      value =>
+        contains(document.messageId, value) ||
+        contains(document.contextId, value),
+    )
+  ) {
+    return false;
+  }
+
+  return true;
+};
+
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function formatDateTime(d: Date): string {
@@ -149,6 +292,38 @@ function metricToJson(metric: TelemetryMetric): object {
   };
 }
 
+function getTelemetrySearchDocument(
+  row: TelemetryRow,
+  typeLabel: string,
+  json: object,
+): TelemetrySearchDocument {
+  if (row.kind === 'event') {
+    return {
+      kind: 'event',
+      componentType: normalizeComponentType(row.record.getName().split('.')[0]),
+      typeLabel,
+      name: row.record.getName(),
+      scope: '',
+      conversationId: row.record.getAssistantconversationid(),
+      messageId: row.record.getMessageid(),
+      contextId: '',
+      rawText: JSON.stringify(json),
+    };
+  }
+
+  return {
+    kind: 'metric',
+    componentType: 'metric',
+    typeLabel,
+    name: '',
+    scope: row.record.getScope(),
+    conversationId: row.record.getAssistantconversationid(),
+    messageId: '',
+    contextId: row.record.getContextid(),
+    rawText: JSON.stringify(json),
+  };
+}
+
 // ─── Main dialog ─────────────────────────────────────────────────────────────
 
 export function ConversationTelemetryDialog(
@@ -170,6 +345,13 @@ export function ConversationTelemetryDialog(
   const [appliedConversationId, setAppliedConversationId] = useState('');
   const [appliedMessageId, setAppliedMessageId] = useState('');
   const [structuredError, setStructuredError] = useState('');
+  const deferredSearchText = useDeferredValue(searchText);
+  const parsedSearchQuery = parseTelemetrySearchQuery(deferredSearchText);
+  const hasSearchQuery = searchText.trim() !== '';
+  const hasTypeFilters = activeFilters.size > 0;
+  const shouldFetchAllRows = hasSearchQuery || hasTypeFilters;
+  const requestPage = shouldFetchAllRows ? 1 : page;
+  const requestPageSize = shouldFetchAllRows ? 100 : pageSize;
 
   useEffect(() => {
     const normalized = splitStructuredTelemetryCriteria(
@@ -203,16 +385,6 @@ export function ConversationTelemetryDialog(
     setRows([]);
     setExpandedRows(new Set());
 
-    const request = new GetAllAssistantTelemetryRequest();
-    const paginate = new Paginate();
-    paginate.setPage(page);
-    paginate.setPagesize(pageSize);
-    request.setPaginate(paginate);
-
-    const assistantDef = new AssistantDefinition();
-    assistantDef.setAssistantid(props.assistantId);
-    request.setAssistant(assistantDef);
-
     const criteriaList = buildTelemetryCriteriaInputs(
       chips.map(chip => ({ key: chip.field, value: String(chip.value) })),
       appliedConversationId,
@@ -224,44 +396,94 @@ export function ConversationTelemetryDialog(
       criteria.setLogic('match');
       return criteria;
     });
-    request.setCriteriasList(criteriaList);
 
-    GetAllAssistantTelemetry(
-      connectionConfig,
-      request,
-      ConnectionConfig.WithDebugger({
-        authorization: token,
-        userId: authId,
-        projectId: projectId,
-      }),
-    )
-      .then(response => {
+    const buildRequest = (nextPage: number, nextPageSize: number) => {
+      const request = new GetAllAssistantTelemetryRequest();
+      const paginate = new Paginate();
+      paginate.setPage(nextPage);
+      paginate.setPagesize(nextPageSize);
+      request.setPaginate(paginate);
+
+      const assistantDef = new AssistantDefinition();
+      assistantDef.setAssistantid(props.assistantId);
+      request.setAssistant(assistantDef);
+      request.setCriteriasList(criteriaList);
+      return request;
+    };
+
+    const toTelemetryRows = (response: any, pageOffset: number) => {
+      const merged: TelemetryRow[] = [];
+      response.getDataList().forEach((record: any, index: number) => {
+        const event = record.getEvent();
+        const metric = record.getMetric();
+        if (event) {
+          merged.push({
+            kind: 'event',
+            ts: event.getTime()?.toDate() ?? new Date(0),
+            key: `e-${pageOffset + index}`,
+            record: event,
+          });
+        } else if (metric) {
+          merged.push({
+            kind: 'metric',
+            ts: metric.getTime()?.toDate() ?? new Date(0),
+            key: `m-${pageOffset + index}`,
+            record: metric,
+          });
+        }
+      });
+      return merged;
+    };
+
+    const fetchTelemetry = async () => {
+      try {
+        const firstResponse = await GetAllAssistantTelemetry(
+          connectionConfig,
+          buildRequest(requestPage, requestPageSize),
+          ConnectionConfig.WithDebugger({
+            authorization: token,
+            userId: authId,
+            projectId: projectId,
+          }),
+        );
         if (!active) return;
-        setTotalItem(response.getPaginated()?.getTotalitem() ?? 0);
-        const merged: TelemetryRow[] = [];
-        response.getDataList().forEach((r, i) => {
-          const e = r.getEvent();
-          const m = r.getMetric();
-          if (e) {
-            const ts = e.getTime()?.toDate() ?? new Date(0);
-            merged.push({ kind: 'event', ts, key: `e-${i}`, record: e });
-          } else if (m) {
-            const ts = m.getTime()?.toDate() ?? new Date(0);
-            merged.push({ kind: 'metric', ts, key: `m-${i}`, record: m });
+
+        const total = firstResponse.getPaginated()?.getTotalitem() ?? 0;
+        const mergedRows = toTelemetryRows(firstResponse, 0);
+
+        if (shouldFetchAllRows && total > requestPageSize) {
+          const totalPages = Math.ceil(total / requestPageSize);
+          for (let nextPage = 2; nextPage <= totalPages; nextPage += 1) {
+            const response = await GetAllAssistantTelemetry(
+              connectionConfig,
+              buildRequest(nextPage, requestPageSize),
+              ConnectionConfig.WithDebugger({
+                authorization: token,
+                userId: authId,
+                projectId: projectId,
+              }),
+            );
+            if (!active) return;
+            mergedRows.push(
+              ...toTelemetryRows(response, (nextPage - 1) * requestPageSize),
+            );
           }
-        });
-        merged.sort((a, b) => a.ts.getTime() - b.ts.getTime());
-        setRows(merged);
-      })
-      .catch(() => {
+        }
+
+        mergedRows.sort((a, b) => a.ts.getTime() - b.ts.getTime());
+        setRows(mergedRows);
+        setTotalItem(total);
+      } catch {
         if (!active) return;
         setRows([]);
         setTotalItem(0);
-      })
-      .finally(() => {
+      } finally {
         if (!active) return;
         setIsLoading(false);
-      });
+      }
+    };
+
+    fetchTelemetry();
 
     return () => {
       active = false;
@@ -274,9 +496,10 @@ export function ConversationTelemetryDialog(
     JSON.stringify(chips),
     appliedConversationId,
     appliedMessageId,
-    pageSize,
-    page,
+    requestPageSize,
+    requestPage,
     criteriaReady,
+    shouldFetchAllRows,
   ]);
 
   const toggleRow = (key: string) => {
@@ -338,6 +561,7 @@ export function ConversationTelemetryDialog(
       else next.add(type);
       return next;
     });
+    setPage(1);
   };
 
   const getRowData = (row: TelemetryRow) => {
@@ -360,10 +584,13 @@ export function ConversationTelemetryDialog(
 
   const filteredRows = rows.filter(row => {
     const { typeLabel, json } = getRowData(row);
-    const matchesSearch = searchText
-      ? typeLabel.toLowerCase().includes(searchText.toLowerCase()) ||
-        JSON.stringify(json).toLowerCase().includes(searchText.toLowerCase())
-      : true;
+    const matchesSearch =
+      deferredSearchText.trim() === ''
+        ? true
+        : matchesTelemetrySearchDocument(
+            getTelemetrySearchDocument(row, typeLabel, json),
+            parsedSearchQuery,
+          );
     const matchesFilter =
       activeFilters.size === 0
         ? true
@@ -374,6 +601,19 @@ export function ConversationTelemetryDialog(
           );
     return matchesSearch && matchesFilter;
   });
+
+  useEffect(() => {
+    if (!shouldFetchAllRows) return;
+    const maxPage = Math.max(1, Math.ceil(filteredRows.length / pageSize));
+    if (page > maxPage) {
+      setPage(maxPage);
+    }
+  }, [filteredRows.length, page, pageSize, shouldFetchAllRows]);
+
+  const visibleRows = shouldFetchAllRows
+    ? filteredRows.slice((page - 1) * pageSize, page * pageSize)
+    : filteredRows;
+  const totalItems = shouldFetchAllRows ? filteredRows.length : totalItem;
 
   return (
     <Modal
@@ -393,8 +633,12 @@ export function ConversationTelemetryDialog(
         <TableToolbar>
           <TableToolbarContent>
             <TableToolbarSearch
-              placeholder="Search telemetry..."
-              onChange={(e: any) => setSearchText(e.target?.value || '')}
+              placeholder='Search telemetry, e.g. type:metric scope:llm "timeout"'
+              value={searchText}
+              onChange={(e: any) => {
+                setSearchText(e.target?.value || '');
+                setPage(1);
+              }}
             />
             <TableToolbarFilter
               filters={EVENT_TYPES.map(t => ({
@@ -402,8 +646,14 @@ export function ConversationTelemetryDialog(
                 label: t.charAt(0).toUpperCase() + t.slice(1),
               }))}
               activeFilters={activeFilters}
-              onApplyFilter={setActiveFilters}
-              onResetFilter={() => setActiveFilters(new Set())}
+              onApplyFilter={filters => {
+                setActiveFilters(filters);
+                setPage(1);
+              }}
+              onResetFilter={() => {
+                setActiveFilters(new Set());
+                setPage(1);
+              }}
               onApply={applyStructuredCriteria}
               onReset={resetStructuredCriteria}
               extraContent={
@@ -490,7 +740,7 @@ export function ConversationTelemetryDialog(
             <div className="flex items-center justify-center py-16">
               <Loading withOverlay={false} small />
             </div>
-          ) : filteredRows.length === 0 ? (
+          ) : visibleRows.length === 0 ? (
             <div className="flex items-center justify-center py-16 text-gray-400 dark:text-gray-500 text-sm">
               No telemetry events found
             </div>
@@ -505,7 +755,7 @@ export function ConversationTelemetryDialog(
                 </TableRow>
               </TableHead>
               <TableBody>
-                {filteredRows.map(row => {
+                {visibleRows.map(row => {
                   const { typeLabel, tagType, json } = getRowData(row);
                   const isExpanded = expandedRows.has(row.key);
                   return (
@@ -552,15 +802,15 @@ export function ConversationTelemetryDialog(
         </div>
 
         {/* Pagination */}
-        {filteredRows.length > 0 && (
+        {totalItems > 0 && (
           <Pagination
-            totalItems={totalItem}
+            totalItems={totalItems}
             page={page}
             pageSize={pageSize}
             pageSizes={[25, 50, 100]}
             onChange={({ page: p, pageSize: ps }) => {
-              if (ps !== pageSize) setPageSize(ps);
-              else setPage(p);
+              setPageSize(ps);
+              setPage(p);
             }}
           />
         )}

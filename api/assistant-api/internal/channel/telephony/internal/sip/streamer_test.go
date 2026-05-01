@@ -97,11 +97,9 @@ func TestSend_TransferConversation_UsesTransferToKey(t *testing.T) {
 	s := newTestSIPStreamer(t)
 
 	var gotTargets []string
-	var gotMessage string
 	var gotPostTransferAction string
-	s.SetOnTransferInitiated(func(targets []string, message string, postTransferAction string) {
+	s.SetOnTransferInitiated(func(targets []string, postTransferAction string) {
 		gotTargets = append([]string(nil), targets...)
-		gotMessage = message
 		gotPostTransferAction = postTransferAction
 	})
 
@@ -112,14 +110,12 @@ func TestSend_TransferConversation_UsesTransferToKey(t *testing.T) {
 		Action: protos.ToolCallAction_TOOL_CALL_ACTION_TRANSFER_CONVERSATION,
 		Args: map[string]string{
 			"transfer_to":          "+15550001111" + commons.SEPARATOR + "sip:agent@example.com",
-			"message":              "Please hold while I transfer your call.",
 			"post_transfer_action": "end_call",
 		},
 	})
 	require.NoError(t, err)
 
 	assert.Equal(t, []string{"+15550001111", "sip:agent@example.com"}, gotTargets)
-	assert.Equal(t, "Please hold while I transfer your call.", gotMessage)
 	assert.Equal(t, "end_call", gotPostTransferAction)
 }
 

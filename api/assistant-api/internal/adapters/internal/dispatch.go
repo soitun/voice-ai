@@ -1086,7 +1086,6 @@ func (talking *genericRequestor) handleToolCall(ctx context.Context, vl internal
 		}
 	}
 
-	// Executor → async goroutine
 	if talking.assistantExecutor != nil {
 		utils.Go(ctx, func() {
 			if err := talking.assistantExecutor.Execute(ctx, talking, vl); err != nil {

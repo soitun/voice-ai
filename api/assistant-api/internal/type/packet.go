@@ -320,7 +320,7 @@ type LLMErrorPacket struct {
 
 func (f LLMErrorPacket) ContextId() string { return f.ContextID }
 func (f LLMErrorPacket) IsRecoverable() bool {
-	return f.Type == LLMRateLimit || f.Type == LLMNetworkTimeout
+	return f.Type != LLMAuthentication && f.Type != LLMSystemPanic
 }
 func (f LLMErrorPacket) Err() error         { return f.Error }
 func (f LLMErrorPacket) ErrMessage() string { return fmt.Sprintf("llm: %s", f.Error.Error()) }

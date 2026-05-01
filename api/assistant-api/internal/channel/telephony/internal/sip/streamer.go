@@ -36,7 +36,7 @@ type Streamer struct {
 
 	transferring        atomic.Bool
 	ringbackCancel      context.CancelFunc
-	onTransferInitiated func(targets []string, message string, postTransferAction string)
+	onTransferInitiated func(targets []string, postTransferAction string)
 
 	cancelParent context.CancelFunc
 }
@@ -197,7 +197,6 @@ func (s *Streamer) Send(response internal_type.Stream) error {
 				return nil
 			}
 			targets := s.SplitTransferTargets(raw)
-			message := data.GetArgs()["message"]
 			postTransferAction := data.GetArgs()["post_transfer_action"]
 			s.mu.RLock()
 			if s.session != nil {
@@ -206,7 +205,7 @@ func (s *Streamer) Send(response internal_type.Stream) error {
 				s.session.SetMetadata("tool_context_id", data.GetId())
 			}
 			s.mu.RUnlock()
-			s.EnterTransferMode(targets, message, postTransferAction)
+			s.EnterTransferMode(targets, postTransferAction)
 			return nil
 		}
 	}
@@ -217,7 +216,7 @@ func (s *Streamer) Send(response internal_type.Stream) error {
 // Transfer
 // =============================================================================
 
-func (s *Streamer) EnterTransferMode(targets []string, message string, postTransferAction string) {
+func (s *Streamer) EnterTransferMode(targets []string, postTransferAction string) {
 	if !s.transferring.CompareAndSwap(false, true) {
 		return
 	}
@@ -234,14 +233,16 @@ func (s *Streamer) EnterTransferMode(targets []string, message string, postTrans
 	ringbackCtx, ringbackCancel := context.WithCancel(s.Ctx)
 	s.mu.Lock()
 	s.ringbackCancel = ringbackCancel
+	audio := s.audio
 	s.mu.Unlock()
 	go func() {
-		s.audio.WaitOutputDrain(ringbackCtx)
-		s.audio.PlayRingback(ringbackCtx)
+		if audio != nil {
+			audio.PlayRingback(ringbackCtx)
+		}
 	}()
 
 	if callback != nil {
-		callback(targets, message, postTransferAction)
+		callback(targets, postTransferAction)
 	}
 }
 
@@ -306,7 +307,7 @@ func (s *Streamer) PushToolCallResult(contextID, toolID, toolName string, action
 	})
 }
 
-func (s *Streamer) SetOnTransferInitiated(fn func(targets []string, message string, postTransferAction string)) {
+func (s *Streamer) SetOnTransferInitiated(fn func(targets []string, postTransferAction string)) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.onTransferInitiated = fn
