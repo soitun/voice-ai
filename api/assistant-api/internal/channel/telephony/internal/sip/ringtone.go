@@ -1,15 +1,16 @@
 package internal_sip_telephony
 
 import (
-	"os"
-	"path/filepath"
-	"runtime"
+	"embed"
 	"sync"
 )
 
 var ringtoneCache sync.Map
 
 const defaultRingtone = "ringtone_us"
+
+//go:embed assets/*.ulaw
+var ringtoneAssets embed.FS
 
 func LoadRingtoneBytes(name string) []byte {
 	if name == "" {
@@ -20,14 +21,7 @@ func LoadRingtoneBytes(name string) []byte {
 			return b
 		}
 	}
-	_, thisFile, _, ok := runtime.Caller(0)
-	if !ok {
-		return nil
-	}
-	assetsDir := filepath.Join(filepath.Dir(thisFile), "assets")
-	fullPath := filepath.Join(assetsDir, name+".ulaw")
-
-	data, err := os.ReadFile(fullPath)
+	data, err := ringtoneAssets.ReadFile("assets/" + name + ".ulaw")
 	if err != nil {
 		if name != defaultRingtone {
 			return LoadRingtoneBytes(defaultRingtone)

@@ -174,25 +174,23 @@ func (t *genericRequestor) Talk(_ context.Context, auth types.SimplePrinciple) e
 		case *protos.ConversationDisconnection:
 			if initialized {
 				ctx := context.Background()
-				utils.Go(ctx, func() {
-					t.OnPacket(ctx, internal_type.ConversationEventPacket{
-						ContextID: t.GetID(),
-						Name:      obs.ComponentSession,
-						Data:      map[string]string{obs.DataType: obs.EventDisconnectRequested, obs.DataReason: payload.GetType().String()},
-						Time:      time.Now(),
-					})
-					t.OnPacket(ctx,
-						internal_type.ConversationMetadataPacket{
-							ContextID: t.Conversation().Id,
-							Metadata: []*protos.Metadata{{
-								Key:   "disconnect_reason",
-								Value: payload.GetType().String(),
-							}},
-						},
-					)
-					t.emitCallCompletion(totalTime)
-					t.Disconnect(ctx)
+				t.OnPacket(ctx, internal_type.ConversationEventPacket{
+					ContextID: t.GetID(),
+					Name:      obs.ComponentSession,
+					Data:      map[string]string{obs.DataType: obs.EventDisconnectRequested, obs.DataReason: payload.GetType().String()},
+					Time:      time.Now(),
 				})
+				t.OnPacket(ctx,
+					internal_type.ConversationMetadataPacket{
+						ContextID: t.Conversation().Id,
+						Metadata: []*protos.Metadata{{
+							Key:   "disconnect_reason",
+							Value: payload.GetType().String(),
+						}},
+					},
+				)
+				t.emitCallCompletion(totalTime)
+				t.Disconnect(ctx)
 			}
 			return nil
 		}

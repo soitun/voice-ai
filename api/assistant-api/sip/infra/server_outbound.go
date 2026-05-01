@@ -72,23 +72,10 @@ func (s *Server) handleOutboundDialog(session *Session, rtpHandler *RTPHandler, 
 	// Ensure dialog resources are cleaned up when the goroutine exits.
 	// sipgo's Close() does NOT send BYE — it only releases internal dialog state.
 	defer dialogSession.Close()
-
-	// Wait for the remote side to answer (processes 1xx and 2xx responses).
-	// Pass SIP credentials so sipgo can handle digest auth challenges automatically.
-	// sipgo's WaitAnswer handles both:
-	//   - 401 WWW-Authenticate (Asterisk, Vonage) → responds with Authorization header
-	//   - 407 Proxy-Authenticate (Twilio, Telnyx, FreeSWITCH) → responds with Proxy-Authorization
-	//   - Only attempts auth once; if second response is still 401/407, returns ErrDialogResponse
-	// Mask password for logging (show first char + length)
-	maskedPwd := "empty"
-	if len(session.config.Password) > 0 {
-		maskedPwd = string(session.config.Password[0]) + strings.Repeat("*", len(session.config.Password)-1)
-	}
 	digestURI := dialogSession.InviteRequest.Recipient.Addr()
 	s.logger.Debugw("Outbound call waiting for answer with digest auth",
 		"call_id", callID,
 		"auth_username", session.config.Username,
-		"auth_password", maskedPwd,
 		"auth_realm", session.config.Realm,
 		"digest_uri", digestURI,
 		"request_uri", dialogSession.InviteRequest.Recipient.String())

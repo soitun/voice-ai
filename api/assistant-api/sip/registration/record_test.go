@@ -16,10 +16,10 @@ type testPostgresConnector struct {
 	db *gorm.DB
 }
 
-func (t *testPostgresConnector) Connect(ctx context.Context) error             { return nil }
-func (t *testPostgresConnector) Name() string                                  { return "test-postgres" }
-func (t *testPostgresConnector) IsConnected(ctx context.Context) bool          { return t.db != nil }
-func (t *testPostgresConnector) Disconnect(ctx context.Context) error          { return nil }
+func (t *testPostgresConnector) Connect(ctx context.Context) error    { return nil }
+func (t *testPostgresConnector) Name() string                         { return "test-postgres" }
+func (t *testPostgresConnector) IsConnected(ctx context.Context) bool { return t.db != nil }
+func (t *testPostgresConnector) Disconnect(ctx context.Context) error { return nil }
 func (t *testPostgresConnector) Query(ctx context.Context, qry string, dest interface{}) error {
 	return t.db.WithContext(ctx).Raw(qry).Scan(dest).Error
 }
@@ -87,9 +87,9 @@ func insertSIPDeployment(t *testing.T, db *gorm.DB, deploymentID, assistantID ui
 	}
 
 	options := map[string]string{
-		"phone":               phone,
+		"phone":                phone,
 		"rapida.credential_id": "101",
-		"rapida.sip_inbound":  "true",
+		"rapida.sip_inbound":   "true",
 	}
 	if sipStatus != "" {
 		options["rapida.sip_status"] = sipStatus
