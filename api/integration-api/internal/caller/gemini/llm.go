@@ -13,6 +13,7 @@ import (
 
 	"google.golang.org/genai"
 
+	"github.com/google/uuid"
 	internal_caller_metrics "github.com/rapidaai/api/integration-api/internal/caller/metrics"
 	internal_callers "github.com/rapidaai/api/integration-api/internal/type"
 	"github.com/rapidaai/pkg/commons"
@@ -76,9 +77,6 @@ func (llc *largeLanguageCaller) buildHistory(allMessages []*protos.Message) (*ge
 					Role:  "user",
 					Parts: make([]*genai.Part, 0),
 				}
-
-				// get the last message and tool name and id
-
 				for _, t := range tool.GetTools() {
 					var responseMap map[string]any
 					if err := json.Unmarshal([]byte(t.GetContent()), &responseMap); err != nil {
@@ -151,9 +149,6 @@ func (llc *largeLanguageCaller) googleFunctionParameterPropertyToSchema(fpp *int
 func (llc *largeLanguageCaller) getContentConfig(opts *internal_callers.ChatCompletionOptions) (mdl string, config *genai.GenerateContentConfig) {
 	config = &genai.GenerateContentConfig{}
 	if len(opts.ToolDefinitions) > 0 {
-		// config.Tools = []*genai.Tool{{
-		// 	FunctionDeclarations: make([]*genai.FunctionDeclaration, len(opts.ToolDefinitions)),
-		// }}
 		fd := make([]*genai.FunctionDeclaration, len(opts.ToolDefinitions))
 		for idx, tl := range opts.ToolDefinitions {
 			switch tl.Type {
@@ -315,6 +310,10 @@ func (llc *largeLanguageCaller) StreamChatCompletion(
 						if err != nil {
 							llc.logger.Errorf("Error marshaling function args: %v", err)
 							argsJSON = []byte("{}")
+						}
+						// Ensure function call has an ID for tracking, generate if missing gemini bug
+						if part.FunctionCall.ID == "" {
+							part.FunctionCall.ID = fmt.Sprintf("toolcall-%d-%s", choice.Index, uuid.NewString())
 						}
 						toolCalls[int(choice.Index)] = &protos.ToolCall{
 							Id:   part.FunctionCall.ID,
