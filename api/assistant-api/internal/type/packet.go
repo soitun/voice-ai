@@ -320,7 +320,7 @@ type LLMErrorPacket struct {
 
 func (f LLMErrorPacket) ContextId() string { return f.ContextID }
 func (f LLMErrorPacket) IsRecoverable() bool {
-	return f.Type == LLMRateLimit || f.Type == LLMNetworkTimeout
+	return f.Type != LLMAuthentication && f.Type != LLMSystemPanic
 }
 func (f LLMErrorPacket) Err() error         { return f.Error }
 func (f LLMErrorPacket) ErrMessage() string { return fmt.Sprintf("llm: %s", f.Error.Error()) }
@@ -436,7 +436,7 @@ type TTSErrorPacket struct {
 
 func (f TTSErrorPacket) ContextId() string { return f.ContextID }
 func (f TTSErrorPacket) IsRecoverable() bool {
-	return f.Type == TTSRateLimit || f.Type == TTSNetworkTimeout
+	return f.Type != TTSAuthentication
 }
 func (f TTSErrorPacket) Err() error         { return f.Error }
 func (f TTSErrorPacket) ErrMessage() string { return fmt.Sprintf("tts: %s", f.Error.Error()) }

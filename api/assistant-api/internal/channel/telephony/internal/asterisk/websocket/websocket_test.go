@@ -63,18 +63,9 @@ func TestSend_EndConversation_PushesToolCallResult(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("timed out waiting for ConversationToolCallResult on CriticalCh")
 	}
-
-	select {
-	case msg := <-aws.CriticalCh:
-		disc, ok := msg.(*protos.ConversationDisconnection)
-		require.True(t, ok, "expected ConversationDisconnection, got %T", msg)
-		assert.Equal(t, protos.ConversationDisconnection_DISCONNECTION_TYPE_TOOL, disc.GetType())
-	case <-time.After(time.Second):
-		t.Fatal("timed out waiting for ConversationDisconnection on CriticalCh")
-	}
 }
 
-func TestSend_EndConversation_CancelsStreamer(t *testing.T) {
+func TestSend_EndConversation_DoesNotCancelStreamer(t *testing.T) {
 	aws := newTestStreamer(t)
 
 	toolCall := &protos.ConversationToolCall{
@@ -87,23 +78,14 @@ func TestSend_EndConversation_CancelsStreamer(t *testing.T) {
 	err := aws.Send(toolCall)
 	require.NoError(t, err)
 
-	// Drain the result and disconnection packets first.
+	// Drain the tool call result.
 	select {
 	case <-aws.CriticalCh:
 	case <-time.After(time.Second):
 		t.Fatal("timed out waiting for ConversationToolCallResult")
 	}
 
-	select {
-	case msg := <-aws.CriticalCh:
-		disc, ok := msg.(*protos.ConversationDisconnection)
-		require.True(t, ok, "expected ConversationDisconnection, got %T", msg)
-		assert.Equal(t, protos.ConversationDisconnection_DISCONNECTION_TYPE_TOOL, disc.GetType())
-	case <-time.After(time.Second):
-		t.Fatal("timed out waiting for ConversationDisconnection")
-	}
-
-	// Context should remain open; teardown is owned by Talk loop.
+	// Context should remain open; disconnect is owned by handleToolResult in adapter layer.
 	select {
 	case <-aws.Context().Done():
 		t.Fatal("streamer context should remain open after end-conversation")

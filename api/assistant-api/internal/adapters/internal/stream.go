@@ -173,13 +173,14 @@ func (t *genericRequestor) Talk(_ context.Context, auth types.SimplePrinciple) e
 
 		case *protos.ConversationDisconnection:
 			if initialized {
-				t.OnPacket(context.Background(), internal_type.ConversationEventPacket{
+				ctx := context.Background()
+				t.OnPacket(ctx, internal_type.ConversationEventPacket{
 					ContextID: t.GetID(),
 					Name:      obs.ComponentSession,
 					Data:      map[string]string{obs.DataType: obs.EventDisconnectRequested, obs.DataReason: payload.GetType().String()},
 					Time:      time.Now(),
 				})
-				t.OnPacket(context.Background(),
+				t.OnPacket(ctx,
 					internal_type.ConversationMetadataPacket{
 						ContextID: t.Conversation().Id,
 						Metadata: []*protos.Metadata{{
@@ -189,9 +190,9 @@ func (t *genericRequestor) Talk(_ context.Context, auth types.SimplePrinciple) e
 					},
 				)
 				t.emitCallCompletion(totalTime)
-				t.Disconnect(context.Background())
-				return nil
+				t.Disconnect(ctx)
 			}
+			return nil
 		}
 	}
 }

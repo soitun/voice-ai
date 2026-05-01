@@ -22,12 +22,16 @@ export interface CarbonTabsProps {
   onChange?: (index: number) => void;
   /** Use contained variant (solid background tabs). */
   contained?: boolean;
+  /** Stretch tabs and panels to fill the parent flex layout. */
+  fill?: boolean;
   /** Accessible label for the tab list. */
   'aria-label'?: string;
   /** Class applied to the Carbon Tabs root container. */
   className?: string;
   /** Class applied to each Carbon TabPanel. */
   panelClassName?: string;
+  /** Class applied to the Carbon TabPanels wrapper. */
+  panelsClassName?: string;
   /** Show TabsSkeleton instead of the real tabs + content. */
   isLoading?: boolean;
 }
@@ -39,9 +43,11 @@ export const Tabs: FC<CarbonTabsProps> = ({
   selectedIndex = 0,
   onChange,
   contained = false,
+  fill = false,
   'aria-label': ariaLabel = 'Tabs',
   className,
   panelClassName,
+  panelsClassName,
   isLoading = false,
 }) => {
   if (isLoading) {
@@ -56,7 +62,7 @@ export const Tabs: FC<CarbonTabsProps> = ({
 
   return (
     <CarbonTabs
-      className={cn(className)}
+      className={cn(fill && 'flex flex-1 min-h-0 flex-col', className)}
       selectedIndex={selectedIndex}
       onChange={({ selectedIndex: idx }) => onChange?.(idx)}
     >
@@ -65,9 +71,14 @@ export const Tabs: FC<CarbonTabsProps> = ({
           <CarbonTab key={label}>{label}</CarbonTab>
         ))}
       </CarbonTabList>
-      <CarbonTabPanels>
+      <CarbonTabPanels
+        className={cn(fill && 'flex flex-1 min-h-0 overflow-hidden', panelsClassName)}
+      >
         {panels.map((panel, idx) => (
-          <CarbonTabPanel key={idx} className={cn(panelClassName)}>
+          <CarbonTabPanel
+            key={idx}
+            className={cn(fill && 'flex flex-1 min-h-0 overflow-hidden', panelClassName)}
+          >
             {panel}
           </CarbonTabPanel>
         ))}

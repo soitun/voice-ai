@@ -36,10 +36,9 @@ type Streamer struct {
 
 	transferring        atomic.Bool
 	ringbackCancel      context.CancelFunc
-	onTransferInitiated func(targets []string, message string, postTransferAction string)
+	onTransferInitiated func(targets []string, postTransferAction string)
 
-	ctx    context.Context
-	cancel context.CancelFunc
+	cancelParent context.CancelFunc
 }
 
 func NewStreamer(ctx context.Context,
@@ -51,7 +50,7 @@ func NewStreamer(ctx context.Context,
 	if sipSession == nil {
 		return nil, fmt.Errorf("SIP session is required — standalone server mode is not supported")
 	}
-	streamerCtx, cancel := context.WithCancel(ctx)
+	_, cancel := context.WithCancel(ctx)
 
 	s := &Streamer{
 		BaseTelephonyStreamer: internal_telephony_base.NewBaseTelephonyStreamer(
@@ -59,21 +58,22 @@ func NewStreamer(ctx context.Context,
 			internal_telephony_base.WithSourceAudioConfig(internal_audio.NewMulaw8khzMonoAudioConfig()),
 			internal_telephony_base.WithBaseOption(channel_base.WithInputAudioConfig(internal_audio.NewLinear16khzMonoAudioConfig())),
 		),
-		ctx:    streamerCtx,
-		cancel: cancel,
+		cancelParent: cancel,
 	}
 
 	go func() {
-		<-streamerCtx.Done()
-		reason := protos.ConversationDisconnection_DISCONNECTION_TYPE_UNSPECIFIED
 		select {
 		case <-sipSession.ByeReceived():
-			reason = protos.ConversationDisconnection_DISCONNECTION_TYPE_USER
-		default:
+			s.Logger.Infow("SIP streamer: user BYE received")
+		case <-sipSession.Context().Done():
+			s.Logger.Infow("SIP streamer: session context cancelled")
+		case <-s.Ctx.Done():
+			return
 		}
-		if msg := s.Disconnect(reason); msg != nil {
+		if msg := s.Disconnect(protos.ConversationDisconnection_DISCONNECTION_TYPE_USER); msg != nil {
 			s.Input(msg)
 		}
+		s.Close()
 	}()
 
 	rtpHandler := sipSession.GetRTPHandler()
@@ -88,11 +88,12 @@ func NewStreamer(ctx context.Context,
 		RTPHandler: rtpHandler,
 		Resampler:  s.Resampler(),
 		PushInput:  s.Input,
+		Ringtone:   "ringtone_us",
 	})
 
 	go s.forwardIncomingAudio()
-	go s.audio.RunOutputSender(streamerCtx)
-	go s.audio.RunBridgeRecorder(streamerCtx)
+	go s.audio.RunOutputSender(s.Ctx)
+	go s.audio.RunBridgeRecorder(s.Ctx)
 	s.Input(s.CreateConnectionRequest())
 
 	localIP, localPort := rtpHandler.LocalAddr()
@@ -119,7 +120,7 @@ func (s *Streamer) forwardIncomingAudio() {
 	bufferThreshold := s.InputBufferThreshold()
 	for {
 		select {
-		case <-s.ctx.Done():
+		case <-s.Ctx.Done():
 			return
 		case audioData, ok := <-rtpHandler.AudioIn():
 			if !ok {
@@ -157,7 +158,7 @@ func (s *Streamer) forwardIncomingAudio() {
 }
 
 func (s *Streamer) Context() context.Context {
-	return s.ctx
+	return s.Ctx
 }
 
 func (s *Streamer) Send(response internal_type.Stream) error {
@@ -175,20 +176,18 @@ func (s *Streamer) Send(response internal_type.Stream) error {
 			s.audio.ClearOutputBuffer()
 		}
 	case *protos.ConversationDisconnection:
+		s.Logger.Infow("SIP streamer: Send(ConversationDisconnection)", "type", data.GetType().String())
 		if disc := s.Disconnect(data.GetType()); disc != nil {
 			s.Input(disc)
 		}
 		s.endSession()
+		s.Close()
 	case *protos.ConversationToolCall:
 		switch data.GetAction() {
 		case protos.ToolCallAction_TOOL_CALL_ACTION_END_CONVERSATION:
 			s.PushToolCallResult(data.GetId(), data.GetToolId(), data.GetName(), data.GetAction(), map[string]string{
 				"status": "completed",
 			})
-			if disc := s.Disconnect(protos.ConversationDisconnection_DISCONNECTION_TYPE_TOOL); disc != nil {
-				s.Input(disc)
-			}
-			s.endSession()
 		case protos.ToolCallAction_TOOL_CALL_ACTION_TRANSFER_CONVERSATION:
 			raw := data.GetArgs()["transfer_to"]
 			if raw == "" {
@@ -199,8 +198,8 @@ func (s *Streamer) Send(response internal_type.Stream) error {
 				return nil
 			}
 			targets := s.SplitTransferTargets(raw)
-			message := data.GetArgs()["message"]
 			postTransferAction := data.GetArgs()["post_transfer_action"]
+			ringtone := data.GetArgs()["ringtone"]
 			s.mu.RLock()
 			if s.session != nil {
 				s.session.SetMetadata(sip_infra.MetadataBridgeTransferTarget, strings.Join(targets, commons.SEPARATOR))
@@ -208,7 +207,7 @@ func (s *Streamer) Send(response internal_type.Stream) error {
 				s.session.SetMetadata("tool_context_id", data.GetId())
 			}
 			s.mu.RUnlock()
-			s.EnterTransferMode(targets, message, postTransferAction)
+			s.EnterTransferMode(targets, postTransferAction, ringtone)
 			return nil
 		}
 	}
@@ -219,7 +218,7 @@ func (s *Streamer) Send(response internal_type.Stream) error {
 // Transfer
 // =============================================================================
 
-func (s *Streamer) EnterTransferMode(targets []string, message string, postTransferAction string) {
+func (s *Streamer) EnterTransferMode(targets []string, postTransferAction, ringtoneEnum string) {
 	if !s.transferring.CompareAndSwap(false, true) {
 		return
 	}
@@ -233,19 +232,20 @@ func (s *Streamer) EnterTransferMode(targets []string, message string, postTrans
 		session.SetState(sip_infra.CallStateTransferring)
 	}
 
-	// If a transfer message was provided, TTS is still playing — let it finish.
-	// Otherwise clear the AI output and play a ringback tone.
-	if message == "" {
-		s.audio.ClearOutputBuffer()
-		ringbackCtx, ringbackCancel := context.WithCancel(s.ctx)
-		s.mu.Lock()
-		s.ringbackCancel = ringbackCancel
-		s.mu.Unlock()
-		go s.audio.PlayRingback(ringbackCtx)
-	}
+	ringbackCtx, ringbackCancel := context.WithCancel(s.Ctx)
+	s.mu.Lock()
+	s.ringbackCancel = ringbackCancel
+	audio := s.audio
+	s.mu.Unlock()
+	go func() {
+		if audio != nil {
+			audio.SetRingtone(ringtoneEnum)
+			audio.PlayRingback(ringbackCtx)
+		}
+	}()
 
 	if callback != nil {
-		callback(targets, message, postTransferAction)
+		callback(targets, postTransferAction)
 	}
 }
 
@@ -310,7 +310,7 @@ func (s *Streamer) PushToolCallResult(contextID, toolID, toolName string, action
 	})
 }
 
-func (s *Streamer) SetOnTransferInitiated(fn func(targets []string, message string, postTransferAction string)) {
+func (s *Streamer) SetOnTransferInitiated(fn func(targets []string, postTransferAction string)) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.onTransferInitiated = fn
@@ -320,7 +320,7 @@ func (s *Streamer) endSession() {
 	s.mu.RLock()
 	session := s.session
 	s.mu.RUnlock()
-	if session != nil && !s.transferring.Load() {
+	if session != nil {
 		session.End()
 	}
 }
@@ -334,17 +334,13 @@ func (s *Streamer) Close() error {
 		return nil
 	}
 
-	s.cancel()
+	s.cancelParent()
 	s.BaseStreamer.Cancel()
 	s.ResetInputBuffer()
 
 	s.mu.RLock()
 	session := s.session
 	s.mu.RUnlock()
-
-	if s.transferring.Load() {
-		return nil
-	}
 
 	if session != nil {
 		session.End()

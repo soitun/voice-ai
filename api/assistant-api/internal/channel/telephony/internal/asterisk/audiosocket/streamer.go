@@ -14,6 +14,7 @@ import (
 	"net"
 	"strings"
 	"sync"
+	"sync/atomic"
 
 	internal_audio "github.com/rapidaai/api/assistant-api/internal/audio"
 	callcontext "github.com/rapidaai/api/assistant-api/internal/callcontext"
@@ -33,6 +34,7 @@ type Streamer struct {
 	reader         *bufio.Reader
 	writer         *bufio.Writer
 	writeMu        sync.Mutex
+	closed         atomic.Bool
 	audioProcessor *internal_asterisk.AudioProcessor
 
 	ctx          context.Context
@@ -213,9 +215,11 @@ func (as *Streamer) Send(response internal_type.Stream) error {
 		if disc := as.Disconnect(data.GetType()); disc != nil {
 			as.Input(disc)
 		}
+		as.Cancel()
 	case *protos.ConversationToolCall:
 		switch data.GetAction() {
 		case protos.ToolCallAction_TOOL_CALL_ACTION_END_CONVERSATION:
+			_ = as.writeFrame(FrameTypeHangup, nil)
 			as.Input(&protos.ConversationToolCallResult{
 				Id:     data.GetId(),
 				ToolId: data.GetToolId(),
@@ -223,10 +227,6 @@ func (as *Streamer) Send(response internal_type.Stream) error {
 				Action: data.GetAction(),
 				Result: map[string]string{"status": "completed"},
 			})
-			_ = as.writeFrame(FrameTypeHangup, nil)
-			if disc := as.Disconnect(protos.ConversationDisconnection_DISCONNECTION_TYPE_TOOL); disc != nil {
-				as.Input(disc)
-			}
 		case protos.ToolCallAction_TOOL_CALL_ACTION_TRANSFER_CONVERSATION:
 			// AudioSocket transfer is NOT supported. AudioSocket is a raw
 			// audio-only TCP protocol with no signalling channel back to
@@ -239,10 +239,27 @@ func (as *Streamer) Send(response internal_type.Stream) error {
 			as.Input(&protos.ConversationToolCallResult{
 				Id:     data.GetId(),
 				ToolId: data.GetToolId(), Name: data.GetName(), Action: data.GetAction(),
-				Result: map[string]string{"status": "failed", "reason": "transfer not supported for AudioSocket"},
+				Result: map[string]string{"status": "failed", "reason": "transfer not supported for AudioSocket", "next_action": "end_call"},
 			})
 		}
 	}
 
+	return nil
+}
+
+func (as *Streamer) Cancel() error {
+	if !as.closed.CompareAndSwap(false, true) {
+		return nil
+	}
+	as.outputCancel()
+	as.cancel()
+	as.writeMu.Lock()
+	conn := as.conn
+	as.conn = nil
+	as.writeMu.Unlock()
+	if conn != nil {
+		conn.Close()
+	}
+	as.BaseStreamer.Cancel()
 	return nil
 }

@@ -8,6 +8,9 @@ package sip_registration
 
 import (
 	"context"
+	"fmt"
+	"sort"
+	"strings"
 
 	internal_assistant_entity "github.com/rapidaai/api/assistant-api/internal/entity/assistants"
 	type_enums "github.com/rapidaai/pkg/types/enums"
@@ -29,7 +32,14 @@ func (m *Manager) loadRecords(ctx context.Context) ([]Record, error) {
 		return nil, err
 	}
 
-	byDID := make([]Record, 0, len(deployments))
+	type candidate struct {
+		record     Record
+		deployment uint64
+		assistant  uint64
+		sipStatus  string
+	}
+
+	grouped := make(map[string][]candidate, len(deployments))
 	for _, dep := range deployments {
 		opts := dep.GetOptions()
 
@@ -52,14 +62,78 @@ func (m *Manager) loadRecords(ctx context.Context) ([]Record, error) {
 			continue
 		}
 
-		byDID = append(byDID, Record{
+		rec := Record{
 			DID:          did,
 			AssistantID:  dep.AssistantId,
 			DeploymentID: dep.Id,
 			CredentialID: credentialID,
 			Status:       sipStatus,
+		}
+		key := normalizeDIDForCollision(did)
+		grouped[key] = append(grouped[key], candidate{
+			record:     rec,
+			deployment: dep.Id,
+			assistant:  dep.AssistantId,
+			sipStatus:  sipStatus,
 		})
 	}
 
-	return byDID, nil
+	selected := make([]Record, 0, len(grouped))
+	for didKey, list := range grouped {
+		if len(list) == 1 {
+			selected = append(selected, list[0].record)
+			continue
+		}
+
+		// Deterministic winner:
+		// 1) keep already active deployment to avoid flapping
+		// 2) otherwise latest deployment id
+		// 3) finally highest assistant id as stable tie-break
+		sort.Slice(list, func(i, j int) bool {
+			iActive := list[i].sipStatus == StatusActive
+			jActive := list[j].sipStatus == StatusActive
+			if iActive != jActive {
+				return iActive
+			}
+			if list[i].deployment != list[j].deployment {
+				return list[i].deployment > list[j].deployment
+			}
+			return list[i].assistant > list[j].assistant
+		})
+
+		winner := list[0]
+		selected = append(selected, winner.record)
+
+		m.logger.Warnw("Duplicate SIP DID detected; keeping one deployment and dropping others",
+			"did", didKey,
+			"winner_assistant_id", winner.assistant,
+			"winner_deployment_id", winner.deployment,
+			"dropped_count", len(list)-1)
+
+		for _, loser := range list[1:] {
+			reason := fmt.Sprintf(
+				"Duplicate DID %s. Inbound registration skipped: kept assistant=%d deployment=%d",
+				didKey, winner.assistant, winner.deployment,
+			)
+			m.markStatus(ctx, loser.deployment, StatusConfigError, reason)
+			m.upsertOption(ctx, loser.deployment, OptKeySIPRetry, "0")
+		}
+	}
+
+	return selected, nil
+}
+
+func normalizeDIDForCollision(did string) string {
+	v := strings.TrimSpace(did)
+	if v == "" {
+		return ""
+	}
+	if strings.HasPrefix(v, "+") {
+		return v
+	}
+	// Keep short internal extensions unchanged; normalize phone-like values.
+	if len(v) > 5 {
+		return "+" + v
+	}
+	return v
 }

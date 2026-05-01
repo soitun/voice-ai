@@ -227,31 +227,23 @@ func (aws *asteriskWebsocketStreamer) Send(response internal_type.Stream) error 
 		if disc := aws.Disconnect(data.GetType()); disc != nil {
 			aws.Input(disc)
 		}
+		aws.Cancel()
 	case *protos.ConversationToolCall:
 		switch data.GetAction() {
 		case protos.ToolCallAction_TOOL_CALL_ACTION_END_CONVERSATION:
 			aws.stopAudioProcessing()
+			result := map[string]string{"status": "completed"}
 			if err := aws.hangupCall(); err != nil {
 				aws.Logger.Error("Failed to hang up call", "error", err)
-				aws.Input(&protos.ConversationToolCallResult{
-					Id:     data.GetId(),
-					ToolId: data.GetToolId(),
-					Name:   data.GetName(),
-					Action: data.GetAction(),
-					Result: map[string]string{"status": "failed", "reason": fmt.Sprintf("hangup failed: %v", err)},
-				})
-				return nil
+				result = map[string]string{"status": "failed", "reason": fmt.Sprintf("hangup failed: %v", err)}
 			}
 			aws.Input(&protos.ConversationToolCallResult{
 				Id:     data.GetId(),
 				ToolId: data.GetToolId(),
 				Name:   data.GetName(),
 				Action: data.GetAction(),
-				Result: map[string]string{"status": "completed"},
+				Result: result,
 			})
-			if disc := aws.Disconnect(protos.ConversationDisconnection_DISCONNECTION_TYPE_TOOL); disc != nil {
-				aws.Input(disc)
-			}
 		case protos.ToolCallAction_TOOL_CALL_ACTION_TRANSFER_CONVERSATION:
 			// Asterisk transfer is a blind transfer via ARI `channels/{id}/redirect`
 			// — the channel leaves Stasis for the dialplan extension we redirect
@@ -271,7 +263,7 @@ func (aws *asteriskWebsocketStreamer) Send(response internal_type.Stream) error 
 				aws.Input(&protos.ConversationToolCallResult{
 					Id:     data.GetId(),
 					ToolId: data.GetToolId(), Name: data.GetName(), Action: data.GetAction(),
-					Result: map[string]string{"status": "failed", "reason": "missing target or channel name"},
+					Result: map[string]string{"status": "failed", "reason": "missing target or channel name", "next_action": "end_call"},
 				})
 				return nil
 			}
@@ -287,23 +279,19 @@ func (aws *asteriskWebsocketStreamer) Send(response internal_type.Stream) error 
 				aws.Input(&protos.ConversationToolCallResult{
 					Id:     data.GetId(),
 					ToolId: data.GetToolId(), Name: data.GetName(), Action: data.GetAction(),
-					Result: map[string]string{"status": "failed", "reason": fmt.Sprintf("ARI redirect failed: %v", err)},
+					Result: map[string]string{"status": "failed", "reason": fmt.Sprintf("ARI redirect failed: %v", err), "next_action": "end_call"},
 				})
 			} else {
-				// "dispatched" — Asterisk accepted the redirect; the dialplan
-				// has not yet dialed the target. We cannot observe whether the
-				// target rang/answered because the AI WebSocket is closed by
-				// Cancel() below.
 				aws.Input(&protos.ConversationToolCallResult{
 					Id:     data.GetId(),
 					ToolId: data.GetToolId(), Name: data.GetName(), Action: data.GetAction(),
 					Result: map[string]string{
-						"status": "dispatched",
-						"reason": "transfer dispatched via ARI redirect; outcome not observed",
+						"status":      "dispatched",
+						"reason":      "transfer dispatched via ARI redirect; outcome not observed",
+						"next_action": "end_call",
 					},
 				})
 			}
-			aws.Cancel()
 		}
 	}
 

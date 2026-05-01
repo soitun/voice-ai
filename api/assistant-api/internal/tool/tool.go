@@ -179,6 +179,8 @@ func (executor *toolExecutor) executeTools(ctx context.Context, contextID string
 			continue
 		}
 		wg.Add(1)
+		// executor.logger.Infof("Executing tool args: %v", call)
+
 		go func(c *protos.ToolCall, caller internal_tool.ToolCaller) {
 			defer wg.Done()
 			caller.Call(ctx, contextID, c.GetId(), executor.parseArgument(c.GetFunction().GetArguments()), communication)

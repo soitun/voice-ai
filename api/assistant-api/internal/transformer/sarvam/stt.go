@@ -230,16 +230,20 @@ func (cst *sarvamSpeechToText) Transform(ctx context.Context, in internal_type.P
 
 		cst.mu.Lock()
 		connection := cst.connection
-		cst.mu.Unlock()
-
+		ctxID := cst.contextId
 		if connection == nil {
+			cst.mu.Unlock()
 			return nil
 		}
 
-		if err := connection.WriteMessage(websocket.TextMessage, vl); err != nil {
+		// Gorilla websocket connections allow one concurrent writer only.
+		// Serialize writes to avoid "concurrent write to websocket connection" panics.
+		err = connection.WriteMessage(websocket.TextMessage, vl)
+		cst.mu.Unlock()
+		if err != nil {
 			cst.logger.Errorf("sarvam-stt: error sending audio: %v", err)
 			cst.onPacket(internal_type.STTErrorPacket{
-				ContextID: cst.contextId,
+				ContextID: ctxID,
 				Error:     fmt.Errorf("sarvam-stt: send failed: %w", err),
 				Type:      internal_type.STTNetworkTimeout,
 			})

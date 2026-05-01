@@ -38,7 +38,7 @@ func newTestExotelStreamer(t *testing.T) *exotelWebsocketStreamer {
 	}
 }
 
-func TestSend_EndConversation_PushesToolCallResultBeforeCancel(t *testing.T) {
+func TestSend_EndConversation_PushesToolCallResult(t *testing.T) {
 	exotel := newTestExotelStreamer(t)
 
 	toolCall := &protos.ConversationToolCall{
@@ -66,16 +66,7 @@ func TestSend_EndConversation_PushesToolCallResultBeforeCancel(t *testing.T) {
 		t.Fatal("Expected ConversationToolCallResult in CriticalCh but timed out")
 	}
 
-	select {
-	case msg := <-exotel.CriticalCh:
-		disc, ok := msg.(*protos.ConversationDisconnection)
-		require.True(t, ok, "Expected ConversationDisconnection, got %T", msg)
-		assert.Equal(t, protos.ConversationDisconnection_DISCONNECTION_TYPE_TOOL, disc.GetType())
-	case <-time.After(time.Second):
-		t.Fatal("Expected ConversationDisconnection in CriticalCh but timed out")
-	}
-
-	// Context should remain open; teardown is owned by Talk loop.
+	// Context should remain open; disconnect is owned by handleToolResult in adapter layer.
 	select {
 	case <-exotel.Ctx.Done():
 		t.Fatal("streamer context should remain open")

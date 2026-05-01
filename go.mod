@@ -62,7 +62,7 @@ require (
 	golang.org/x/sync v0.20.0
 	golang.org/x/sys v0.42.0
 	google.golang.org/api v0.265.0
-	google.golang.org/genai v1.40.0
+	google.golang.org/genai v1.55.0
 	google.golang.org/grpc v1.80.0
 	google.golang.org/protobuf v1.36.11
 	gopkg.in/hraban/opus.v2 v2.0.0-20230925203106-0188a62cb302

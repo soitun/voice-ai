@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strconv"
 	"time"
 
 	internal_audio "github.com/rapidaai/api/assistant-api/internal/audio"
@@ -1039,13 +1040,17 @@ func (talking *genericRequestor) handleAssistantMessageMetadata(ctx context.Cont
 // =============================================================================
 
 func (talking *genericRequestor) handleToolCall(ctx context.Context, vl internal_type.LLMToolCallPacket) {
+	req, _ := json.Marshal(vl)
 	// Notify client + emit event (fast, stays on critical)
 	talking.OnPacket(ctx, internal_type.ConversationEventPacket{
 		ContextID: vl.ContextID,
 		Name:      observe.ComponentTool,
 		Data:      map[string]string{observe.DataType: observe.EventToolCallStarted, "name": vl.Name, "id": vl.ToolID, "action": vl.Action.String()},
 		Time:      time.Now(),
-	})
+	}, internal_type.ToolLogCreatePacket{
+		ContextID: vl.ContextID, ToolID: vl.ToolID, Name: vl.Name, Request: req,
+	},
+	)
 
 	if msg, ok := vl.Arguments["message"]; ok && msg != "" {
 		talking.OnPacket(ctx,
@@ -1053,10 +1058,21 @@ func (talking *genericRequestor) handleToolCall(ctx context.Context, vl internal
 			internal_type.InjectMessagePacket{ContextID: vl.ContextID, Text: msg})
 	}
 
-	talking.Notify(ctx, &protos.ConversationToolCall{
-		Id: vl.ContextID, ToolId: vl.ToolID, Name: vl.Name,
-		Action: vl.Action, Args: vl.Arguments, Time: timestamppb.Now(),
-	})
+	if delayStr, ok := vl.Arguments["delay"]; ok && delayStr != "" {
+		if delayMs, err := strconv.Atoi(delayStr); err == nil && delayMs > 0 {
+			time.AfterFunc(time.Duration(delayMs)*time.Millisecond, func() {
+				talking.Notify(ctx, &protos.ConversationToolCall{
+					Id: vl.ContextID, ToolId: vl.ToolID, Name: vl.Name,
+					Action: vl.Action, Args: vl.Arguments, Time: timestamppb.Now(),
+				})
+			})
+		}
+	} else {
+		talking.Notify(ctx, &protos.ConversationToolCall{
+			Id: vl.ContextID, ToolId: vl.ToolID, Name: vl.Name,
+			Action: vl.Action, Args: vl.Arguments, Time: timestamppb.Now(),
+		})
+	}
 
 	if vl.Action != protos.ToolCallAction_TOOL_CALL_ACTION_UNSPECIFIED {
 		// Stop idle timer via packet so it is ordered AFTER any InjectMessagePacket
@@ -1069,13 +1085,6 @@ func (talking *genericRequestor) handleToolCall(ctx context.Context, vl internal
 		}
 	}
 
-	// DB write → lowCh (non-blocking)
-	req, _ := json.Marshal(vl)
-	talking.OnPacket(ctx, internal_type.ToolLogCreatePacket{
-		ContextID: vl.ContextID, ToolID: vl.ToolID, Name: vl.Name, Request: req,
-	})
-
-	// Executor → async goroutine
 	if talking.assistantExecutor != nil {
 		utils.Go(ctx, func() {
 			if err := talking.assistantExecutor.Execute(ctx, talking, vl); err != nil {
@@ -1087,19 +1096,39 @@ func (talking *genericRequestor) handleToolCall(ctx context.Context, vl internal
 
 func (talking *genericRequestor) handleToolResult(ctx context.Context, vl internal_type.LLMToolResultPacket) {
 	res, _ := json.Marshal(vl)
+
+	// for tool call first persist the tool then do anything else, this ensures that even if the process crashes after this point we have a record of the tool call and its result
 	talking.OnPacket(ctx,
-		internal_type.TTSInterruptPacket{ContextID: vl.ContextID},
-		internal_type.StartIdleTimeoutPacket{ContextID: vl.ContextID},
 		internal_type.ToolLogUpdatePacket{
 			ContextID: vl.ContextID, ToolID: vl.ToolID, Response: res,
-		},
+		})
+
+	switch vl.Action {
+	case protos.ToolCallAction_TOOL_CALL_ACTION_END_CONVERSATION:
+		talking.Notify(ctx, &protos.ConversationDisconnection{
+			Type: protos.ConversationDisconnection_DISCONNECTION_TYPE_TOOL,
+		})
+		return
+	case protos.ToolCallAction_TOOL_CALL_ACTION_TRANSFER_CONVERSATION:
+		if vl.Result["next_action"] == "end_call" {
+			talking.Notify(ctx, &protos.ConversationDisconnection{
+				Type: protos.ConversationDisconnection_DISCONNECTION_TYPE_TOOL,
+			})
+			return
+		}
+	}
+
+	talking.OnPacket(
+		ctx,
+		internal_type.TTSInterruptPacket{ContextID: vl.ContextID},
+		internal_type.StartIdleTimeoutPacket{ContextID: vl.ContextID},
 		internal_type.ConversationEventPacket{
 			ContextID: vl.ContextID,
 			Name:      observe.ComponentTool,
 			Data:      map[string]string{observe.DataType: observe.EventToolCallCompleted, "name": vl.Name, "id": vl.ToolID},
 			Time:      time.Now(),
-		})
-
+		},
+	)
 	if talking.assistantExecutor != nil {
 		utils.Go(ctx, func() {
 			if err := talking.assistantExecutor.Execute(ctx, talking, vl); err != nil {

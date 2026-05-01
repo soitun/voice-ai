@@ -18,17 +18,16 @@ func newTestSIPStreamer(t *testing.T) *Streamer {
 	logger, err := commons.NewApplicationLogger()
 	require.NoError(t, err)
 
-	ctx, cancel := context.WithCancel(context.Background())
+	_, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 
 	return &Streamer{
 		BaseTelephonyStreamer: internal_telephony_base.NewBaseTelephonyStreamer(logger, &callcontext.CallContext{}, nil),
-		ctx:                   ctx,
-		cancel:                cancel,
+		cancelParent:          cancel,
 	}
 }
 
-func TestSend_EndConversation_PushesToolResultAndToolDisconnection(t *testing.T) {
+func TestSend_EndConversation_PushesToolResult(t *testing.T) {
 	s := newTestSIPStreamer(t)
 
 	err := s.Send(&protos.ConversationToolCall{
@@ -50,15 +49,7 @@ func TestSend_EndConversation_PushesToolResultAndToolDisconnection(t *testing.T)
 		t.Fatal("timed out waiting for ConversationToolCallResult")
 	}
 
-	select {
-	case msg := <-s.CriticalCh:
-		disc, ok := msg.(*protos.ConversationDisconnection)
-		require.True(t, ok, "expected ConversationDisconnection, got %T", msg)
-		assert.Equal(t, protos.ConversationDisconnection_DISCONNECTION_TYPE_TOOL, disc.GetType())
-	case <-time.After(time.Second):
-		t.Fatal("timed out waiting for ConversationDisconnection")
-	}
-
+	// Context should remain open; disconnect is owned by handleToolResult in adapter layer.
 	select {
 	case <-s.Context().Done():
 		t.Fatal("streamer context should remain open; teardown is owned by Talk loop")
@@ -106,11 +97,9 @@ func TestSend_TransferConversation_UsesTransferToKey(t *testing.T) {
 	s := newTestSIPStreamer(t)
 
 	var gotTargets []string
-	var gotMessage string
 	var gotPostTransferAction string
-	s.SetOnTransferInitiated(func(targets []string, message string, postTransferAction string) {
+	s.SetOnTransferInitiated(func(targets []string, postTransferAction string) {
 		gotTargets = append([]string(nil), targets...)
-		gotMessage = message
 		gotPostTransferAction = postTransferAction
 	})
 
@@ -121,14 +110,12 @@ func TestSend_TransferConversation_UsesTransferToKey(t *testing.T) {
 		Action: protos.ToolCallAction_TOOL_CALL_ACTION_TRANSFER_CONVERSATION,
 		Args: map[string]string{
 			"transfer_to":          "+15550001111" + commons.SEPARATOR + "sip:agent@example.com",
-			"message":              "Please hold while I transfer your call.",
 			"post_transfer_action": "end_call",
 		},
 	})
 	require.NoError(t, err)
 
 	assert.Equal(t, []string{"+15550001111", "sip:agent@example.com"}, gotTargets)
-	assert.Equal(t, "Please hold while I transfer your call.", gotMessage)
 	assert.Equal(t, "end_call", gotPostTransferAction)
 }
 

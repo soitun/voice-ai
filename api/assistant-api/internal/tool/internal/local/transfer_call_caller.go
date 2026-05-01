@@ -8,7 +8,6 @@ package internal_tool_local
 import (
 	"context"
 	"fmt"
-	"time"
 
 	internal_assistant_entity "github.com/rapidaai/api/assistant-api/internal/entity/assistants"
 	internal_tool "github.com/rapidaai/api/assistant-api/internal/tool/internal"
@@ -54,15 +53,11 @@ func (tc *transferCallCaller) Call(ctx context.Context, contextID, toolId string
 		postTransferAction = getPostTransferAction(action)
 	}
 
-	if transferDelay > 0 {
-		time.Sleep(time.Duration(transferDelay) * time.Millisecond)
-	}
-
 	arguments := map[string]string{
-		"transfer_to":          transferTo,
 		"message":              transferMessage,
+		"delay":                fmt.Sprintf("%d", transferDelay),
+		"transfer_to":          transferTo,
 		"transfer_message":     transferMessage,
-		"transfer_delay":       fmt.Sprintf("%d", transferDelay),
 		"post_transfer_action": string(PostTransferActionEndCall),
 	}
 	if postTransferAction != "" {
