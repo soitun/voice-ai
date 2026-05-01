@@ -1,4 +1,4 @@
-import React, { useDeferredValue, useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   AssistantDefinition,
   ConnectionConfig,
@@ -14,6 +14,7 @@ import { connectionConfig } from '@/configs';
 import { useCurrentCredential } from '@/hooks/use-credential';
 import { Modal, ModalHeader, ModalBody } from '@/app/components/carbon/modal';
 import { Pagination } from '@/app/components/carbon/pagination';
+import { Tabs } from '@/app/components/carbon/tabs';
 import {
   Table,
   TableHead,
@@ -29,7 +30,8 @@ import {
   DismissibleTag,
   Loading,
   CodeSnippet,
-  Stack,
+  Dropdown,
+  MultiSelect,
 } from '@carbon/react';
 import { TableToolbarFilter } from '@/app/components/carbon/table-toolbar-filter';
 import { ChevronRight } from '@carbon/icons-react';
@@ -53,17 +55,12 @@ type CriteriaInput = {
   value: string;
 };
 
-type TelemetrySearchQuery = {
-  freeTextTerms: string[];
-  filters: {
-    type: string[];
-    component: string[];
-    scope: string[];
-    name: string[];
-    conversationId: string[];
-    messageId: string[];
-    contextId: string[];
-  };
+type TelemetryFilterState = {
+  searchText: string;
+  names: string[];
+  messageOrContextId: string;
+  eventDataType: string;
+  metricScope: string;
 };
 
 type TelemetrySearchDocument = {
@@ -75,6 +72,7 @@ type TelemetrySearchDocument = {
   conversationId: string;
   messageId: string;
   contextId: string;
+  eventDataType: string;
   rawText: string;
 };
 
@@ -99,6 +97,29 @@ const EVENT_TAG_TYPE: Record<string, string> = {
   knowledge: 'teal',
   metric: 'high-contrast',
 };
+
+const EVENT_NAME_OPTIONS = [
+  'session',
+  'telephony',
+  'webrtc',
+  'stt',
+  'llm',
+  'tts',
+  'vad',
+  'eos',
+  'denoise',
+  'recording',
+  'tool',
+  'knowledge',
+].map(id => ({
+  id,
+  label: id,
+}));
+
+const METRIC_SCOPE_OPTIONS = ['message', 'conversation'].map(id => ({
+  id,
+  label: id.charAt(0) + id.slice(1),
+}));
 
 const normalizeComponentType = (nameKey: string): string =>
   nameKey === 'sip' ? 'telephony' : nameKey;
@@ -141,120 +162,56 @@ export const buildTelemetryCriteriaInputs = (
   return out;
 };
 
-const createEmptyTelemetrySearchQuery = (): TelemetrySearchQuery => ({
-  freeTextTerms: [],
-  filters: {
-    type: [],
-    component: [],
-    scope: [],
-    name: [],
-    conversationId: [],
-    messageId: [],
-    contextId: [],
-  },
-});
-
-const tokenizeTelemetrySearchQuery = (value: string): string[] =>
-  (value.match(/"[^"]+"|\S+/g) || [])
-    .map(token => token.trim())
-    .filter(Boolean)
-    .map(token =>
-      token.startsWith('"') && token.endsWith('"')
-        ? token.slice(1, -1).trim()
-        : token,
-    )
-    .filter(Boolean);
-
-const normalizeTelemetrySearchField = (field: string): string => {
-  switch (field.toLowerCase()) {
-    case 'event':
-      return 'name';
-    case 'conversation':
-      return 'conversationId';
-    case 'message':
-      return 'messageId';
-    case 'context':
-      return 'contextId';
-    default:
-      return field.toLowerCase();
-  }
-};
-
-export const parseTelemetrySearchQuery = (
-  value: string,
-): TelemetrySearchQuery => {
-  const query = createEmptyTelemetrySearchQuery();
-
-  tokenizeTelemetrySearchQuery(value).forEach(token => {
-    const delimiterIndex = token.indexOf(':');
-    if (delimiterIndex <= 0) {
-      query.freeTextTerms.push(token.toLowerCase());
-      return;
-    }
-
-    const field = normalizeTelemetrySearchField(
-      token.slice(0, delimiterIndex).trim(),
-    );
-    const fieldValue = token.slice(delimiterIndex + 1).trim().toLowerCase();
-
-    if (!fieldValue) {
-      return;
-    }
-
-    switch (field) {
-      case 'type':
-      case 'component':
-      case 'scope':
-      case 'name':
-      case 'conversationId':
-      case 'messageId':
-      case 'contextId':
-        query.filters[field].push(fieldValue);
-        break;
-      default:
-        query.freeTextTerms.push(token.toLowerCase());
-    }
-  });
-
-  return query;
-};
-
-export const matchesTelemetrySearchDocument = (
+export const matchesTelemetryFilters = (
   document: TelemetrySearchDocument,
-  query: TelemetrySearchQuery,
+  filters: TelemetryFilterState,
 ): boolean => {
+  const normalizeSearchValue = (value?: string) =>
+    String(value || '')
+      .toLowerCase()
+      .replace(/\s+/g, ' ')
+      .trim();
+  const compactSearchValue = (value?: string) =>
+    String(value || '')
+      .toLowerCase()
+      .replace(/[\s"'`]+/g, '');
   const contains = (source: string, term: string) =>
-    source.toLowerCase().includes(term);
-  const matchesAny = (values: string[], candidate: string) =>
-    values.length === 0 || values.some(value => contains(candidate, value));
+    normalizeSearchValue(source).includes(normalizeSearchValue(term)) ||
+    compactSearchValue(source).includes(compactSearchValue(term));
+  const searchTerm = filters.searchText.trim();
 
   if (
-    query.freeTextTerms.some(
-      term =>
-        !contains(document.typeLabel, term) && !contains(document.rawText, term),
-    )
+    searchTerm &&
+    !contains(document.typeLabel, searchTerm) &&
+    !contains(document.rawText, searchTerm)
   ) {
     return false;
   }
 
-  if (!matchesAny(query.filters.type, document.kind)) return false;
-  if (!matchesAny(query.filters.component, document.componentType)) return false;
-  if (!matchesAny(query.filters.scope, document.scope)) return false;
-  if (!matchesAny(query.filters.name, document.name)) return false;
-  if (!matchesAny(query.filters.conversationId, document.conversationId))
-    return false;
-  if (!matchesAny(query.filters.contextId, document.contextId)) return false;
-
   if (
-    query.filters.messageId.length > 0 &&
-    !query.filters.messageId.some(
-      value =>
-        contains(document.messageId, value) ||
-        contains(document.contextId, value),
-    )
+    filters.names.length > 0 &&
+    !filters.names.some(name => contains(document.name, name))
   ) {
     return false;
   }
+
+  if (
+    filters.messageOrContextId &&
+    !contains(document.messageId, filters.messageOrContextId) &&
+    !contains(document.contextId, filters.messageOrContextId)
+  ) {
+    return false;
+  }
+
+  if (
+    filters.eventDataType &&
+    !contains(document.eventDataType, filters.eventDataType)
+  ) {
+    return false;
+  }
+
+  if (filters.metricScope && !contains(document.scope, filters.metricScope))
+    return false;
 
   return true;
 };
@@ -298,6 +255,7 @@ function getTelemetrySearchDocument(
   json: object,
 ): TelemetrySearchDocument {
   if (row.kind === 'event') {
+    const eventJson = json as { data?: Record<string, string> };
     return {
       kind: 'event',
       componentType: normalizeComponentType(row.record.getName().split('.')[0]),
@@ -307,7 +265,8 @@ function getTelemetrySearchDocument(
       conversationId: row.record.getAssistantconversationid(),
       messageId: row.record.getMessageid(),
       contextId: '',
-      rawText: JSON.stringify(json),
+      eventDataType: eventJson.data?.type || '',
+      rawText: `${JSON.stringify(json)}\n${JSON.stringify(json, null, 2)}`,
     };
   }
 
@@ -320,7 +279,8 @@ function getTelemetrySearchDocument(
     conversationId: row.record.getAssistantconversationid(),
     messageId: '',
     contextId: row.record.getContextid(),
-    rawText: JSON.stringify(json),
+    eventDataType: '',
+    rawText: `${JSON.stringify(json)}\n${JSON.stringify(json, null, 2)}`,
   };
 }
 
@@ -333,23 +293,32 @@ export function ConversationTelemetryDialog(
   const [chips, setChips] = useState<Chip[]>([]);
   const [rows, setRows] = useState<TelemetryRow[]>([]);
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
+  const [selectedTab, setSelectedTab] = useState(0);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(50);
   const [totalItem, setTotalItem] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
   const [criteriaReady, setCriteriaReady] = useState(false);
   const [searchText, setSearchText] = useState('');
-  const [activeFilters, setActiveFilters] = useState<Set<string>>(new Set());
   const [conversationIdInput, setConversationIdInput] = useState('');
   const [messageIdInput, setMessageIdInput] = useState('');
+  const [eventNameInputs, setEventNameInputs] = useState<string[]>([]);
+  const [eventDataTypeInput, setEventDataTypeInput] = useState('');
+  const [metricScopeInput, setMetricScopeInput] = useState('');
   const [appliedConversationId, setAppliedConversationId] = useState('');
   const [appliedMessageId, setAppliedMessageId] = useState('');
+  const [appliedEventNames, setAppliedEventNames] = useState<string[]>([]);
+  const [appliedEventDataType, setAppliedEventDataType] = useState('');
+  const [appliedMetricScope, setAppliedMetricScope] = useState('');
   const [structuredError, setStructuredError] = useState('');
-  const deferredSearchText = useDeferredValue(searchText);
-  const parsedSearchQuery = parseTelemetrySearchQuery(deferredSearchText);
+  const activeTabKind: 'event' | 'metric' =
+    selectedTab === 0 ? 'event' : 'metric';
   const hasSearchQuery = searchText.trim() !== '';
-  const hasTypeFilters = activeFilters.size > 0;
-  const shouldFetchAllRows = hasSearchQuery || hasTypeFilters;
+  const hasLocalFilters =
+    activeTabKind === 'event'
+      ? appliedEventNames.length > 0 || appliedEventDataType !== ''
+      : appliedMetricScope !== '';
+  const shouldFetchAllRows = hasSearchQuery || hasLocalFilters;
   const requestPage = shouldFetchAllRows ? 1 : page;
   const requestPageSize = shouldFetchAllRows ? 100 : pageSize;
 
@@ -368,12 +337,20 @@ export function ConversationTelemetryDialog(
     setRows([]);
     setExpandedRows(new Set());
     setTotalItem(0);
+    setSelectedTab(0);
     setPage(1);
     setChips(initialChips);
+    setSearchText('');
     setConversationIdInput(normalized.conversationId);
     setMessageIdInput(normalized.messageId);
+    setEventNameInputs([]);
+    setEventDataTypeInput('');
+    setMetricScopeInput('');
     setAppliedConversationId(normalized.conversationId);
     setAppliedMessageId(normalized.messageId);
+    setAppliedEventNames([]);
+    setAppliedEventDataType('');
+    setAppliedMetricScope('');
     setStructuredError('');
     setCriteriaReady(true);
   }, [props.criterias]);
@@ -539,28 +516,33 @@ export function ConversationTelemetryDialog(
     setPage(1);
   };
 
-  const EVENT_TYPES = [
-    'session',
-    'telephony',
-    'webrtc',
-    'stt',
-    'llm',
-    'tts',
-    'vad',
-    'eos',
-    'denoise',
-    'recording',
-    'tool',
-    'knowledge',
-  ];
+  const applyEventFilters = (): boolean => {
+    if (!applyStructuredCriteria()) {
+      return false;
+    }
+    setAppliedEventNames(eventNameInputs);
+    setAppliedEventDataType(eventDataTypeInput.trim());
+    setPage(1);
+    return true;
+  };
 
-  const toggleFilter = (type: string) => {
-    setActiveFilters(prev => {
-      const next = new Set(prev);
-      if (next.has(type)) next.delete(type);
-      else next.add(type);
-      return next;
-    });
+  const resetEventFilters = () => {
+    setEventNameInputs([]);
+    setEventDataTypeInput('');
+    setAppliedEventNames([]);
+    setAppliedEventDataType('');
+    resetStructuredCriteria();
+  };
+
+  const applyMetricFilters = (): boolean => {
+    setAppliedMetricScope(metricScopeInput);
+    setPage(1);
+    return true;
+  };
+
+  const resetMetricFilters = () => {
+    setMetricScopeInput('');
+    setAppliedMetricScope('');
     setPage(1);
   };
 
@@ -582,25 +564,25 @@ export function ConversationTelemetryDialog(
     };
   };
 
-  const filteredRows = rows.filter(row => {
-    const { typeLabel, json } = getRowData(row);
-    const matchesSearch =
-      deferredSearchText.trim() === ''
-        ? true
-        : matchesTelemetrySearchDocument(
-            getTelemetrySearchDocument(row, typeLabel, json),
-            parsedSearchQuery,
-          );
-    const matchesFilter =
-      activeFilters.size === 0
-        ? true
-        : activeFilters.has(
-            row.kind === 'event'
-              ? normalizeComponentType(row.record.getName().split('.')[0])
-              : 'metric',
-          );
-    return matchesSearch && matchesFilter;
-  });
+  const getFilteredRows = (kind: 'event' | 'metric') =>
+    rows.filter(row => {
+      const { typeLabel, json } = getRowData(row);
+      if (row.kind !== kind) {
+        return false;
+      }
+      return matchesTelemetryFilters(
+        getTelemetrySearchDocument(row, typeLabel, json),
+        {
+          searchText,
+          names: kind === 'event' ? appliedEventNames : [],
+          messageOrContextId: kind === 'event' ? appliedMessageId : '',
+          eventDataType: kind === 'event' ? appliedEventDataType : '',
+          metricScope: kind === 'metric' ? appliedMetricScope : '',
+        },
+      );
+    });
+
+  const filteredRows = getFilteredRows(activeTabKind);
 
   useEffect(() => {
     if (!shouldFetchAllRows) return;
@@ -610,30 +592,33 @@ export function ConversationTelemetryDialog(
     }
   }, [filteredRows.length, page, pageSize, shouldFetchAllRows]);
 
-  const visibleRows = shouldFetchAllRows
-    ? filteredRows.slice((page - 1) * pageSize, page * pageSize)
-    : filteredRows;
-  const totalItems = shouldFetchAllRows ? filteredRows.length : totalItem;
+  useEffect(() => {
+    setExpandedRows(new Set());
+    setPage(1);
+  }, [selectedTab]);
 
-  return (
-    <Modal
-      open={props.modalOpen}
-      onClose={() => props.setModalOpen(false)}
-      size="lg"
-      preventCloseOnClickOutside
-      containerClassName="!h-[90vh] !w-[90vw] !max-h-[90vh] !max-w-[90vw]"
-    >
-      <ModalHeader
-        label="Observability"
-        title="Telemetry Events"
-        onClose={() => props.setModalOpen(false)}
-      />
-      <ModalBody className="!p-0 !overflow-hidden !flex !flex-col">
-        {/* Toolbar */}
+  const totalItems = shouldFetchAllRows ? filteredRows.length : totalItem;
+  const renderTelemetryTable = (kind: 'event' | 'metric') => {
+    const isActiveTab = activeTabKind === kind;
+    const isEventTab = kind === 'event';
+    const tabTitle = isEventTab ? 'Events' : 'Metrics';
+    const tabRows = isActiveTab ? filteredRows : getFilteredRows(kind);
+    const tabVisibleRows =
+      isActiveTab && shouldFetchAllRows
+        ? tabRows.slice((page - 1) * pageSize, page * pageSize)
+        : tabRows;
+    const tabTotalItems = isActiveTab
+      ? totalItems
+      : shouldFetchAllRows
+        ? tabRows.length
+        : tabRows.length;
+
+    return (
+      <>
         <TableToolbar>
           <TableToolbarContent>
             <TableToolbarSearch
-              placeholder='Search telemetry, e.g. type:metric scope:llm "timeout"'
+              placeholder={`Search ${tabTitle.toLowerCase()} payload or text`}
               value={searchText}
               onChange={(e: any) => {
                 setSearchText(e.target?.value || '');
@@ -641,50 +626,80 @@ export function ConversationTelemetryDialog(
               }}
             />
             <TableToolbarFilter
-              filters={EVENT_TYPES.map(t => ({
-                id: t,
-                label: t.charAt(0).toUpperCase() + t.slice(1),
-              }))}
-              activeFilters={activeFilters}
-              onApplyFilter={filters => {
-                setActiveFilters(filters);
-                setPage(1);
-              }}
-              onResetFilter={() => {
-                setActiveFilters(new Set());
-                setPage(1);
-              }}
-              onApply={applyStructuredCriteria}
-              onReset={resetStructuredCriteria}
+              panelClassName="!w-[48rem] max-w-[calc(100vw-4rem)]"
+              filters={[]}
+              activeFilters={new Set()}
+              onApplyFilter={() => {}}
+              onResetFilter={() => {}}
+              onApply={isEventTab ? applyEventFilters : applyMetricFilters}
+              onReset={isEventTab ? resetEventFilters : resetMetricFilters}
               extraContent={
-                <Stack orientation="vertical" gap={6} className="py-2">
-                  <TextInput
-                    id="telemetry-criteria-conversation-id"
-                    labelText="Conversation ID"
-                    placeholder="Conversation ID"
-                    value={conversationIdInput}
-                    onChange={(e: any) =>
-                      setConversationIdInput(e.target?.value || '')
-                    }
-                  />
-                  <TextInput
-                    id="telemetry-criteria-message-id"
-                    labelText="Message / Context ID"
-                    placeholder="Message ID or Context ID"
-                    value={messageIdInput}
-                    onChange={(e: any) =>
-                      setMessageIdInput(e.target?.value || '')
-                    }
-                  />
-                </Stack>
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                  {isEventTab ? (
+                    <>
+                      <MultiSelect
+                        id="telemetry-filter-event-name"
+                        titleText="Name"
+                        label="Choose names"
+                        items={EVENT_NAME_OPTIONS}
+                        itemToString={(item: any) => item?.label || ''}
+                        selectedItems={EVENT_NAME_OPTIONS.filter(item =>
+                          eventNameInputs.includes(item.id),
+                        )}
+                        onChange={({ selectedItems }: any) =>
+                          setEventNameInputs(
+                            selectedItems.map((item: any) => item.id),
+                          )
+                        }
+                      />
+                      <TextInput
+                        id="telemetry-filter-event-message-id"
+                        labelText="MessageID / ContextID"
+                        placeholder="MessageID or ContextID"
+                        value={messageIdInput}
+                        onChange={(e: any) =>
+                          setMessageIdInput(e.target?.value || '')
+                        }
+                      />
+                      <TextInput
+                        id="telemetry-filter-event-data-type"
+                        labelText="Type"
+                        placeholder="Type"
+                        value={eventDataTypeInput}
+                        onChange={(e: any) =>
+                          setEventDataTypeInput(e.target?.value || '')
+                        }
+                      />
+                    </>
+                  ) : (
+                    <Dropdown
+                      id="telemetry-filter-metric-scope"
+                      titleText="Scope"
+                      label="Choose scope"
+                      items={METRIC_SCOPE_OPTIONS}
+                      itemToString={(item: any) => item?.label || ''}
+                      selectedItem={
+                        METRIC_SCOPE_OPTIONS.find(
+                          item => item.id === metricScopeInput,
+                        ) || null
+                      }
+                      onChange={({ selectedItem }: any) =>
+                        setMetricScopeInput(selectedItem?.id || '')
+                      }
+                    />
+                  )}
+                </div>
               }
             />
           </TableToolbarContent>
         </TableToolbar>
 
-        {/* Active filter + criteria chips */}
         {(chips.length > 0 ||
-          activeFilters.size > 0 ||
+          (isEventTab
+            ? appliedEventNames.length > 0 ||
+              appliedMessageId !== '' ||
+              appliedEventDataType !== ''
+            : appliedMetricScope !== '') ||
           appliedConversationId !== '' ||
           appliedMessageId !== '') && (
           <div className="flex flex-wrap gap-1.5 px-4 py-2 border-b border-gray-200 dark:border-gray-800">
@@ -718,14 +733,45 @@ export function ConversationTelemetryDialog(
                 onClose={() => removeChip(chip.id)}
               />
             ))}
-            {Array.from(activeFilters).map(f => (
+            {isEventTab &&
+              appliedEventNames.map(appliedEventName => (
+                <DismissibleTag
+                  key={appliedEventName}
+                  type="cyan"
+                  text={`name: ${EVENT_NAME_OPTIONS.find(option => option.id === appliedEventName)?.label || appliedEventName}`}
+                  onClose={() => {
+                    setEventNameInputs(prev =>
+                      prev.filter(value => value !== appliedEventName),
+                    );
+                    setAppliedEventNames(prev =>
+                      prev.filter(value => value !== appliedEventName),
+                    );
+                    setPage(1);
+                  }}
+                />
+              ))}
+            {!isEventTab && appliedMetricScope !== '' && (
               <DismissibleTag
-                key={f}
                 type="cyan"
-                text={f}
-                onClose={() => toggleFilter(f)}
+                text={`scope: ${appliedMetricScope}`}
+                onClose={() => {
+                  setMetricScopeInput('');
+                  setAppliedMetricScope('');
+                  setPage(1);
+                }}
               />
-            ))}
+            )}
+            {isEventTab && appliedEventDataType !== '' && (
+              <DismissibleTag
+                type="cyan"
+                text={`data.type: ${appliedEventDataType}`}
+                onClose={() => {
+                  setEventDataTypeInput('');
+                  setAppliedEventDataType('');
+                  setPage(1);
+                }}
+              />
+            )}
           </div>
         )}
         {structuredError !== '' && (
@@ -734,15 +780,14 @@ export function ConversationTelemetryDialog(
           </div>
         )}
 
-        {/* Table */}
         <div className="flex-1 overflow-auto">
           {isLoading ? (
             <div className="flex items-center justify-center py-16">
               <Loading withOverlay={false} small />
             </div>
-          ) : visibleRows.length === 0 ? (
+          ) : tabVisibleRows.length === 0 ? (
             <div className="flex items-center justify-center py-16 text-gray-400 dark:text-gray-500 text-sm">
-              No telemetry events found
+              No {tabTitle.toLowerCase()} found
             </div>
           ) : (
             <Table>
@@ -755,7 +800,7 @@ export function ConversationTelemetryDialog(
                 </TableRow>
               </TableHead>
               <TableBody>
-                {visibleRows.map(row => {
+                {tabVisibleRows.map(row => {
                   const { typeLabel, tagType, json } = getRowData(row);
                   const isExpanded = expandedRows.has(row.key);
                   return (
@@ -801,10 +846,9 @@ export function ConversationTelemetryDialog(
           )}
         </div>
 
-        {/* Pagination */}
-        {totalItems > 0 && (
+        {isActiveTab && tabTotalItems > 0 && (
           <Pagination
-            totalItems={totalItems}
+            totalItems={tabTotalItems}
             page={page}
             pageSize={pageSize}
             pageSizes={[25, 50, 100]}
@@ -814,6 +858,40 @@ export function ConversationTelemetryDialog(
             }}
           />
         )}
+      </>
+    );
+  };
+
+  return (
+    <Modal
+      open={props.modalOpen}
+      onClose={() => props.setModalOpen(false)}
+      size="lg"
+      preventCloseOnClickOutside
+      containerClassName="!h-[90vh] !w-[90vw] !max-h-[90vh] !max-w-[90vw]"
+    >
+      <ModalHeader
+        label="Observability"
+        title="Telemetry Events"
+        onClose={() => props.setModalOpen(false)}
+      />
+      <ModalBody className="!p-0 !overflow-hidden !flex !flex-col">
+        <Tabs
+          tabs={['Events', 'Metrics']}
+          selectedIndex={selectedTab}
+          onChange={setSelectedTab}
+          contained
+          fill
+          aria-label="Telemetry tabs"
+          panelClassName="!p-0"
+        >
+          <div className="flex flex-1 min-h-0 flex-col">
+            {renderTelemetryTable('event')}
+          </div>
+          <div className="flex flex-1 min-h-0 flex-col">
+            {renderTelemetryTable('metric')}
+          </div>
+        </Tabs>
       </ModalBody>
     </Modal>
   );

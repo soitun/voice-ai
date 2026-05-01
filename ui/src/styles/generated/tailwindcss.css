@@ -2888,6 +2888,9 @@
   .\!w-20 {
     width: calc(var(--spacing) * 20) !important;
   }
+  .\!w-\[48rem\] {
+    width: 48rem !important;
+  }
   .\!w-\[90vw\] {
     width: 90vw !important;
   }
@@ -3089,6 +3092,9 @@
   .w-screen {
     width: 100vw;
   }
+  .\!max-w-\[44rem\] {
+    max-width: 44rem !important;
+  }
   .\!max-w-\[90vw\] {
     max-width: 90vw !important;
   }
@@ -3134,6 +3140,9 @@
   .max-w-\[42rem\] {
     max-width: 42rem;
   }
+  .max-w-\[44rem\] {
+    max-width: 44rem;
+  }
   .max-w-\[70\%\] {
     max-width: 70%;
   }
@@ -3154,6 +3163,9 @@
   }
   .max-w-\[1290px\] {
     max-width: 1290px;
+  }
+  .max-w-\[calc\(100vw-4rem\)\] {
+    max-width: calc(100vw - 4rem);
   }
   .max-w-full {
     max-width: 100%;
@@ -3457,6 +3469,9 @@
   }
   .\!gap-1 {
     gap: calc(var(--spacing) * 1) !important;
+  }
+  .\!gap-2 {
+    gap: calc(var(--spacing) * 2) !important;
   }
   .\!gap-4 {
     gap: calc(var(--spacing) * 4) !important;
@@ -7044,6 +7059,11 @@
       width: 460px;
     }
   }
+  .xl\:grid-cols-3 {
+    @media (width >= 80rem) {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+  }
   .xl\:grid-cols-4 {
     @media (width >= 80rem) {
       grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -9872,6 +9892,11 @@
       border-radius: 0 !important;
     }
   }
+  .\[\&_\.cds--list-box__field\]\:\!bg-\[var\(--cds-field\)\] {
+    & .cds--list-box  field {
+      background-color: var(--cds-field) !important;
+    }
+  }
   .\[\&_\.cds--select-input\]\:\!border-none {
     & .cds--select-input {
       --tw-border-style: none !important;
@@ -9906,6 +9931,11 @@
   .\[\&_\.cds--tab-content\]\:\!p-0 {
     & .cds--tab-content {
       padding: calc(var(--spacing) * 0) !important;
+    }
+  }
+  .\[\&_\.cds--tabs__nav\]\:\!w-full {
+    & .cds--tabs  nav {
+      width: 100% !important;
     }
   }
   .\[\&_\.cds--tabs__nav\]\:w-full {
@@ -9943,6 +9973,11 @@
       margin-inline: calc(var(--spacing) * 0);
     }
   }
+  .\[\&_\.cds--tabs__nav-item\]\:\!flex-1 {
+    & .cds--tabs  nav-item {
+      flex: 1 !important;
+    }
+  }
   .\[\&_\.cds--tabs__nav-item\]\:flex-1 {
     & .cds--tabs  nav-item {
       flex: 1;
@@ -9953,9 +9988,19 @@
       margin-left: calc(var(--spacing) * 0);
     }
   }
+  .\[\&_\.cds--tabs__nav-link\]\:\!w-full {
+    & .cds--tabs  nav-link {
+      width: 100% !important;
+    }
+  }
   .\[\&_\.cds--tabs__nav-link\]\:w-full {
     & .cds--tabs  nav-link {
       width: 100%;
+    }
+  }
+  .\[\&_\.cds--tabs__nav-link\]\:\!max-w-none {
+    & .cds--tabs  nav-link {
+      max-width: none !important;
     }
   }
   .\[\&_\.cds--tabs__nav-link\]\:justify-center {
