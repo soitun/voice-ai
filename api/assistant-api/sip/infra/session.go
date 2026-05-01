@@ -96,6 +96,9 @@ type Session struct {
 	// Disconnect() explicitly before End() if a SIP BYE should be sent.
 	// Set by the server that owns this session.
 	onDisconnect func(session *Session)
+	// onEnded is called once after End() completes local teardown (RTP stop,
+	// context cancel, state transition).
+	onEnded func(session *Session)
 }
 
 // NewSession creates a new SIP session
@@ -422,6 +425,13 @@ func (s *Session) ClearOnDisconnect() {
 	s.mu.Unlock()
 }
 
+// SetOnEnded registers a callback that is invoked once End() completes.
+func (s *Session) SetOnEnded(fn func(session *Session)) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.onEnded = fn
+}
+
 // Disconnect performs transport-level call teardown by invoking the onDisconnect callback.
 // This sends a SIP BYE (or equivalent) to the remote party before local cleanup.
 // Safe to call multiple times — the callback is cleared after first invocation.
@@ -559,6 +569,13 @@ func (s *Session) End() {
 		s.logger.Info("Session ended",
 			"call_id", s.info.CallID,
 			"duration", s.info.GetDuration())
+	}
+
+	s.mu.RLock()
+	onEnded := s.onEnded
+	s.mu.RUnlock()
+	if onEnded != nil {
+		onEnded(s)
 	}
 }
 

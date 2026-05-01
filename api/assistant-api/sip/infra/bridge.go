@@ -68,7 +68,6 @@ func (s *Server) MakeBridgeCall(ctx context.Context, cfg *Config, toURI, fromURI
 	session.SetLocalRTP(invite.externalIP, invite.localPort)
 	session.SetRTPHandler(answered.rtpHandler)
 	session.SetDialogClientSession(invite.dialogSession)
-	session.SetState(CallStateConnected)
 
 	if answered.negotiatedCodec != nil {
 		session.SetNegotiatedCodec(answered.negotiatedCodec.Name, int(answered.negotiatedCodec.ClockRate))
@@ -76,6 +75,7 @@ func (s *Server) MakeBridgeCall(ctx context.Context, cfg *Config, toURI, fromURI
 
 	// Register for BYE routing
 	s.registerSession(session, invite.callID)
+	s.setCallState(session, CallStateConnected, "bridge_call_answered")
 
 	s.logger.Infow("Bridge call answered", "call_id", invite.callID, "to", toURI)
 	return session, nil
@@ -117,6 +117,10 @@ func (s *Server) BridgeTransfer(ctx context.Context, inbound, outbound *Session,
 	inCodec := inbound.GetNegotiatedCodec()
 	outCodec := outbound.GetNegotiatedCodec()
 	needsTranscode := inCodec != nil && outCodec != nil && inCodec.Name != outCodec.Name
+	s.setCallState(inbound, CallStateTransferring, "bridge_transfer_started")
+	s.setCallState(outbound, CallStateTransferring, "bridge_transfer_started")
+	s.setCallState(inbound, CallStateBridgeConnected, "bridge_media_connected")
+	s.setCallState(outbound, CallStateBridgeConnected, "bridge_media_connected")
 
 	s.logger.Infow("Audio bridge started",
 		"inbound_call_id", inCallID,
@@ -165,6 +169,7 @@ func (s *Server) BridgeTransfer(ctx context.Context, inbound, outbound *Session,
 	// handleBye). Ending it here would race with metadata writes in executeTransfer
 	// and with the observer teardown in media.go.
 	if !outbound.IsEnded() {
+		s.beginEnding(outbound, "bridge_transfer_exit")
 		outbound.End()
 	}
 

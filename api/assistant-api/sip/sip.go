@@ -831,8 +831,9 @@ func (m *SIPEngine) pipelineCallStart(ctx context.Context, session *sip_infra.Se
 					ts.ExitTransferMode()
 					if toolIDStr != "" {
 						ts.PushToolCallResult(toolCtxIDStr, toolIDStr, "transfer_call", protos.ToolCallAction_TOOL_CALL_ACTION_TRANSFER_CONVERSATION, map[string]string{
-							"status": "failed",
-							"reason": fmt.Sprintf("Transfer to %s failed", primaryTarget),
+							"status":      "failed",
+							"reason":      fmt.Sprintf("Transfer to %s failed", primaryTarget),
+							"next_action": postTransferAction,
 						})
 					}
 				},
@@ -891,12 +892,6 @@ func (m *SIPEngine) pipelineCallEnd(callID string) {
 	}
 	session, ok := srv.GetSession(callID)
 	if !ok {
-		return
-	}
-	// Don't end the session if a bridge transfer is active — the pipeline
-	// transfer handler owns the session lifecycle during bridging.
-	if session.GetState() == sip_infra.CallStateTransferring || session.GetState() == sip_infra.CallStateBridgeConnected {
-		m.logger.Infow("pipelineCallEnd: skipping session.End — transfer active", "call_id", callID)
 		return
 	}
 	session.End()

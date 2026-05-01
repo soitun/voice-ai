@@ -128,6 +128,24 @@ func (p *AudioProcessor) ClearOutputBuffer() {
 	}
 }
 
+func (p *AudioProcessor) WaitOutputDrain(ctx context.Context) {
+	ticker := time.NewTicker(chunkDuration)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			p.outputBufferMu.Lock()
+			empty := p.outputBuffer.Len() == 0
+			p.outputBufferMu.Unlock()
+			if empty {
+				return
+			}
+		}
+	}
+}
+
 // RunOutputSender paces 20ms audio frames to the RTP handler. Blocks until ctx is cancelled.
 func (p *AudioProcessor) RunOutputSender(ctx context.Context) {
 	ticker := time.NewTicker(chunkDuration)

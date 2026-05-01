@@ -136,7 +136,7 @@ func (d *Dispatcher) executeTransfer(ctx context.Context, v sip_infra.TransferIn
 	// Track bridge duration from the moment the transfer target answered
 	bridgeStart := time.Now()
 
-	endReason, err := d.server.BridgeTransfer(context.Background(), v.Session, outboundSession, v.OnOperatorAudio)
+	endReason, err := d.server.BridgeTransfer(ctx, v.Session, outboundSession, v.OnOperatorAudio)
 	bridgeDuration := time.Since(bridgeStart)
 
 	if err != nil {
@@ -161,35 +161,13 @@ func (d *Dispatcher) executeTransfer(ctx context.Context, v sip_infra.TransferIn
 		v.Session.SetMetadata(sip_infra.MetadataBridgeTransferDuration, bridgeDuration.String())
 	}
 
-	// Operator (transfer target) hung up. PostTransferAction (from the tool args)
-	// decides:
-	//   - end_call : end the inbound session (caller's call drops).
-	//   - resume_ai: hand the caller back to the AI (Talk loop keeps running).
-	if endReason == sip_infra.BridgeEndOutboundBye {
-		if v.OnTeardown != nil {
-			v.OnTeardown()
-		}
-		if v.PostTransferAction == sip_infra.PostTransferActionEndCall {
-			if !v.Session.IsEnded() {
-				v.Session.End()
-			}
-			return
-		}
-		if v.OnResumeAI != nil {
-			v.OnResumeAI()
-		}
-		return
-	}
-
+	// SIP layer owns transfer transport only. Policy decisions (continue vs end_call)
+	// are handled upstream via tool-result handling.
 	if v.OnTeardown != nil {
 		v.OnTeardown()
 	}
-
-	// Caller hung up, timeout, or context cancelled — end the inbound session.
-	// This unblocks pipelineCallStart's session wait, which then reads the
-	// metadata for observer events. BridgeTransfer only ends the outbound leg.
-	if !v.Session.IsEnded() {
-		v.Session.End()
+	if v.OnResumeAI != nil {
+		v.OnResumeAI()
 	}
 }
 

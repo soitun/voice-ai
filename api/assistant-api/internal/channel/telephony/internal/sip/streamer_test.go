@@ -18,13 +18,12 @@ func newTestSIPStreamer(t *testing.T) *Streamer {
 	logger, err := commons.NewApplicationLogger()
 	require.NoError(t, err)
 
-	ctx, cancel := context.WithCancel(context.Background())
+	_, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 
 	return &Streamer{
 		BaseTelephonyStreamer: internal_telephony_base.NewBaseTelephonyStreamer(logger, &callcontext.CallContext{}, nil),
-		ctx:                   ctx,
-		cancel:                cancel,
+		cancelParent:          cancel,
 	}
 }
 

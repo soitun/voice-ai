@@ -12,6 +12,25 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+type fakeTransferServer struct {
+	makeBridgeCallFn func(ctx context.Context, cfg *sip_infra.Config, toURI, fromURI string) (*sip_infra.Session, error)
+	bridgeTransferFn func(ctx context.Context, inbound, outbound *sip_infra.Session, onOperatorAudio func([]byte)) (sip_infra.BridgeEndReason, error)
+}
+
+func (f *fakeTransferServer) MakeBridgeCall(ctx context.Context, cfg *sip_infra.Config, toURI, fromURI string) (*sip_infra.Session, error) {
+	if f.makeBridgeCallFn != nil {
+		return f.makeBridgeCallFn(ctx, cfg, toURI, fromURI)
+	}
+	return nil, errors.New("make bridge call not implemented")
+}
+
+func (f *fakeTransferServer) BridgeTransfer(ctx context.Context, inbound, outbound *sip_infra.Session, onOperatorAudio func([]byte)) (sip_infra.BridgeEndReason, error) {
+	if f.bridgeTransferFn != nil {
+		return f.bridgeTransferFn(ctx, inbound, outbound, onOperatorAudio)
+	}
+	return sip_infra.BridgeEndContext, errors.New("bridge transfer not implemented")
+}
+
 func newTransferTestConfig() *sip_infra.Config {
 	return &sip_infra.Config{
 		Server:            "127.0.0.1",
@@ -29,6 +48,16 @@ func newTransferTestSession(t *testing.T) *sip_infra.Session {
 	s, err := sip_infra.NewSession(context.Background(), &sip_infra.SessionConfig{
 		Config:    newTransferTestConfig(),
 		Direction: sip_infra.CallDirectionInbound,
+	})
+	require.NoError(t, err)
+	return s
+}
+
+func newTransferTestOutboundSession(t *testing.T) *sip_infra.Session {
+	t.Helper()
+	s, err := sip_infra.NewSession(context.Background(), &sip_infra.SessionConfig{
+		Config:    newTransferTestConfig(),
+		Direction: sip_infra.CallDirectionOutbound,
 	})
 	require.NoError(t, err)
 	return s
@@ -491,4 +520,217 @@ func TestMetadataKeyConstants_Distinct(t *testing.T) {
 		assert.False(t, seen[k], "duplicate metadata key: %s", k)
 		seen[k] = true
 	}
+}
+
+func TestTransferRace_UserHangupCancelsDialAttempt(t *testing.T) {
+	t.Parallel()
+
+	var cancelled atomic.Bool
+	var failedCalled atomic.Bool
+
+	srv := &fakeTransferServer{
+		makeBridgeCallFn: func(ctx context.Context, _ *sip_infra.Config, _, _ string) (*sip_infra.Session, error) {
+			<-ctx.Done()
+			cancelled.Store(true)
+			return nil, ctx.Err()
+		},
+	}
+
+	d := NewDispatcher(&DispatcherConfig{
+		Logger:         newPipelineTestLogger(t),
+		TransferServer: srv,
+	})
+
+	inbound := newTransferTestSession(t)
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		d.executeTransfer(context.Background(), sip_infra.TransferInitiatedPipeline{
+			ID:        inbound.GetCallID(),
+			Session:   inbound,
+			TargetURI: "918031405561",
+			Config:    newTransferTestConfig(),
+			OnFailed:  func() { failedCalled.Store(true) },
+		})
+	}()
+
+	time.Sleep(50 * time.Millisecond)
+	inbound.End()
+
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("transfer did not stop after caller hangup")
+	}
+
+	assert.True(t, cancelled.Load(), "dial attempt context should cancel on caller hangup")
+	assert.True(t, failedCalled.Load(), "OnFailed should fire when transfer cannot complete")
+}
+
+func TestTransferRace_AIDisconnectContextTeardownAllLegs(t *testing.T) {
+	t.Parallel()
+
+	inbound := newTransferTestSession(t)
+	outbound := newTransferTestOutboundSession(t)
+
+	var teardownCalled atomic.Bool
+	var bridgeCtxCancelled atomic.Bool
+	var resumeCalled atomic.Bool
+
+	srv := &fakeTransferServer{
+		makeBridgeCallFn: func(_ context.Context, _ *sip_infra.Config, _, _ string) (*sip_infra.Session, error) {
+			return outbound, nil
+		},
+		bridgeTransferFn: func(ctx context.Context, _ *sip_infra.Session, out *sip_infra.Session, _ func([]byte)) (sip_infra.BridgeEndReason, error) {
+			<-ctx.Done()
+			bridgeCtxCancelled.Store(true)
+			if !out.IsEnded() {
+				out.End()
+			}
+			return sip_infra.BridgeEndContext, ctx.Err()
+		},
+	}
+
+	d := NewDispatcher(&DispatcherConfig{
+		Logger:         newPipelineTestLogger(t),
+		TransferServer: srv,
+	})
+
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		d.executeTransfer(ctx, sip_infra.TransferInitiatedPipeline{
+			ID:        inbound.GetCallID(),
+			Session:   inbound,
+			TargetURI: "918031405561",
+			Config:    newTransferTestConfig(),
+			OnTeardown: func() {
+				teardownCalled.Store(true)
+			},
+			OnResumeAI: func() {
+				resumeCalled.Store(true)
+			},
+		})
+	}()
+
+	time.Sleep(50 * time.Millisecond)
+	cancel()
+
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("transfer did not teardown after AI/context disconnect")
+	}
+
+	assert.True(t, bridgeCtxCancelled.Load(), "bridge context should be cancelled")
+	assert.True(t, teardownCalled.Load(), "OnTeardown should be called on bridge exit")
+	assert.True(t, resumeCalled.Load(), "OnResumeAI should be called to return control to AI/tool path")
+	assert.False(t, inbound.IsEnded(), "SIP transfer layer must not end inbound session")
+	assert.True(t, outbound.IsEnded(), "outbound leg should be ended on bridge teardown")
+}
+
+func TestTransferRace_OperatorDisconnectResumesAI(t *testing.T) {
+	t.Parallel()
+
+	inbound := newTransferTestSession(t)
+	outbound := newTransferTestOutboundSession(t)
+
+	var teardownCount atomic.Int32
+	var resumeCount atomic.Int32
+
+	srv := &fakeTransferServer{
+		makeBridgeCallFn: func(_ context.Context, _ *sip_infra.Config, _, _ string) (*sip_infra.Session, error) {
+			return outbound, nil
+		},
+		bridgeTransferFn: func(_ context.Context, _ *sip_infra.Session, out *sip_infra.Session, _ func([]byte)) (sip_infra.BridgeEndReason, error) {
+			if !out.IsEnded() {
+				out.End()
+			}
+			return sip_infra.BridgeEndOutboundBye, nil
+		},
+	}
+
+	d := NewDispatcher(&DispatcherConfig{
+		Logger:         newPipelineTestLogger(t),
+		TransferServer: srv,
+	})
+
+	d.executeTransfer(context.Background(), sip_infra.TransferInitiatedPipeline{
+		ID:        inbound.GetCallID(),
+		Session:   inbound,
+		TargetURI: "918031405561",
+		Config:    newTransferTestConfig(),
+		OnTeardown: func() {
+			teardownCount.Add(1)
+		},
+		OnResumeAI: func() {
+			resumeCount.Add(1)
+		},
+	})
+
+	assert.Equal(t, int32(1), teardownCount.Load(), "OnTeardown must be called exactly once")
+	assert.Equal(t, int32(1), resumeCount.Load(), "OnResumeAI must be called exactly once")
+	assert.False(t, inbound.IsEnded(), "inbound leg should continue when operator hangs up")
+	assert.True(t, outbound.IsEnded(), "outbound leg should end when operator hangs up")
+}
+
+func TestTransferRace_ConcurrentCallerEndAndBridgeComplete(t *testing.T) {
+	t.Parallel()
+
+	inbound := newTransferTestSession(t)
+	outbound := newTransferTestOutboundSession(t)
+
+	var teardownCount atomic.Int32
+	var resumeCount atomic.Int32
+	started := make(chan struct{})
+
+	srv := &fakeTransferServer{
+		makeBridgeCallFn: func(_ context.Context, _ *sip_infra.Config, _, _ string) (*sip_infra.Session, error) {
+			return outbound, nil
+		},
+		bridgeTransferFn: func(_ context.Context, _ *sip_infra.Session, out *sip_infra.Session, _ func([]byte)) (sip_infra.BridgeEndReason, error) {
+			close(started)
+			time.Sleep(50 * time.Millisecond)
+			if !out.IsEnded() {
+				out.End()
+			}
+			return sip_infra.BridgeEndOutboundBye, nil
+		},
+	}
+
+	d := NewDispatcher(&DispatcherConfig{
+		Logger:         newPipelineTestLogger(t),
+		TransferServer: srv,
+	})
+
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		d.executeTransfer(context.Background(), sip_infra.TransferInitiatedPipeline{
+			ID:        inbound.GetCallID(),
+			Session:   inbound,
+			TargetURI: "918031405561",
+			Config:    newTransferTestConfig(),
+			OnTeardown: func() {
+				teardownCount.Add(1)
+			},
+			OnResumeAI: func() {
+				resumeCount.Add(1)
+			},
+		})
+	}()
+
+	<-started
+	inbound.End()
+
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("concurrent transfer completion and caller teardown deadlocked")
+	}
+
+	assert.Equal(t, int32(1), teardownCount.Load(), "OnTeardown must be called exactly once")
+	assert.Equal(t, int32(1), resumeCount.Load(), "OnResumeAI must be called exactly once")
+	assert.True(t, outbound.IsEnded(), "outbound leg should be ended")
 }

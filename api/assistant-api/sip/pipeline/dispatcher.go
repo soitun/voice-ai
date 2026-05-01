@@ -39,7 +39,7 @@ type Dispatcher struct {
 	mediaCh   chan callEnvelope
 	controlCh chan callEnvelope
 
-	server             *sip_infra.Server
+	server             TransferServer
 	registrationClient *sip_infra.RegistrationClient
 
 	didResolver          DIDResolverFunc
@@ -97,6 +97,7 @@ type OnCreateHooksFunc func(ctx context.Context, auth types.SimplePrinciple, ass
 type DispatcherConfig struct {
 	Logger               commons.Logger
 	Server               *sip_infra.Server
+	TransferServer       TransferServer
 	RegistrationClient   *sip_infra.RegistrationClient
 	DIDResolver          DIDResolverFunc
 	OnCreateConversation OnCreateConversationFunc
@@ -108,10 +109,21 @@ type DispatcherConfig struct {
 	OnCreateHooks        OnCreateHooksFunc
 }
 
+// TransferServer is the minimal SIP infra surface required by transfer orchestration.
+// It enables deterministic tests by allowing fake implementations.
+type TransferServer interface {
+	MakeBridgeCall(ctx context.Context, cfg *sip_infra.Config, toURI, fromURI string) (*sip_infra.Session, error)
+	BridgeTransfer(ctx context.Context, inbound, outbound *sip_infra.Session, onOperatorAudio func([]byte)) (sip_infra.BridgeEndReason, error)
+}
+
 func NewDispatcher(cfg *DispatcherConfig) *Dispatcher {
+	transferServer := cfg.TransferServer
+	if transferServer == nil && cfg.Server != nil {
+		transferServer = cfg.Server
+	}
 	return &Dispatcher{
 		logger:               cfg.Logger,
-		server:               cfg.Server,
+		server:               transferServer,
 		registrationClient:   cfg.RegistrationClient,
 		didResolver:          cfg.DIDResolver,
 		onCreateConversation: cfg.OnCreateConversation,
