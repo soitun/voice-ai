@@ -160,7 +160,6 @@ const ConfigureAssistantTool: FC<{ assistantId: string }> = ({
           totalSelected={selectedToolId ? 1 : 0}
           totalCount={axtion.tools.length}
           onCancel={() => setSelectedToolId(null)}
-          className="[&_[class*=divider]]:hidden [&_.cds--btn]:transition-colors [&_.cds--btn:hover]:!bg-primary [&_.cds--btn:hover]:!text-white"
         >
           {selectedToolId && (
             <>

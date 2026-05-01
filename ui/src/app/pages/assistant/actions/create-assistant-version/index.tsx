@@ -3,10 +3,7 @@ import { useRapidaStore } from '@/hooks';
 import { useCurrentCredential } from '@/hooks/use-credential';
 import { useParams } from 'react-router-dom';
 import { Helmet } from '@/app/components/helmet';
-import {
-  PrimaryButton,
-  SecondaryButton,
-} from '@/app/components/carbon/button';
+import { PrimaryButton, SecondaryButton } from '@/app/components/carbon/button';
 import { ButtonSet } from '@carbon/react';
 import { TabForm } from '@/app/components/form/tab-form';
 import { FieldSet } from '@/app/components/form/fieldset';
@@ -284,12 +281,14 @@ const CreateNewVersion: FC<{ assistantId: string }> = ({ assistantId }) => {
               "Update the assistant's definition — including the model, instructions, and variables — as needed.",
             actions: [
               <ButtonSet className="!w-full [&>button]:!flex-1 [&>button]:!max-w-none">
-                <SecondaryButton size="lg"
+                <SecondaryButton
+                  size="lg"
                   onClick={() => showDialog(navigator.goBack)}
                 >
                   Cancel
                 </SecondaryButton>
-                <PrimaryButton size="lg"
+                <PrimaryButton
+                  size="lg"
                   onClick={() => {
                     if (validateInstruction()) {
                       setActiveTab('commit-assistant');
@@ -324,13 +323,10 @@ const CreateNewVersion: FC<{ assistantId: string }> = ({ assistantId }) => {
                   {/* Prompt template section */}
                   <div className="flex flex-col gap-6">
                     <SectionDivider label="Prompt Template" />
-                    <DocNoticeBlock
-                      docUrl="https://doc.rapida.ai/assistants/prompt-templating"
-                      tone="blue"
-                    >
+                    <DocNoticeBlock docUrl="https://doc.rapida.ai/assistants/prompt-templating">
                       Prompt variables and system arguments are resolved at
-                      runtime. Read the prompt templating guide before
-                      creating the version.
+                      runtime. Read the prompt templating guide before creating
+                      the version.
                     </DocNoticeBlock>
                     <ConfigPrompt
                       instanceId={randomString(10)}
@@ -351,12 +347,14 @@ const CreateNewVersion: FC<{ assistantId: string }> = ({ assistantId }) => {
               'Write a brief note describing what changed in this version.',
             actions: [
               <ButtonSet className="!w-full [&>button]:!flex-1 [&>button]:!max-w-none">
-                <SecondaryButton size="lg"
+                <SecondaryButton
+                  size="lg"
                   onClick={() => showDialog(navigator.goBack)}
                 >
                   Cancel
                 </SecondaryButton>
-                <PrimaryButton size="lg"
+                <PrimaryButton
+                  size="lg"
                   onClick={() => {
                     createProviderModel();
                   }}

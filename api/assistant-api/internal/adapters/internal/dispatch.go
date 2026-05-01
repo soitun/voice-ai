@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strconv"
 	"time"
 
 	internal_audio "github.com/rapidaai/api/assistant-api/internal/audio"
@@ -1058,10 +1059,21 @@ func (talking *genericRequestor) handleToolCall(ctx context.Context, vl internal
 			internal_type.InjectMessagePacket{ContextID: vl.ContextID, Text: msg})
 	}
 
-	talking.Notify(ctx, &protos.ConversationToolCall{
-		Id: vl.ContextID, ToolId: vl.ToolID, Name: vl.Name,
-		Action: vl.Action, Args: vl.Arguments, Time: timestamppb.Now(),
-	})
+	if delayStr, ok := vl.Arguments["delay"]; ok && delayStr != "" {
+		if delayMs, err := strconv.Atoi(delayStr); err == nil && delayMs > 0 {
+			time.AfterFunc(time.Duration(5)*time.Second, func() {
+				talking.Notify(ctx, &protos.ConversationToolCall{
+					Id: vl.ContextID, ToolId: vl.ToolID, Name: vl.Name,
+					Action: vl.Action, Args: vl.Arguments, Time: timestamppb.Now(),
+				})
+			})
+		}
+	} else {
+		talking.Notify(ctx, &protos.ConversationToolCall{
+			Id: vl.ContextID, ToolId: vl.ToolID, Name: vl.Name,
+			Action: vl.Action, Args: vl.Arguments, Time: timestamppb.Now(),
+		})
+	}
 
 	if vl.Action != protos.ToolCallAction_TOOL_CALL_ACTION_UNSPECIFIED {
 		// Stop idle timer via packet so it is ordered AFTER any InjectMessagePacket

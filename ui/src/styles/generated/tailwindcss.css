@@ -3993,6 +3993,9 @@
   .\!bg-\[var\(--cds-field\)\] {
     background-color: var(--cds-field) !important;
   }
+  .\!bg-primary {
+    background-color: var(--color-primary) !important;
+  }
   .\!bg-white {
     background-color: var(--color-white) !important;
   }

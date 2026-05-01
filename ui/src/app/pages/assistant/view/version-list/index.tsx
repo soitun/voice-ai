@@ -19,8 +19,6 @@ import {
   TableToolbar,
   TableToolbarContent,
   TableToolbarSearch,
-  TableSelectRow,
-  TableSelectAll,
   TableBatchActions,
   TableBatchAction,
   RadioButton,
@@ -70,9 +68,13 @@ export function Version(props: VersionProps) {
   const [userId, token, projectId] = useCredential();
   const assistantProviderAction = useAssistantProviderPageStore();
   const [isFetching, setIsFetching] = useState(true);
-  const [deployingProviderId, setDeployingProviderId] = useState<string | null>(null);
+  const [deployingProviderId, setDeployingProviderId] = useState<string | null>(
+    null,
+  );
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedVersionId, setSelectedVersionId] = useState<string | null>(null);
+  const [selectedVersionId, setSelectedVersionId] = useState<string | null>(
+    null,
+  );
 
   useEffect(() => {
     setIsFetching(true);
@@ -114,7 +116,9 @@ export function Version(props: VersionProps) {
         toast.error(error);
       },
       e => {
-        toast.success('New version of assistant has been deployed successfully.');
+        toast.success(
+          'New version of assistant has been deployed successfully.',
+        );
         assistantProviderAction.onChangeAssistant(e);
         props.onReload();
         setDeployingProviderId(null);
@@ -132,7 +136,8 @@ export function Version(props: VersionProps) {
 
   const getProviderData = (apm: any) => {
     const caseType = apm.getAssistantproviderCase();
-    const Cases = GetAllAssistantProviderResponse.AssistantProvider.AssistantproviderCase;
+    const Cases =
+      GetAllAssistantProviderResponse.AssistantProvider.AssistantproviderCase;
 
     switch (caseType) {
       case Cases.ASSISTANTPROVIDERMODEL: {
@@ -183,20 +188,29 @@ export function Version(props: VersionProps) {
       projectId,
       token,
       userId,
-      (err: string) => { setIsFetching(false); toast.error(err); },
-      () => { setIsFetching(false); },
+      (err: string) => {
+        setIsFetching(false);
+        toast.error(err);
+      },
+      () => {
+        setIsFetching(false);
+      },
     );
   };
 
   const allRows = assistantProviderAction.assistantProviders
     .map(apm => ({ apm, data: getProviderData(apm) }))
-    .filter(({ data }) => data !== null) as { apm: any; data: NonNullable<ReturnType<typeof getProviderData>> }[];
+    .filter(({ data }) => data !== null) as {
+    apm: any;
+    data: NonNullable<ReturnType<typeof getProviderData>>;
+  }[];
 
   const filteredRows = searchTerm
-    ? allRows.filter(({ data }) =>
-        `vrsn_${data.id}`.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        data.type.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        data.description.toLowerCase().includes(searchTerm.toLowerCase()),
+    ? allRows.filter(
+        ({ data }) =>
+          `vrsn_${data.id}`.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          data.type.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          data.description.toLowerCase().includes(searchTerm.toLowerCase()),
       )
     : allRows;
 
@@ -212,9 +226,10 @@ export function Version(props: VersionProps) {
         >
           <TableBatchAction
             renderIcon={Rocket}
-            kind="ghost"
             onClick={() => {
-              const row = filteredRows.find(r => r.data.id === selectedVersionId);
+              const row = filteredRows.find(
+                r => r.data.id === selectedVersionId,
+              );
               if (row) {
                 deployRevision(row.data.deployType, row.data.id);
                 setSelectedVersionId(null);
@@ -251,17 +266,26 @@ export function Version(props: VersionProps) {
         <TableBody>
           {filteredRows.map(({ data }, idx) => {
             const isCurrent =
-              assistantProviderAction.assistant?.getAssistantproviderid() === data.id;
+              assistantProviderAction.assistant?.getAssistantproviderid() ===
+              data.id;
             const isDeploying = deployingProviderId === data.id;
 
             return (
               <TableRow
                 key={idx}
                 isSelected={selectedVersionId === data.id}
-                onClick={() => !isCurrent && setSelectedVersionId(selectedVersionId === data.id ? null : data.id)}
+                onClick={() =>
+                  !isCurrent &&
+                  setSelectedVersionId(
+                    selectedVersionId === data.id ? null : data.id,
+                  )
+                }
                 className={!isCurrent ? 'cursor-pointer' : ''}
               >
-                <TableCell className="!w-12 !pr-0" onClick={e => e.stopPropagation()}>
+                <TableCell
+                  className="!w-12 !pr-0"
+                  onClick={e => e.stopPropagation()}
+                >
                   <RadioButton
                     id={`version-select-${data.id}`}
                     name="version-select"
@@ -280,21 +304,32 @@ export function Version(props: VersionProps) {
                   <VersionId id={data.id} />
                 </TableCell>
                 <TableCell>
-                  <Tag type={data.typeColor} size="sm">{data.type}</Tag>
+                  <Tag type={data.typeColor} size="sm">
+                    {data.type}
+                  </Tag>
                 </TableCell>
                 <TableCell>{data.description}</TableCell>
                 <TableCell>
                   {isCurrent ? (
                     <IconIndicator kind="succeeded" label="In use" size={16} />
                   ) : isDeploying ? (
-                    <IconIndicator kind="in-progress" label="Deploying" size={16} />
+                    <IconIndicator
+                      kind="in-progress"
+                      label="Deploying"
+                      size={16}
+                    />
                   ) : (
-                    <IconIndicator kind="incomplete" label="Available" size={16} />
+                    <IconIndicator
+                      kind="incomplete"
+                      label="Available"
+                      size={16}
+                    />
                   )}
                 </TableCell>
                 <TableCell>{data.createdBy}</TableCell>
                 <TableCell>
-                  {data.createdDate && toHumanReadableDateTime(data.createdDate)}
+                  {data.createdDate &&
+                    toHumanReadableDateTime(data.createdDate)}
                 </TableCell>
               </TableRow>
             );
