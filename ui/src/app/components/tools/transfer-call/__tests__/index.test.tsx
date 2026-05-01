@@ -120,7 +120,7 @@ describe('ConfigureTransferCall', () => {
         'tool.transfer_message',
         'Please hold while I transfer your call.',
       ),
-      createMetadata('tool.transfer_delay', '300'),
+      createMetadata('tool.transfer_delay', '700'),
       createMetadata('tool.post_transfer_action', 'end_call'),
     ];
 
@@ -136,7 +136,7 @@ describe('ConfigureTransferCall', () => {
     const postTransferAction = screen.getByTestId('post-transfer-action');
 
     expect(message).toHaveValue('Please hold while I transfer your call.');
-    expect(delay).toHaveValue('300');
+    expect(delay).toHaveValue('700');
     expect(postTransferAction).toHaveValue('end_call');
 
     fireEvent.change(message, {
@@ -155,7 +155,7 @@ describe('ConfigureTransferCall', () => {
       afterMessageUpdate
         .find(m => m.getKey() === 'tool.transfer_delay')
         ?.getValue(),
-    ).toBe('300');
+    ).toBe('700');
 
     fireEvent.change(delay, { target: { value: '650' } });
 

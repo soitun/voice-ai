@@ -1040,7 +1040,6 @@ func (talking *genericRequestor) handleAssistantMessageMetadata(ctx context.Cont
 // =============================================================================
 
 func (talking *genericRequestor) handleToolCall(ctx context.Context, vl internal_type.LLMToolCallPacket) {
-	talking.logger.Debugf("tool-call-> %+v", vl)
 	req, _ := json.Marshal(vl)
 	// Notify client + emit event (fast, stays on critical)
 	talking.OnPacket(ctx, internal_type.ConversationEventPacket{
@@ -1061,7 +1060,7 @@ func (talking *genericRequestor) handleToolCall(ctx context.Context, vl internal
 
 	if delayStr, ok := vl.Arguments["delay"]; ok && delayStr != "" {
 		if delayMs, err := strconv.Atoi(delayStr); err == nil && delayMs > 0 {
-			time.AfterFunc(time.Duration(5)*time.Second, func() {
+			time.AfterFunc(time.Duration(delayMs)*time.Millisecond, func() {
 				talking.Notify(ctx, &protos.ConversationToolCall{
 					Id: vl.ContextID, ToolId: vl.ToolID, Name: vl.Name,
 					Action: vl.Action, Args: vl.Arguments, Time: timestamppb.Now(),
@@ -1096,7 +1095,6 @@ func (talking *genericRequestor) handleToolCall(ctx context.Context, vl internal
 }
 
 func (talking *genericRequestor) handleToolResult(ctx context.Context, vl internal_type.LLMToolResultPacket) {
-	talking.logger.Debugf("tool-call-> %+v", vl)
 	res, _ := json.Marshal(vl)
 
 	// for tool call first persist the tool then do anything else, this ensures that even if the process crashes after this point we have a record of the tool call and its result

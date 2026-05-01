@@ -32,7 +32,7 @@ export const ConfigureTransferCall: FC<ConfigureToolProps> = ({
   const transferDelayValue =
     transferDelayRaw === '' || Number.isNaN(transferDelayParsed)
       ? 500
-      : transferDelayParsed;
+      : Math.min(Math.max(transferDelayParsed, 500), 3000);
 
   const handleTransferToChange = useCallback(
     (options: string[]) => {
@@ -103,7 +103,27 @@ export const ConfigureTransferCall: FC<ConfigureToolProps> = ({
               <SelectItem value="end_call" text="Disconnect the call" />
               <SelectItem value="resume_ai" text="Hand over to AI" />
             </Select>
-            <Slider
+            <Select
+              id="transfer-ringtone"
+              labelText={
+                <span className="inline-flex items-center gap-1">
+                  Ringtone
+                  <Tooltip
+                    align="right"
+                    label="Ringtone played during the transfer flow."
+                  >
+                    <Information size={14} />
+                  </Tooltip>
+                </span>
+              }
+              value={getParamValue('tool.ringtone') || 'ringtone_us'}
+              onChange={e => updateParameter('tool.ringtone', e.target.value)}
+            >
+              <SelectItem value="ringtone_in" text="ringtone_in" />
+              <SelectItem value="ringtone_uk" text="ringtone_uk" />
+              <SelectItem value="ringtone_us" text="ringtone_us" />
+            </Select>
+              <Slider
               id="transfer-delay"
               labelText={
                 <span className="inline-flex items-center gap-1">
@@ -116,8 +136,8 @@ export const ConfigureTransferCall: FC<ConfigureToolProps> = ({
                   </Tooltip>
                 </span>
               }
-              min={0}
-              max={1000}
+              min={500}
+              max={3000}
               step={50}
               value={transferDelayValue}
               onChange={({ value }: { value: number }) =>

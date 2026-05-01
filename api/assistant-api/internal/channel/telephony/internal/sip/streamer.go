@@ -88,6 +88,7 @@ func NewStreamer(ctx context.Context,
 		RTPHandler: rtpHandler,
 		Resampler:  s.Resampler(),
 		PushInput:  s.Input,
+		Ringtone:   "ringtone_us",
 	})
 
 	go s.forwardIncomingAudio()
@@ -198,6 +199,7 @@ func (s *Streamer) Send(response internal_type.Stream) error {
 			}
 			targets := s.SplitTransferTargets(raw)
 			postTransferAction := data.GetArgs()["post_transfer_action"]
+			ringtone := data.GetArgs()["ringtone"]
 			s.mu.RLock()
 			if s.session != nil {
 				s.session.SetMetadata(sip_infra.MetadataBridgeTransferTarget, strings.Join(targets, commons.SEPARATOR))
@@ -205,7 +207,7 @@ func (s *Streamer) Send(response internal_type.Stream) error {
 				s.session.SetMetadata("tool_context_id", data.GetId())
 			}
 			s.mu.RUnlock()
-			s.EnterTransferMode(targets, postTransferAction)
+			s.EnterTransferMode(targets, postTransferAction, ringtone)
 			return nil
 		}
 	}
@@ -216,7 +218,7 @@ func (s *Streamer) Send(response internal_type.Stream) error {
 // Transfer
 // =============================================================================
 
-func (s *Streamer) EnterTransferMode(targets []string, postTransferAction string) {
+func (s *Streamer) EnterTransferMode(targets []string, postTransferAction, ringtoneEnum string) {
 	if !s.transferring.CompareAndSwap(false, true) {
 		return
 	}
@@ -237,6 +239,7 @@ func (s *Streamer) EnterTransferMode(targets []string, postTransferAction string
 	s.mu.Unlock()
 	go func() {
 		if audio != nil {
+			audio.SetRingtone(ringtoneEnum)
 			audio.PlayRingback(ringbackCtx)
 		}
 	}()

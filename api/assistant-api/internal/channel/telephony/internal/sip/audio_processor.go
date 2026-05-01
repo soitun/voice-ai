@@ -54,16 +54,21 @@ type AudioProcessor struct {
 	bridge           atomic.Pointer[bridgeState]
 	bridgeUserCh     chan []byte
 	bridgeOperatorCh chan []byte
+
+	// Ringback
+	ringtoneMu sync.RWMutex
+	ringtone   []byte
 }
 
 type AudioProcessorConfig struct {
 	RTPHandler *sip_infra.RTPHandler
 	Resampler  internal_type.AudioResampler
 	PushInput  func(internal_type.Stream)
+	Ringtone   string
 }
 
 func NewAudioProcessor(cfg AudioProcessorConfig) *AudioProcessor {
-	return &AudioProcessor{
+	p := &AudioProcessor{
 		resampler:        cfg.Resampler,
 		rtpHandler:       cfg.RTPHandler,
 		pushInput:        cfg.PushInput,
@@ -71,6 +76,21 @@ func NewAudioProcessor(cfg AudioProcessorConfig) *AudioProcessor {
 		bridgeUserCh:     make(chan []byte, audioChSize),
 		bridgeOperatorCh: make(chan []byte, audioChSize),
 	}
+	p.SetRingtone(cfg.Ringtone)
+	return p
+}
+
+func (p *AudioProcessor) SetRingtone(name string) {
+	audio := LoadRingtoneBytes(name)
+	p.ringtoneMu.Lock()
+	p.ringtone = audio
+	p.ringtoneMu.Unlock()
+}
+
+func (p *AudioProcessor) ringtoneBytes() []byte {
+	p.ringtoneMu.RLock()
+	defer p.ringtoneMu.RUnlock()
+	return p.ringtone
 }
 
 // ProcessInputAudio normalizes codec and resamples RTP audio to 16kHz LINEAR16.
@@ -258,6 +278,9 @@ func (p *AudioProcessor) PlayRingback(ctx context.Context) {
 	ticker := time.NewTicker(chunkDuration)
 	defer ticker.Stop()
 
+	ringtone := p.ringtoneBytes()
+	useFile := len(ringtone) >= mulawFrameSize
+	fileOffset := 0
 	offset := 0
 	for {
 		select {
@@ -265,7 +288,17 @@ func (p *AudioProcessor) PlayRingback(ctx context.Context) {
 			return
 		case <-ticker.C:
 			var frame []byte
-			frame, offset = internal_audio.GenerateRingbackMulawFrame(offset)
+			if useFile {
+				end := fileOffset + mulawFrameSize
+				if end > len(ringtone) {
+					fileOffset = 0
+					end = mulawFrameSize
+				}
+				frame = ringtone[fileOffset:end]
+				fileOffset = end
+			} else {
+				frame, offset = internal_audio.GenerateRingbackMulawFrame(offset)
+			}
 			if codec != nil && codec.Name == "PCMA" {
 				frame = internal_audio.UlawToAlaw(frame)
 			}
